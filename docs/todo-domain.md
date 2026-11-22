@@ -61,6 +61,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/views/views.ts` → `releaseResults`, `voterView`, `lastResultView` (A16)
 - `src/ordering/queue.ts` → `nextPositionStatus`, `applyOrder` (A17)
 - `src/election/position-actions.ts` → `deferPosition`, `cancelPosition` (A18)
+- `src/ordering/suggest.ts` → `suggestOrder` (A19)
 
 ---
 
@@ -282,12 +283,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/position-actions.test.ts` (9).
 - Decisões: a confirmação exige o título exato (diferencia maiúsculas).
 
-### [ ] A19 — Algoritmo `suggestOrder`
+### [x] A19 — Algoritmo `suggestOrder`
 **Ref.:** architecture §5.4 (algoritmo de ordenação).
 **Fazer:** ordenar os cargos da fila por disputa, conflitos, aptos e primeira opção, de forma estável.
 **Testes (escrever antes):** mais conflitos primeiro; mais aptos no empate; mais primeiras opções no empate; cargos com menos de 2 aptos no fim; ordem atual mantida quando tudo empata.
 **Commit sugerido:** `feat(domain): sugere a ordem de votação dos cargos`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `suggestOrder(election): string[]`.
+- Arquivos: `src/ordering/suggest.ts`.
+- Como usar: a rota `GET /queue/suggestion` devolve `suggestOrder(e)`; só vira fila com `applyOrder` após confirmação.
+- Testes: `test/suggest-order.test.ts` (5).
+- Decisões: "cargos com 0 ou 1 apto vão para o fim" é o critério de maior prioridade; conflito conta só cargos ainda na fila.
 
 ### [ ] A20 — Resiliência: histórico e anulação
 **Ref.:** architecture §5.4 (resiliência).
