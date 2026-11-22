@@ -53,6 +53,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/eligibility/eligibility.ts` → `eligibleCandidates`, `attachableCandidates`, `attachExistingCandidate` (A8)
 - `src/tiebreak/tiebreak.ts` → `rankByTiebreak` (Strategy por regra + fallback por `createdAt` e id) (A9)
 - `src/tally/compute-result.ts` → `computeResult` e tipos `RoundResult`, `RoundOutcome`, `CandidateCount` (A10)
+- `src/tally/runoff-cut.ts` → `cutForRunoff`: finalistas do 2º turno com empate na fronteira (interno) (A11)
 
 ---
 
@@ -178,12 +179,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/compute-result.test.ts` (9).
 - Decisões: `counts` vem do mais para o menos votado; empates seguem a ordem da cédula.
 
-### [ ] A11 — Corte para o 2º turno com empates
+### [x] A11 — Corte para o 2º turno com empates
 **Ref.:** architecture §5.4 (apuração 4).
 **Fazer:** escolher exatamente 2 finalistas aplicando o desempate só entre os empatados na fronteira.
 **Testes (escrever antes):** dois empatados no topo vão sem desempate; três empatados no topo; empate no 2º lugar desempatado só entre os empatados.
 **Commit sugerido:** `feat(domain): resolve empates na fronteira do segundo turno`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `cutForRunoff` (interno), usado por `computeResult`.
+- Arquivos: `src/tally/runoff-cut.ts`.
+- Como usar: via `computeResult(...).runoffCandidateIds`.
+- Testes: `test/runoff-cut.test.ts` (3).
+- Decisões: nenhuma.
 
 ### [ ] A12 — Abertura da eleição e das rodadas
 **Ref.:** architecture §5.3, §5.4 (votação 5; elegibilidade 3).

@@ -1,5 +1,6 @@
 import { BLANK, type Candidate, type Position, type Round, type RoundKind } from '../model';
 import { rankByTiebreak } from '../tiebreak/tiebreak';
+import { cutForRunoff } from './runoff-cut';
 
 /** Desfecho da apuração de uma rodada. */
 export type RoundOutcome = 'ELECTED' | 'RUNOFF_REQUIRED' | 'NO_VALID_VOTES';
@@ -91,7 +92,7 @@ function countVotes(round: Round): VoteCount {
  * @returns O desfecho e, conforme o caso, o eleito ou os finalistas.
  */
 function decide(round: Round, count: VoteCount, position: Position, candidates: readonly Candidate[]): Decision {
-  const [leader, runnerUp] = count.counts;
+  const [leader] = count.counts;
   if (!leader || count.validVotes === 0) return { outcome: 'NO_VALID_VOTES', tiebreakApplied: false };
 
   const isMostVotedWins = round.kind === 'RUNOFF' || round.candidateIds.length <= MAX_CANDIDATES_WITHOUT_RUNOFF;
@@ -101,8 +102,9 @@ function decide(round: Round, count: VoteCount, position: Position, candidates: 
   if (leader.votes * 2 > count.validVotes) {
     return { outcome: 'ELECTED', electedCandidateId: leader.candidateId, tiebreakApplied: false };
   }
-  const second = runnerUp ?? leader;
-  return { outcome: 'RUNOFF_REQUIRED', runoffCandidateIds: [leader.candidateId, second.candidateId], tiebreakApplied: false };
+  const ballot = resolveCandidates(round.candidateIds, candidates);
+  const cut = cutForRunoff(count.counts, position.tiebreak, ballot);
+  return { outcome: 'RUNOFF_REQUIRED', runoffCandidateIds: cut.finalists, tiebreakApplied: cut.tiebreakApplied };
 }
 
 /**
@@ -128,7 +130,7 @@ function electMostVoted(counts: readonly CandidateCount[], position: Position, c
  * @returns Os candidatos correspondentes, na mesma ordem.
  * @throws {Error} Se algum id não existir entre os candidatos.
  */
-export function resolveCandidates(ids: readonly string[], candidates: readonly Candidate[]): Candidate[] {
+function resolveCandidates(ids: readonly string[], candidates: readonly Candidate[]): Candidate[] {
   return ids.map((id) => {
     const candidate = candidates.find((c) => c.id === id);
     if (!candidate) throw new Error(`Ballot references unknown candidate ${id}`);
