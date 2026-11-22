@@ -51,3 +51,4 @@ export {
   type RoundResultView,
   type VoterView,
 } from './views/views';
+export { nextPositionStatus, applyOrder, type NextPositionInfo } from './ordering/queue';

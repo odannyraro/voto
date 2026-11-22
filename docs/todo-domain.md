@@ -59,6 +59,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/election/close.ts` → `closeRound`, `closeRoundIfDue`; internos `finalizeRound`, `everyoneVoted` (A14)
 - `src/election/runoff.ts` → `openRunoff` (A15)
 - `src/views/views.ts` → `releaseResults`, `voterView`, `lastResultView` (A16)
+- `src/ordering/queue.ts` → `nextPositionStatus`, `applyOrder` (A17)
 
 ---
 
@@ -256,12 +257,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/views.test.ts` (12).
 - Decisões: o eleitor só vê o resultado da rodada **mais recente**, e só se liberado; se ela foi anulada, volta a esperar.
 
-### [ ] A17 — Fila: próximo passo e ordem manual
+### [x] A17 — Fila: próximo passo e ordem manual
 **Ref.:** architecture §5.4 (candidatos insuficientes), §6.3 (`NextPositionDTO`).
 **Fazer:** `nextPositionStatus` e `applyOrder`.
 **Testes (escrever antes):** pronto; candidatos insuficientes com anexáveis; nada sobrando; rodada em andamento; 2º turno pendente primeiro; aplicar ordem; ordem que omite, repete ou inventa cargo; eleição encerrada.
 **Commit sugerido:** `feat(domain): informa o próximo cargo da fila e aplica nova ordem`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `nextPositionStatus`, `applyOrder`.
+- Arquivos: `src/ordering/queue.ts`.
+- Como usar: `nextPositionStatus(election)` já tem o formato do `NextPositionDTO`.
+- Testes: `test/queue.test.ts` (10).
+- Decisões: prioridade dos status: `ROUND_IN_PROGRESS` > `AWAITING_RUNOFF` > `NONE_LEFT` > `INSUFFICIENT_CANDIDATES`/`READY` (topo da fila).
 
 ### [ ] A18 — Candidatos insuficientes: adiar e cancelar
 **Ref.:** architecture §5.4 (candidatos insuficientes), §6.1 (`defer`, `cancel`).
