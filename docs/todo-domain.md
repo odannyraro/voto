@@ -47,6 +47,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/election/guards.ts` → validações reaproveitadas (prazo, `requireDraft`, `requireNotFinished`, `requireOpen`) (A3)
 - `src/election/positions.ts` → `addPosition`, `updatePosition`, `removePosition` (A4)
 - `src/election/lookup.ts` → buscas e substituições imutáveis no agregado (`findPosition`, `isElected`, `findOpenRound`, `replaceRound`...) (A4)
+- `src/election/candidates.ts` → `addCandidate`, `updateCandidate`, `removeCandidate` (A5)
 
 ---
 
@@ -100,12 +101,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/positions.test.ts` (15).
 - Decisões: adicionar e remover só em `DRAFT`; editar só cargo `PENDING`; remover é bloqueado se algum candidato concorre ao cargo (`POSITION_HAS_CANDIDATES`).
 
-### [ ] A5 — Candidatos: criar, editar, remover
+### [x] A5 — Candidatos: criar, editar, remover
 **Ref.:** architecture §5.1, §5.4 (elegibilidade 2).
 **Fazer:** validação de nome, idade, tempo restante, `applications` e `firstChoicePositionId`.
 **Testes (escrever antes):** cadastro com `createdAt`; cadastro com eleição aberta; nome em branco; idade nos limites (16 e 120) e fora deles; meses negativos; candidaturas vazias ou repetidas; cargo inexistente; primeira opção fora das candidaturas; eleição encerrada; edição da primeira opção; edição que derruba a primeira opção; candidato inexistente; candidato eleito; remoção; remoção de quem está na cédula aberta; remoção de eleito.
 **Commit sugerido:** `feat(domain): cadastra candidatos e valida candidaturas`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `addCandidate`, `updateCandidate`, `removeCandidate`.
+- Arquivos: `src/election/candidates.ts`, `src/election/lookup.ts` (`findCandidate`, `replaceCandidate`, `isElected`, `findOpenRound`).
+- Como usar: `addCandidate(election, { name, age, remainingMonths, applications, firstChoicePositionId }, ctx)`.
+- Testes: `test/candidates.test.ts` (22).
+- Decisões: candidato eleito não pode ser editado nem removido (o resultado registrado não muda depois). Cadastro permitido com a eleição aberta (README: candidatos insuficientes).
 
 ### [ ] A6 — Credenciamento de eleitores
 **Ref.:** architecture §5.5 (credenciar eleitor), §6.1 (`POST /voters`).

@@ -17,3 +17,10 @@ export {
   type AddPositionInput,
   type UpdatePositionInput,
 } from './election/positions';
+export {
+  addCandidate,
+  updateCandidate,
+  removeCandidate,
+  type AddCandidateInput,
+  type UpdateCandidateInput,
+} from './election/candidates';
