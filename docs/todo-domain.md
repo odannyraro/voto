@@ -55,6 +55,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/tally/compute-result.ts` → `computeResult` e tipos `RoundResult`, `RoundOutcome`, `CandidateCount` (A10)
 - `src/tally/runoff-cut.ts` → `cutForRunoff`: finalistas do 2º turno com empate na fronteira (interno) (A11)
 - `src/election/rounds.ts` → `openElection`, `openRound`; internos `checkCanStartRound`, `startRound` (A12)
+- `src/election/vote.ts` → `castVote` (A13)
 
 ---
 
@@ -204,12 +205,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/rounds.test.ts` (16).
 - Decisões: recebe objeto de entrada (formato do corpo da rota). Bloqueia com 2º turno pendente (`RUNOFF_PENDING`) e sem eleitores credenciados (`NO_CREDENTIALED_VOTERS`). O admin pode abrir qualquer cargo pendente, não só o do topo da fila.
 
-### [ ] A13 — Votação
+### [x] A13 — Votação
 **Ref.:** architecture §5.4 (votação 1, 2, 3), §5.1 (sigilo).
 **Fazer:** `castVote` com eleitor apto, voto único, prazo e sigilo.
 **Testes (escrever antes):** conta o voto e registra quem votou; branco; contagem sem id de eleitor; voto no prazo exato; voto depois do prazo; voto duplo; eleitor credenciado depois da abertura; eleitor revogado; escolha fora da cédula; rodada fechada; rodada inexistente.
 **Commit sugerido:** `feat(domain): registra votos com sigilo, prazo e voto único`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `castVote`.
+- Arquivos: `src/election/vote.ts`.
+- Como usar: `castVote(election, { roundId, voterId, choice }, ctx)`; `choice` é o id do candidato ou `BLANK`.
+- Testes: `test/vote.test.ts` (11).
+- Decisões: voto no instante exato do prazo é aceito; depois, `ROUND_EXPIRED`. A tolerância de rede (`VOTE_GRACE_MS`) fica no servidor, que desconta do `now`.
 
 ### [ ] A14 — Fechamento da rodada → **marco M1**
 **Ref.:** architecture §5.3, §5.4 (votação 4, apuração 6), §8.3.

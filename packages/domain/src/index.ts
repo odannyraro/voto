@@ -40,3 +40,4 @@ export {
   type CandidateCount,
 } from './tally/compute-result';
 export { openElection, openRound, type OpenRoundInput } from './election/rounds';
+export { castVote, type CastVoteInput } from './election/vote';
