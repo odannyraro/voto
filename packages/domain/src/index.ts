@@ -42,3 +42,4 @@ export {
 export { openElection, openRound, type OpenRoundInput } from './election/rounds';
 export { castVote, type CastVoteInput } from './election/vote';
 export { closeRound, closeRoundIfDue } from './election/close';
+export { openRunoff } from './election/runoff';

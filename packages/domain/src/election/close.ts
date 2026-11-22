@@ -83,6 +83,9 @@ function applyResult(election: Election, position: Position, result: RoundResult
     case 'RUNOFF_REQUIRED':
       return replacePosition(election, { ...position, status: 'AWAITING_RUNOFF' });
     case 'NO_VALID_VOTES': {
+      // Num 2º turno sem votos válidos os finalistas continuam os mesmos: o cargo volta a
+      // aguardar o 2º turno, em vez de recomeçar do 1º.
+      if (result.kind === 'RUNOFF') return replacePosition(election, { ...position, status: 'AWAITING_RUNOFF' });
       // §5.4: sem votos válidos o cargo volta ao início da fila e o admin decide o que fazer.
       const pending = replacePosition(election, { ...position, status: 'PENDING' });
       return { ...pending, queue: [position.id, ...election.queue] };

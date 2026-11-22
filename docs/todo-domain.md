@@ -57,6 +57,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/election/rounds.ts` → `openElection`, `openRound`; internos `checkCanStartRound`, `startRound` (A12)
 - `src/election/vote.ts` → `castVote` (A13)
 - `src/election/close.ts` → `closeRound`, `closeRoundIfDue`; internos `finalizeRound`, `everyoneVoted` (A14)
+- `src/election/runoff.ts` → `openRunoff` (A15)
 
 ---
 
@@ -230,12 +231,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/close.test.ts` (10).
 - Decisões: `closeRound` não recebe `ctx` (não usa tempo nem ids).
 
-### [ ] A15 — 2º turno
+### [x] A15 — 2º turno
 **Ref.:** architecture §5.4 (apuração 5), §5.5.
 **Fazer:** `openRunoff` com os finalistas do último 1º turno; apuração do 2º turno com desempate.
 **Testes (escrever antes):** abre com os dois finalistas; repete o 2º turno após 2º turno sem votos válidos; cargo sem 2º turno pendente; cargo inexistente; outra rodada aberta; elege o mais votado; empate resolvido pela regra; 2º turno sem votos válidos.
 **Commit sugerido:** `feat(domain): abre e apura o segundo turno`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `openRunoff`.
+- Arquivos: `src/election/runoff.ts`, `src/election/close.ts`.
+- Como usar: `openRunoff(election, { positionId, durationSeconds? }, ctx)`.
+- Testes: `test/runoff.test.ts` (8; 7 nesta tarefa e 1 adicionado na A23).
+- Decisões: finalistas recalculados a partir do último 1º turno fechado. 2º turno sem votos válidos devolve o cargo a `AWAITING_RUNOFF` (não a `PENDING`), porque os finalistas continuam os mesmos.
 
 ### [ ] A16 — Liberação de resultados e visões por papel
 **Ref.:** architecture §5.4 (votação 7), §6.3 (`VoterStateDTO`, `RoundResultDTO`).
@@ -328,3 +334,4 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - 2026-11-22 — A6/A12/A13/A15 — comandos com mais de 3 parâmetros recebem objeto: `credentialVoters(e, { count, labels? }, codeGen, ctx)`, `openRound(e, { positionId, durationSeconds? }, ctx)`, `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `castVote(e, { roundId, voterId, choice }, ctx)`. — regra do CLAUDE.md; os objetos têm o formato dos corpos das rotas.
 - 2026-11-22 — A14 — `closeRound(e, roundId)` sem `ctx`. — não usa tempo nem ids.
 - 2026-11-22 — A12 — `openRound` bloqueado com 2º turno pendente (`RUNOFF_PENDING`) e sem eleitores credenciados (`NO_CREDENTIALED_VOTERS`). — evita que um finalista seja eleito em outro cargo no meio do caminho e rodadas que fechariam sozinhas.
+- 2026-11-22 — A15 — 2º turno sem votos válidos volta a `AWAITING_RUNOFF`. — os finalistas continuam os mesmos.
