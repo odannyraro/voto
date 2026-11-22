@@ -60,6 +60,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/election/runoff.ts` → `openRunoff` (A15)
 - `src/views/views.ts` → `releaseResults`, `voterView`, `lastResultView` (A16)
 - `src/ordering/queue.ts` → `nextPositionStatus`, `applyOrder` (A17)
+- `src/election/position-actions.ts` → `deferPosition`, `cancelPosition` (A18)
 
 ---
 
@@ -269,12 +270,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/queue.test.ts` (10).
 - Decisões: prioridade dos status: `ROUND_IN_PROGRESS` > `AWAITING_RUNOFF` > `NONE_LEFT` > `INSUFFICIENT_CANDIDATES`/`READY` (topo da fila).
 
-### [ ] A18 — Candidatos insuficientes: adiar e cancelar
+### [x] A18 — Candidatos insuficientes: adiar e cancelar
 **Ref.:** architecture §5.4 (candidatos insuficientes), §6.1 (`defer`, `cancel`).
 **Fazer:** `deferPosition` e `cancelPosition` com `confirmTitle`.
 **Testes (escrever antes):** adiar para o fim; adiar cargo fora da fila; cargo inexistente; cancelar com título confirmado; cancelar cargo aguardando 2º turno; confirmação diferente, em outra caixa ou vazia; cancelar cargo em votação.
 **Commit sugerido:** `feat(domain): permite adiar e cancelar cargos com dupla confirmação`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `deferPosition`, `cancelPosition`.
+- Arquivos: `src/election/position-actions.ts`.
+- Como usar: `cancelPosition(election, positionId, confirmTitle)`.
+- Testes: `test/position-actions.test.ts` (9).
+- Decisões: a confirmação exige o título exato (diferencia maiúsculas).
 
 ### [ ] A19 — Algoritmo `suggestOrder`
 **Ref.:** architecture §5.4 (algoritmo de ordenação).
@@ -345,6 +351,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - 2026-11-22 — A3 — `createElection` devolve `Result<Election>` (a §5.2 previa `Election`). — valida nome e prazo.
 - 2026-11-22 — A6/A12/A13/A15 — comandos com mais de 3 parâmetros recebem objeto: `credentialVoters(e, { count, labels? }, codeGen, ctx)`, `openRound(e, { positionId, durationSeconds? }, ctx)`, `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `castVote(e, { roundId, voterId, choice }, ctx)`. — regra do CLAUDE.md; os objetos têm o formato dos corpos das rotas.
 - 2026-11-22 — A14 — `closeRound(e, roundId)` sem `ctx`. — não usa tempo nem ids.
+- 2026-11-22 — A18 — `cancelPosition(e, positionId, confirmTitle)`. — dupla confirmação reforçada no domínio (§5.4).
 - 2026-11-22 — A12 — `openRound` bloqueado com 2º turno pendente (`RUNOFF_PENDING`) e sem eleitores credenciados (`NO_CREDENTIALED_VOTERS`). — evita que um finalista seja eleito em outro cargo no meio do caminho e rodadas que fechariam sozinhas.
 - 2026-11-22 — A15 — 2º turno sem votos válidos volta a `AWAITING_RUNOFF`. — os finalistas continuam os mesmos.
 - 2026-11-22 — A16 — `voterView` e `lastResultView` substituem o `toVoterView` citado na S0.4. — mesmos dados, nomes mais claros.

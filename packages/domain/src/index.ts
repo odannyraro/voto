@@ -52,3 +52,4 @@ export {
   type VoterView,
 } from './views/views';
 export { nextPositionStatus, applyOrder, type NextPositionInfo } from './ordering/queue';
+export { deferPosition, cancelPosition } from './election/position-actions';
