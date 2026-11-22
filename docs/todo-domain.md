@@ -43,6 +43,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/result.ts` → `Result<T>`, `ok`, `fail` (A1)
 - `src/context.ts` → `DomainContext` (relógio e ids) e `CodeGenerator` (A1)
 - `test/builders/` → `anElection()`, `aPosition()`, `aCandidate()`, `aVoter()`, `aRound()`, `fixedContext()`, `secondsAfter()`, `sequenceCodeGenerator()` (A2)
+- `src/election/election.ts` → `createElection`, `updateElection`, `DEFAULT_VOTING_SECONDS` (A3)
+- `src/election/guards.ts` → validações reaproveitadas (prazo, `requireDraft`, `requireNotFinished`, `requireOpen`) (A3)
 
 ---
 
@@ -72,12 +74,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: nenhum próprio.
 - Decisões: os builders montam o agregado direto (sem passar pelos comandos), para cada teste preparar exatamente o estado de que precisa.
 
-### [ ] A3 — `createElection` e edição da eleição
+### [x] A3 — `createElection` e edição da eleição
 **Ref.:** architecture §5.1, §6.1.
 **Fazer:** criar eleição em `DRAFT`; editar nome e prazo padrão com validação.
 **Testes (escrever antes):** criação vazia; nome sem espaços nas pontas; nome em branco; limites do prazo (5 e 3600 aceitos; 4, 3601 e fracionário rejeitados); edição; edição de eleição encerrada.
 **Commit sugerido:** `feat(domain): cria e edita eleições com validação`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `createElection` e `updateElection`.
+- Arquivos: `src/election/election.ts`, `src/election/guards.ts`.
+- Como usar: `createElection({ adminId, name, defaultVotingSeconds? }, ctx): Result<Election>`; `updateElection(election, { name?, defaultVotingSeconds? })`.
+- Testes: `test/election.test.ts` (13).
+- Decisões: `createElection` devolve `Result` (a §5.2 previa `Election`) porque valida nome e prazo. Prazo padrão de 60 s.
 
 ### [ ] A4 — Cargos: adicionar, editar, remover
 **Ref.:** architecture §5.1, §5.3.
@@ -250,3 +257,4 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 
 - 2026-11-22 — A1 — o `packages/domain` foi criado **antes do Sprint 0**, autocontido: `package.json`, `tsconfig.json`, `vitest.config.ts` e `.gitignore` próprios, e tipos do agregado em `src/model.ts`. Na integração: a S0.1/S0.2 absorve as configs na raiz; a S0.3a cria os tipos em `@voto/shared` e `model.ts` passa a reexportá-los; a S0.4 deixa de ser necessária (a API pública já existe, implementada). O tipo `DomainApi = typeof import('./index')` pode ser exportado na integração. — permitir que A avançasse sem esperar B.
 - 2026-11-22 — A1 — os códigos de `DOMAIN_ERROR_CODES` precisam estar no `ERROR_CODES` da S0.3a. — contrato com o servidor (mapeamento HTTP) e o front.
+- 2026-11-22 — A3 — `createElection` devolve `Result<Election>` (a §5.2 previa `Election`). — valida nome e prazo.
