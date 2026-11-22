@@ -45,6 +45,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `test/builders/` → `anElection()`, `aPosition()`, `aCandidate()`, `aVoter()`, `aRound()`, `fixedContext()`, `secondsAfter()`, `sequenceCodeGenerator()` (A2)
 - `src/election/election.ts` → `createElection`, `updateElection`, `DEFAULT_VOTING_SECONDS` (A3)
 - `src/election/guards.ts` → validações reaproveitadas (prazo, `requireDraft`, `requireNotFinished`, `requireOpen`) (A3)
+- `src/election/positions.ts` → `addPosition`, `updatePosition`, `removePosition` (A4)
+- `src/election/lookup.ts` → buscas e substituições imutáveis no agregado (`findPosition`, `isElected`, `findOpenRound`, `replaceRound`...) (A4)
 
 ---
 
@@ -86,12 +88,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/election.test.ts` (13).
 - Decisões: `createElection` devolve `Result` (a §5.2 previa `Election`) porque valida nome e prazo. Prazo padrão de 60 s.
 
-### [ ] A4 — Cargos: adicionar, editar, remover
+### [x] A4 — Cargos: adicionar, editar, remover
 **Ref.:** architecture §5.1, §5.3.
 **Fazer:** cargos com título único e regra de desempate válida; entram no fim da fila.
 **Testes (escrever antes):** adicionar no fim da fila; título em branco ou duplicado (sem diferenciar maiúsculas); regra inválida; adicionar com eleição aberta; editar regra; título de outro cargo; cargo inexistente; cargo já decidido; remover; remover com candidatos; remover com eleição aberta.
 **Commit sugerido:** `feat(domain): adiciona gestão de cargos da eleição`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `addPosition`, `updatePosition`, `removePosition`.
+- Arquivos: `src/election/positions.ts`, `src/election/lookup.ts`, `src/election/guards.ts`.
+- Como usar: `addPosition(election, { title, tiebreak }, ctx)`; `updatePosition(election, positionId, { title?, tiebreak? })`; `removePosition(election, positionId)`.
+- Testes: `test/positions.test.ts` (15).
+- Decisões: adicionar e remover só em `DRAFT`; editar só cargo `PENDING`; remover é bloqueado se algum candidato concorre ao cargo (`POSITION_HAS_CANDIDATES`).
 
 ### [ ] A5 — Candidatos: criar, editar, remover
 **Ref.:** architecture §5.1, §5.4 (elegibilidade 2).

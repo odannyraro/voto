@@ -10,3 +10,10 @@ export {
   type CreateElectionInput,
   type UpdateElectionInput,
 } from './election/election';
+export {
+  addPosition,
+  updatePosition,
+  removePosition,
+  type AddPositionInput,
+  type UpdatePositionInput,
+} from './election/positions';
