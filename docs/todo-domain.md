@@ -66,6 +66,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/election/annul.ts` → `annulRound` (A20)
 - `test/builders/result-helpers.ts` → `valueOf(result)` para encadear passos sem `if` no teste (A20)
 - `src/election/finish.ts` → `finishElection` (A21)
+- `test/scenarios/full-election.test.ts` → cenário completo só com a API pública (A22)
 
 ---
 
@@ -323,12 +324,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/finish.test.ts` (4).
 - Decisões: permite encerrar com cargos ainda pendentes (decisão do admin).
 
-### [ ] A22 — Cenário completo só com a API pública
+### [x] A22 — Cenário completo só com a API pública
 **Ref.:** architecture §10.
 **Fazer:** eleição com dois cargos, 2º turno e exclusão do eleito, só com funções do `index.ts`.
 **Testes (escrever antes):** resultado do 2º turno liberado ao eleitor; próximo cargo pronto; eleito fora da cédula seguinte; encerramento com todos os cargos decididos.
 **Commit sugerido:** `test(domain): adiciona cenário completo de eleição pela API pública`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: cenário de ponta a ponta do domínio.
+- Arquivos: `test/scenarios/full-election.test.ts`.
+- Como usar: referência de uso da API para a B16a.
+- Testes: 4.
+- Decisões: os cenários passaram de primeira, o que é esperado, já que integram regras testadas nas tarefas anteriores.
 
 ### [ ] A23 — StrykerJS no domínio
 **Ref.:** architecture §2 (teste de mutação); aula 15.
