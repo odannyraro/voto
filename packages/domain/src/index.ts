@@ -56,3 +56,4 @@ export { deferPosition, cancelPosition } from './election/position-actions';
 export { suggestOrder } from './ordering/suggest';
 export { createHistory, pushSnapshot, undo, canUndo, HISTORY_LIMIT, type History } from './history/history';
 export { annulRound } from './election/annul';
+export { finishElection } from './election/finish';

@@ -65,6 +65,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/history/history.ts` → `createHistory`, `pushSnapshot`, `undo`, `canUndo`, `HISTORY_LIMIT` (A20)
 - `src/election/annul.ts` → `annulRound` (A20)
 - `test/builders/result-helpers.ts` → `valueOf(result)` para encadear passos sem `if` no teste (A20)
+- `src/election/finish.ts` → `finishElection` (A21)
 
 ---
 
@@ -310,12 +311,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/history.test.ts` (6), `test/annul.test.ts` (9; 4 nesta tarefa e 5 adicionados na A23).
 - Decisões: só a última rodada válida de um cargo pode ser anulada (`ROUND_NOT_LATEST`).
 
-### [ ] A21 — `finishElection`
+### [x] A21 — `finishElection`
 **Ref.:** architecture §5.3.
 **Fazer:** encerrar a eleição aberta sem rodada em andamento.
 **Testes (escrever antes):** encerra; rodada aberta; eleição nunca aberta; nada muda depois.
 **Commit sugerido:** `feat(domain): encerra a eleição`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `finishElection`.
+- Arquivos: `src/election/finish.ts`.
+- Como usar: `finishElection(election)`.
+- Testes: `test/finish.test.ts` (4).
+- Decisões: permite encerrar com cargos ainda pendentes (decisão do admin).
 
 ### [ ] A22 — Cenário completo só com a API pública
 **Ref.:** architecture §10.
