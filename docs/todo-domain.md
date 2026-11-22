@@ -58,6 +58,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/election/vote.ts` → `castVote` (A13)
 - `src/election/close.ts` → `closeRound`, `closeRoundIfDue`; internos `finalizeRound`, `everyoneVoted` (A14)
 - `src/election/runoff.ts` → `openRunoff` (A15)
+- `src/views/views.ts` → `releaseResults`, `voterView`, `lastResultView` (A16)
 
 ---
 
@@ -243,12 +244,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/runoff.test.ts` (8; 7 nesta tarefa e 1 adicionado na A23).
 - Decisões: finalistas recalculados a partir do último 1º turno fechado. 2º turno sem votos válidos devolve o cargo a `AWAITING_RUNOFF` (não a `PENDING`), porque os finalistas continuam os mesmos.
 
-### [ ] A16 — Liberação de resultados e visões por papel
+### [x] A16 — Liberação de resultados e visões por papel
 **Ref.:** architecture §5.4 (votação 7), §6.3 (`VoterStateDTO`, `RoundResultDTO`).
 **Fazer:** `releaseResults`; o que o eleitor vê em cada fase; resultado com nomes para o admin.
 **Testes (escrever antes):** liberar rodada fechada; rodada aberta; rodada inexistente; último resultado com nomes; sem rodada fechada; espera antes de tudo; cédula sem contagem; voto registrado; eleitor tardio espera; resultado escondido até liberar; resultado liberado; eleição encerrada.
 **Commit sugerido:** `feat(domain): libera resultados e define o que cada papel pode ver`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `releaseResults`, `voterView`, `lastResultView`.
+- Arquivos: `src/views/views.ts`.
+- Como usar: no presenter do servidor, `voterView(election, voterId)` + `serverNow` = `VoterStateDTO`; `lastResultView(election)` = `lastResult` do `AdminElectionDTO`.
+- Testes: `test/views.test.ts` (12).
+- Decisões: o eleitor só vê o resultado da rodada **mais recente**, e só se liberado; se ela foi anulada, volta a esperar.
 
 ### [ ] A17 — Fila: próximo passo e ordem manual
 **Ref.:** architecture §5.4 (candidatos insuficientes), §6.3 (`NextPositionDTO`).
@@ -335,3 +341,4 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - 2026-11-22 — A14 — `closeRound(e, roundId)` sem `ctx`. — não usa tempo nem ids.
 - 2026-11-22 — A12 — `openRound` bloqueado com 2º turno pendente (`RUNOFF_PENDING`) e sem eleitores credenciados (`NO_CREDENTIALED_VOTERS`). — evita que um finalista seja eleito em outro cargo no meio do caminho e rodadas que fechariam sozinhas.
 - 2026-11-22 — A15 — 2º turno sem votos válidos volta a `AWAITING_RUNOFF`. — os finalistas continuam os mesmos.
+- 2026-11-22 — A16 — `voterView` e `lastResultView` substituem o `toVoterView` citado na S0.4. — mesmos dados, nomes mais claros.
