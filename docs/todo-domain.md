@@ -56,6 +56,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/tally/runoff-cut.ts` → `cutForRunoff`: finalistas do 2º turno com empate na fronteira (interno) (A11)
 - `src/election/rounds.ts` → `openElection`, `openRound`; internos `checkCanStartRound`, `startRound` (A12)
 - `src/election/vote.ts` → `castVote` (A13)
+- `src/election/close.ts` → `closeRound`, `closeRoundIfDue`; internos `finalizeRound`, `everyoneVoted` (A14)
 
 ---
 
@@ -217,12 +218,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/vote.test.ts` (11).
 - Decisões: voto no instante exato do prazo é aceito; depois, `ROUND_EXPIRED`. A tolerância de rede (`VOTE_GRACE_MS`) fica no servidor, que desconta do `now`.
 
-### [ ] A14 — Fechamento da rodada → **marco M1**
+### [x] A14 — Fechamento da rodada → **marco M1**
 **Ref.:** architecture §5.3, §5.4 (votação 4, apuração 6), §8.3.
 **Fazer:** fechamento manual, fechamento por prazo ou por todos terem votado, e aplicação do resultado ao cargo.
 **Testes (escrever antes):** fecha e elege; vai para 2º turno; sem votos válidos volta ao início da fila; rodada já fechada; rodada inexistente; fecha depois do prazo; continua aberta no prazo exato; fecha quando todos votaram; nada muda sem rodada aberta; último voto fecha a rodada.
 **Commit sugerido:** `feat(domain): fecha rodadas e aplica o resultado ao cargo`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `closeRound`, `closeRoundIfDue`; `castVote` fecha a rodada no último voto.
+- Arquivos: `src/election/close.ts`, `src/election/vote.ts`.
+- Como usar: `closeRoundIfDue(election, ctx)` devolve a **mesma instância** se nada mudou (o servidor compara com `===` para decidir se salva); `closeRound(election, roundId)`.
+- Testes: `test/close.test.ts` (10).
+- Decisões: `closeRound` não recebe `ctx` (não usa tempo nem ids).
 
 ### [ ] A15 — 2º turno
 **Ref.:** architecture §5.4 (apuração 5), §5.5.
@@ -320,4 +326,5 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - 2026-11-22 — A1 — os códigos de `DOMAIN_ERROR_CODES` precisam estar no `ERROR_CODES` da S0.3a. — contrato com o servidor (mapeamento HTTP) e o front.
 - 2026-11-22 — A3 — `createElection` devolve `Result<Election>` (a §5.2 previa `Election`). — valida nome e prazo.
 - 2026-11-22 — A6/A12/A13/A15 — comandos com mais de 3 parâmetros recebem objeto: `credentialVoters(e, { count, labels? }, codeGen, ctx)`, `openRound(e, { positionId, durationSeconds? }, ctx)`, `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `castVote(e, { roundId, voterId, choice }, ctx)`. — regra do CLAUDE.md; os objetos têm o formato dos corpos das rotas.
+- 2026-11-22 — A14 — `closeRound(e, roundId)` sem `ctx`. — não usa tempo nem ids.
 - 2026-11-22 — A12 — `openRound` bloqueado com 2º turno pendente (`RUNOFF_PENDING`) e sem eleitores credenciados (`NO_CREDENTIALED_VOTERS`). — evita que um finalista seja eleito em outro cargo no meio do caminho e rodadas que fechariam sozinhas.

@@ -75,3 +75,14 @@ export function isElected(election: Election, candidateId: string): boolean {
 export function findOpenRound(election: Election): Round | undefined {
   return election.rounds.find((round) => round.status === 'OPEN');
 }
+
+/**
+ * Devolve uma cópia da eleição com uma rodada trocada pela versão nova (mesmo id).
+ *
+ * @param election - Eleição atual.
+ * @param updated - Nova versão da rodada.
+ * @returns A eleição com a rodada substituída.
+ */
+export function replaceRound(election: Election, updated: Round): Election {
+  return { ...election, rounds: election.rounds.map((round) => (round.id === updated.id ? updated : round)) };
+}

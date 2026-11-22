@@ -1,6 +1,8 @@
 import type { DomainContext } from '../context';
 import { BLANK, type Election, type Round, type VoteChoice } from '../model';
 import { fail, ok, type Result } from '../result';
+import { everyoneVoted, finalizeRound } from './close';
+import { replaceRound } from './lookup';
 
 /** Voto de um eleitor (mesmo formato do corpo de `POST /voter/votes`, mais o eleitor). */
 export interface CastVoteInput {
@@ -12,7 +14,8 @@ export interface CastVoteInput {
 
 /**
  * Registra o voto de um eleitor numa rodada aberta. Guarda *quem votou* separado de
- * *em quem*, para preservar o sigilo (architecture.md §5.1).
+ * *em quem*, para preservar o sigilo (architecture.md §5.1). Se for o último eleitor apto,
+ * a rodada já é fechada e apurada.
  *
  * @param election - Eleição com a rodada aberta.
  * @param input - Rodada, eleitor e escolha.
@@ -34,7 +37,9 @@ export function castVote(election: Election, input: CastVoteInput, ctx: DomainCo
     votedVoterIds: [...round.votedVoterIds, input.voterId],
     tally: { ...round.tally, [input.choice]: (round.tally[input.choice] ?? 0) + 1 },
   };
-  return ok({ ...election, rounds: election.rounds.map((r) => (r.id === round.id ? updatedRound : r)) });
+  const withVote = replaceRound(election, updatedRound);
+  // §5.4: quando o último apto vota, a rodada fecha sem esperar o prazo.
+  return ok(everyoneVoted(updatedRound) ? finalizeRound(withVote, updatedRound) : withVote);
 }
 
 /**
