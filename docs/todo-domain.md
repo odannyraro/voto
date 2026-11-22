@@ -67,6 +67,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `test/builders/result-helpers.ts` → `valueOf(result)` para encadear passos sem `if` no teste (A20)
 - `src/election/finish.ts` → `finishElection` (A21)
 - `test/scenarios/full-election.test.ts` → cenário completo só com a API pública (A22)
+- `stryker.config.json` → teste de mutação (`npm run test:mutation`) (A23)
 
 ---
 
@@ -336,12 +337,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: 4.
 - Decisões: os cenários passaram de primeira, o que é esperado, já que integram regras testadas nas tarefas anteriores.
 
-### [ ] A23 — StrykerJS no domínio
+### [x] A23 — StrykerJS no domínio
 **Ref.:** architecture §2 (teste de mutação); aula 15.
 **Fazer:** configurar o Stryker, rodar, matar os mutantes sobreviventes relevantes e registrar o *mutation score*.
 **Testes (escrever antes):** novos testes para os sobreviventes relevantes.
 **Commit sugerido:** `test(domain): configura StrykerJS e mata mutantes sobreviventes`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `stryker.config.json` + script `test:mutation`. Score inicial de 88,2%, final de 89,4% (1021 mortos, 110 sobreviventes, 11 sem cobertura).
+- Arquivos: `stryker.config.json`, `test/annul.test.ts`, `test/runoff.test.ts`.
+- Como usar: `npm run test:mutation -w packages/domain` (cerca de 1,5 min); relatório HTML em `reports/mutation/` (fora do git).
+- Testes: +6 (busca da última rodada válida, deduplicação da fila e eleição encerrada na anulação; 2º turno repetido).
+- Decisões: `tsconfigFile` aponta para um arquivo inexistente porque o pré-processador de tsconfig do Stryker 10 é incompatível com o TypeScript 7 (o Vitest não precisa dele). Os sobreviventes restantes são, na maioria, trocas do texto das mensagens de erro.
 
 ### [ ] A24 — Revisão de *test smells* e README do pacote
 **Ref.:** architecture §10.3; CLAUDE.md (smells).

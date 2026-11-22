@@ -61,6 +61,20 @@ describe('openRunoff', () => {
     });
   });
 
+  it('reopens the runoff with the same finalists after a runoff without valid votes', () => {
+    const election = {
+      ...electionAwaitingRunoff(),
+      rounds: [
+        firstRoundWithoutMajority,
+        aRound({ id: 'blank-runoff', kind: 'RUNOFF', candidateIds: ['bia', 'caio'], tally: { [BLANK]: 1 }, status: 'CLOSED' }),
+      ],
+    };
+
+    const result = openRunoff(election, { positionId: 'president' }, fixedContext());
+
+    expect(result).toMatchObject({ ok: true, value: { rounds: [{}, {}, { kind: 'RUNOFF', candidateIds: ['bia', 'caio'] }] } });
+  });
+
   it('rejects a position that is not waiting for a runoff', () => {
     const election = anElection().open().withPositions(aPosition({ id: 'president' })).build();
 
