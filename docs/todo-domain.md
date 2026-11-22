@@ -62,6 +62,9 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/ordering/queue.ts` → `nextPositionStatus`, `applyOrder` (A17)
 - `src/election/position-actions.ts` → `deferPosition`, `cancelPosition` (A18)
 - `src/ordering/suggest.ts` → `suggestOrder` (A19)
+- `src/history/history.ts` → `createHistory`, `pushSnapshot`, `undo`, `canUndo`, `HISTORY_LIMIT` (A20)
+- `src/election/annul.ts` → `annulRound` (A20)
+- `test/builders/result-helpers.ts` → `valueOf(result)` para encadear passos sem `if` no teste (A20)
 
 ---
 
@@ -295,12 +298,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/suggest-order.test.ts` (5).
 - Decisões: "cargos com 0 ou 1 apto vão para o fim" é o critério de maior prioridade; conflito conta só cargos ainda na fila.
 
-### [ ] A20 — Resiliência: histórico e anulação
+### [x] A20 — Resiliência: histórico e anulação
 **Ref.:** architecture §5.4 (resiliência).
 **Fazer:** `pushSnapshot`, `undo`, limite de 50; `annulRound`.
 **Testes (escrever antes):** começa sem desfazer; guarda o anterior; desfaz; nada para desfazer; esquece além do limite; limite padrão 50; anular rodada aberta; anular desfaz o eleito; não é a última rodada; rodada inexistente.
 **Commit sugerido:** `feat(domain): adiciona histórico para desfazer e anulação de rodadas`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `createHistory`, `pushSnapshot`, `undo`, `canUndo`, `annulRound`.
+- Arquivos: `src/history/history.ts`, `src/election/annul.ts`, `test/builders/result-helpers.ts`.
+- Como usar: o registro do repositório é um `History<Election>`; cada comando faz `pushSnapshot(record, novaEleição, HISTORY_LIMIT)`; `undo(record)` → `NOTHING_TO_UNDO` se vazio.
+- Testes: `test/history.test.ts` (6), `test/annul.test.ts` (9; 4 nesta tarefa e 5 adicionados na A23).
+- Decisões: só a última rodada válida de um cargo pode ser anulada (`ROUND_NOT_LATEST`).
 
 ### [ ] A21 — `finishElection`
 **Ref.:** architecture §5.3.
