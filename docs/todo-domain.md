@@ -50,6 +50,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/election/candidates.ts` → `addCandidate`, `updateCandidate`, `removeCandidate` (A5)
 - `src/election/voters.ts` → `credentialVoters`, `revokeVoter` (A6)
 - `src/voters/code.ts` → `createCodeGenerator`, `CODE_ALPHABET`, `CODE_LENGTH` (A7)
+- `src/eligibility/eligibility.ts` → `eligibleCandidates`, `attachableCandidates`, `attachExistingCandidate` (A8)
 
 ---
 
@@ -139,12 +140,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/code-generator.test.ts` (6).
 - Decisões: nenhuma.
 
-### [ ] A8 — Elegibilidade e anexar candidato existente
+### [x] A8 — Elegibilidade e anexar candidato existente
 **Ref.:** architecture §5.4 (elegibilidade 1, 3, 4).
 **Fazer:** aptos por cargo (concorre e não foi eleito); candidatos anexáveis; anexar candidato não eleito a cargo pendente.
 **Testes (escrever antes):** só quem concorre; exclui eleito em outro cargo; anexáveis; anexar inclui o cargo nas candidaturas; não duplica; eleito; candidato e cargo inexistentes; cargo não pendente.
 **Commit sugerido:** `feat(domain): calcula aptos e permite anexar candidato existente`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `eligibleCandidates`, `attachableCandidates`, `attachExistingCandidate`.
+- Arquivos: `src/eligibility/eligibility.ts`.
+- Como usar: `eligibleCandidates(election, positionId): Candidate[]`.
+- Testes: `test/eligibility.test.ts` (9).
+- Decisões: anexar não muda a primeira opção do candidato.
 
 ### [ ] A9 — Desempate (Strategy)
 **Ref.:** architecture §5.4 (desempate), §5.5.
