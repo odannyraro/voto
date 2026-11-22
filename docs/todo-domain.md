@@ -68,6 +68,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/election/finish.ts` → `finishElection` (A21)
 - `test/scenarios/full-election.test.ts` → cenário completo só com a API pública (A22)
 - `stryker.config.json` → teste de mutação (`npm run test:mutation`) (A23)
+- `README.md` → visão geral do pacote, API e comandos de teste (A24)
 
 ---
 
@@ -349,12 +350,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: +6 (busca da última rodada válida, deduplicação da fila e eleição encerrada na anulação; 2º turno repetido).
 - Decisões: `tsconfigFile` aponta para um arquivo inexistente porque o pré-processador de tsconfig do Stryker 10 é incompatível com o TypeScript 7 (o Vitest não precisa dele). Os sobreviventes restantes são, na maioria, trocas do texto das mensagens de erro.
 
-### [ ] A24 — Revisão de *test smells* e README do pacote
+### [x] A24 — Revisão de *test smells* e README do pacote
 **Ref.:** architecture §10.3; CLAUDE.md (smells).
 **Fazer:** revisar nomes, AAA, magic numbers, lógica condicional; escrever `packages/domain/README.md`.
 **Testes (escrever antes):** não se aplica.
 **Commit sugerido:** `docs(domain): documenta o pacote e revisa a suíte de testes`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: varredura sem `.only`/`.skip`/`console.log`/`if` nos testes; `&&` condicional trocado por `valueOf` (A20) e por `expect.not.objectContaining` (A13); README do pacote.
+- Arquivos: `README.md`.
+- Como usar: —
+- Testes: total de 205; cobertura de cerca de 97% em linhas e 94% em branches.
+- Decisões: depois do Sprint 0, rodar `npm run lint` e `npm run format` no pacote (ainda não havia ESLint/Prettier).
 
 ### [ ] A25 — *(vinda da B19)* Rate limit no login e na sessão do eleitor
 **Depende de:** B6 e B13 na `main`.
