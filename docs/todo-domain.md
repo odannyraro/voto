@@ -49,6 +49,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/election/lookup.ts` → buscas e substituições imutáveis no agregado (`findPosition`, `isElected`, `findOpenRound`, `replaceRound`...) (A4)
 - `src/election/candidates.ts` → `addCandidate`, `updateCandidate`, `removeCandidate` (A5)
 - `src/election/voters.ts` → `credentialVoters`, `revokeVoter` (A6)
+- `src/voters/code.ts` → `createCodeGenerator`, `CODE_ALPHABET`, `CODE_LENGTH` (A7)
 
 ---
 
@@ -126,12 +127,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/voters.test.ts` (13).
 - Decisões: o domínio só garante a unicidade dentro da eleição (`DUPLICATE_VOTER_CODE`); a unicidade global é do servidor (B11). Recebe um objeto de entrada (regra "mais de 3 parâmetros → objeto").
 
-### [ ] A7 — Gerador de códigos puro
+### [x] A7 — Gerador de códigos puro
 **Ref.:** architecture §5.5 (formato do código).
 **Fazer:** 8 caracteres do alfabeto sem ambíguos, com a fonte de aleatoriedade injetada.
 **Testes (escrever antes):** código montado a partir dos índices sorteados; último caractere do alfabeto; a fonte é chamada com o tamanho do alfabeto; índice fora do alfabeto lança `RangeError`; alfabeto sem `0 O 1 I L`; tamanho 8.
 **Commit sugerido:** `feat(domain): gera códigos de eleitor com aleatoriedade injetada`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `createCodeGenerator(randomIndex)`.
+- Arquivos: `src/voters/code.ts`.
+- Como usar: no servidor (B11), `createCodeGenerator((max) => crypto.randomInt(max))`.
+- Testes: `test/code-generator.test.ts` (6).
+- Decisões: nenhuma.
 
 ### [ ] A8 — Elegibilidade e anexar candidato existente
 **Ref.:** architecture §5.4 (elegibilidade 1, 3, 4).

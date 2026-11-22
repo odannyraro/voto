@@ -30,3 +30,4 @@ export {
   type CredentialVotersInput,
   type CredentialedVoters,
 } from './election/voters';
+export { CODE_ALPHABET, CODE_LENGTH, createCodeGenerator, type RandomIndexSource } from './voters/code';
