@@ -51,6 +51,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/election/voters.ts` → `credentialVoters`, `revokeVoter` (A6)
 - `src/voters/code.ts` → `createCodeGenerator`, `CODE_ALPHABET`, `CODE_LENGTH` (A7)
 - `src/eligibility/eligibility.ts` → `eligibleCandidates`, `attachableCandidates`, `attachExistingCandidate` (A8)
+- `src/tiebreak/tiebreak.ts` → `rankByTiebreak` (Strategy por regra + fallback por `createdAt` e id) (A9)
 
 ---
 
@@ -152,12 +153,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/eligibility.test.ts` (9).
 - Decisões: anexar não muda a primeira opção do candidato.
 
-### [ ] A9 — Desempate (Strategy)
+### [x] A9 — Desempate (Strategy)
 **Ref.:** architecture §5.4 (desempate), §5.5.
 **Fazer:** comparador por regra e fallback determinístico.
 **Testes (escrever antes):** `YOUNGEST`, `OLDEST`, `MOST_REMAINING_TIME`; fallback por `createdAt`; último recurso por id; não altera a lista recebida.
 **Commit sugerido:** `feat(domain): implementa regras de desempate entre candidatos`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `rankByTiebreak(candidates, rule)`.
+- Arquivos: `src/tiebreak/tiebreak.ts`.
+- Como usar: `rankByTiebreak(tied, position.tiebreak)[0]` é o vencedor.
+- Testes: `test/tiebreak.test.ts` (6).
+- Decisões: depois do `createdAt`, desempata pelo id, para o resultado nunca depender da ordem de entrada.
 
 ### [ ] A10 — Apuração do 1º turno
 **Ref.:** architecture §5.4 (apuração 1, 2, 3, 6).
