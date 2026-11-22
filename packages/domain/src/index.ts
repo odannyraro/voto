@@ -39,3 +39,4 @@ export {
   type RoundOutcome,
   type CandidateCount,
 } from './tally/compute-result';
+export { openElection, openRound, type OpenRoundInput } from './election/rounds';

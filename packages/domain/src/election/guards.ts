@@ -46,3 +46,14 @@ export function requireNotFinished(election: Election): Result<never> | undefine
   if (election.status !== 'FINISHED') return undefined;
   return fail('ELECTION_FINISHED', 'A finished election cannot be changed');
 }
+
+/**
+ * Garante que a eleição está aberta para votação.
+ *
+ * @param election - Eleição a conferir.
+ * @returns `ELECTION_NOT_OPEN` se ela estiver em `DRAFT` ou `FINISHED`; senão `undefined`.
+ */
+export function requireOpen(election: Election): Result<never> | undefined {
+  if (election.status === 'OPEN') return undefined;
+  return fail('ELECTION_NOT_OPEN', 'The election is not open for voting');
+}

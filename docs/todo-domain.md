@@ -54,6 +54,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/tiebreak/tiebreak.ts` → `rankByTiebreak` (Strategy por regra + fallback por `createdAt` e id) (A9)
 - `src/tally/compute-result.ts` → `computeResult` e tipos `RoundResult`, `RoundOutcome`, `CandidateCount` (A10)
 - `src/tally/runoff-cut.ts` → `cutForRunoff`: finalistas do 2º turno com empate na fronteira (interno) (A11)
+- `src/election/rounds.ts` → `openElection`, `openRound`; internos `checkCanStartRound`, `startRound` (A12)
 
 ---
 
@@ -191,12 +192,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/runoff-cut.test.ts` (3).
 - Decisões: nenhuma.
 
-### [ ] A12 — Abertura da eleição e das rodadas
+### [x] A12 — Abertura da eleição e das rodadas
 **Ref.:** architecture §5.3, §5.4 (votação 5; elegibilidade 3).
 **Fazer:** `openElection`; `openRound` com cédula e eleitores congelados e prazo absoluto.
 **Testes (escrever antes):** abrir eleição; sem cargos; abrir duas vezes; rodada com cédula e eleitores congelados; cargo `VOTING` e fora da fila; prazo padrão; eleito fora da cédula; revogado fora da rodada; segunda rodada aberta; 2º turno pendente; cargo não pendente; cargo inexistente; sem aptos; sem eleitores; prazo inválido; eleição em `DRAFT`.
 **Commit sugerido:** `feat(domain): abre a eleição e rodadas com cédula congelada`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `openElection`, `openRound`.
+- Arquivos: `src/election/rounds.ts`.
+- Como usar: `openRound(election, { positionId, durationSeconds? }, ctx)`.
+- Testes: `test/rounds.test.ts` (16).
+- Decisões: recebe objeto de entrada (formato do corpo da rota). Bloqueia com 2º turno pendente (`RUNOFF_PENDING`) e sem eleitores credenciados (`NO_CREDENTIALED_VOTERS`). O admin pode abrir qualquer cargo pendente, não só o do topo da fila.
 
 ### [ ] A13 — Votação
 **Ref.:** architecture §5.4 (votação 1, 2, 3), §5.1 (sigilo).
@@ -308,3 +314,4 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - 2026-11-22 — A1 — os códigos de `DOMAIN_ERROR_CODES` precisam estar no `ERROR_CODES` da S0.3a. — contrato com o servidor (mapeamento HTTP) e o front.
 - 2026-11-22 — A3 — `createElection` devolve `Result<Election>` (a §5.2 previa `Election`). — valida nome e prazo.
 - 2026-11-22 — A6/A12/A13/A15 — comandos com mais de 3 parâmetros recebem objeto: `credentialVoters(e, { count, labels? }, codeGen, ctx)`, `openRound(e, { positionId, durationSeconds? }, ctx)`, `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `castVote(e, { roundId, voterId, choice }, ctx)`. — regra do CLAUDE.md; os objetos têm o formato dos corpos das rotas.
+- 2026-11-22 — A12 — `openRound` bloqueado com 2º turno pendente (`RUNOFF_PENDING`) e sem eleitores credenciados (`NO_CREDENTIALED_VOTERS`). — evita que um finalista seja eleito em outro cargo no meio do caminho e rodadas que fechariam sozinhas.
