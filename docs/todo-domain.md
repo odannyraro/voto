@@ -37,18 +37,27 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 
 > Mantido pelo agente. Uma linha por módulo: caminho (relativo a `packages/domain`) → para que serve.
 
-_(vazio até a primeira tarefa)_
+- `src/index.ts` → única API pública do pacote; os testes importam daqui (A1)
+- `src/model.ts` → tipos do agregado da §5.1 (provisório até a S0.3a; depois reexporta de `@voto/shared`) (A1)
+- `src/errors.ts` → `DOMAIN_ERROR_CODES` e `DomainError` (A1)
+- `src/result.ts` → `Result<T>`, `ok`, `fail` (A1)
+- `src/context.ts` → `DomainContext` (relógio e ids) e `CodeGenerator` (A1)
 
 ---
 
 ## Tarefas
 
-### [ ] A1 — Fundações: `Result`, `DomainError`, `DomainContext`
+### [x] A1 — Fundações: `Result`, `DomainError`, `DomainContext`
 **Ref.:** architecture §5.1, §5.2.
 **Fazer:** tipos do agregado, catálogo de códigos de erro, `DomainError`, `Result<T>` com `ok`/`fail`, `DomainContext` e `CodeGenerator`; `index.ts` como única porta de entrada.
 **Testes (escrever antes):** `fail` produz um `DomainError` com código e mensagem; códigos únicos e em `UPPER_SNAKE_CASE`.
 **Commit sugerido:** `feat(domain): adiciona Result, DomainError e contexto do domínio`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: base do pacote `@voto/domain` (package.json, tsconfig, vitest.config com limite de 80%) e os tipos/erros fundamentais.
+- Arquivos: `src/model.ts`, `src/errors.ts`, `src/result.ts`, `src/context.ts`, `src/index.ts`.
+- Como usar: `ok(value)`, `fail('CODE', 'message')`; testes conferem erros com `toMatchObject({ ok: false, error: { code } })`.
+- Testes: `test/result.test.ts` (5).
+- Decisões: o Sprint 0 ainda não existia, então o pacote nasceu autocontido (ver "Decisões e desvios"). `DomainError` estende `Error`, para o servidor poder lançá-lo na borda.
 
 ### [ ] A2 — Test data builders e `FixedContext`
 **Ref.:** architecture §10.3; CLAUDE.md (DAMP, builders).
@@ -233,3 +242,5 @@ _(vazio até a primeira tarefa)_
 
 > Registro de decisões que mudam ou detalham o `architecture.md`. Formato: `AAAA-MM-DD — tarefa — decisão — motivo`.
 
+- 2026-11-22 — A1 — o `packages/domain` foi criado **antes do Sprint 0**, autocontido: `package.json`, `tsconfig.json`, `vitest.config.ts` e `.gitignore` próprios, e tipos do agregado em `src/model.ts`. Na integração: a S0.1/S0.2 absorve as configs na raiz; a S0.3a cria os tipos em `@voto/shared` e `model.ts` passa a reexportá-los; a S0.4 deixa de ser necessária (a API pública já existe, implementada). O tipo `DomainApi = typeof import('./index')` pode ser exportado na integração. — permitir que A avançasse sem esperar B.
+- 2026-11-22 — A1 — os códigos de `DOMAIN_ERROR_CODES` precisam estar no `ERROR_CODES` da S0.3a. — contrato com o servidor (mapeamento HTTP) e o front.
