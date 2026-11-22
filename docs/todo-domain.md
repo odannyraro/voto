@@ -42,6 +42,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/errors.ts` → `DOMAIN_ERROR_CODES` e `DomainError` (A1)
 - `src/result.ts` → `Result<T>`, `ok`, `fail` (A1)
 - `src/context.ts` → `DomainContext` (relógio e ids) e `CodeGenerator` (A1)
+- `test/builders/` → `anElection()`, `aPosition()`, `aCandidate()`, `aVoter()`, `aRound()`, `fixedContext()`, `secondsAfter()`, `sequenceCodeGenerator()` (A2)
 
 ---
 
@@ -59,12 +60,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/result.test.ts` (5).
 - Decisões: o Sprint 0 ainda não existia, então o pacote nasceu autocontido (ver "Decisões e desvios"). `DomainError` estende `Error`, para o servidor poder lançá-lo na borda.
 
-### [ ] A2 — Test data builders e `FixedContext`
+### [x] A2 — Test data builders e `FixedContext`
 **Ref.:** architecture §10.3; CLAUDE.md (DAMP, builders).
 **Fazer:** builders com valores padrão válidos e `fixedContext()` determinístico.
 **Testes (escrever antes):** não se aplica (código de teste); validado pelo `typecheck` e pelo uso nas tarefas seguintes.
 **Commit sugerido:** `test(domain): adiciona builders de dados de teste e contexto fixo`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: builder fluente de eleição e fábricas de cargo, candidato, eleitor e rodada; contexto com relógio parado e ids `id-1`, `id-2`...
+- Arquivos: `test/builders/election-builder.ts`, `test/builders/fixed-context.ts`.
+- Como usar: `anElection().open().withPositions(aPosition({ id: 'president' })).withCandidates(aCandidate()).build()`; sem `withQueue`, a fila é a ordem dos cargos `PENDING`. `fixedContext(now?)`, `secondsAfter(base, s)`, `sequenceCodeGenerator(codes)`.
+- Testes: nenhum próprio.
+- Decisões: os builders montam o agregado direto (sem passar pelos comandos), para cada teste preparar exatamente o estado de que precisa.
 
 ### [ ] A3 — `createElection` e edição da eleição
 **Ref.:** architecture §5.1, §6.1.
