@@ -48,6 +48,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/election/positions.ts` → `addPosition`, `updatePosition`, `removePosition` (A4)
 - `src/election/lookup.ts` → buscas e substituições imutáveis no agregado (`findPosition`, `isElected`, `findOpenRound`, `replaceRound`...) (A4)
 - `src/election/candidates.ts` → `addCandidate`, `updateCandidate`, `removeCandidate` (A5)
+- `src/election/voters.ts` → `credentialVoters`, `revokeVoter` (A6)
 
 ---
 
@@ -113,12 +114,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/candidates.test.ts` (22).
 - Decisões: candidato eleito não pode ser editado nem removido (o resultado registrado não muda depois). Cadastro permitido com a eleição aberta (README: candidatos insuficientes).
 
-### [ ] A6 — Credenciamento de eleitores
+### [x] A6 — Credenciamento de eleitores
 **Ref.:** architecture §5.5 (credenciar eleitor), §6.1 (`POST /voters`).
 **Fazer:** gerar N eleitores com códigos do `CodeGenerator` injetado; rótulos opcionais; revogação.
 **Testes (escrever antes):** um eleitor por código; rótulos em ordem; mantém eleitores anteriores; quantidade 0, 501 e fracionária; mais rótulos que eleitores; código repetido (já existente e na mesma leva); eleição encerrada; revogar; eleitor inexistente; revogar duas vezes.
 **Commit sugerido:** `feat(domain): credencia e revoga eleitores`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `credentialVoters` e `revokeVoter`.
+- Arquivos: `src/election/voters.ts`.
+- Como usar: `credentialVoters(election, { count, labels? }, codeGenerator, ctx): Result<{ election, codes }>`.
+- Testes: `test/voters.test.ts` (13).
+- Decisões: o domínio só garante a unicidade dentro da eleição (`DUPLICATE_VOTER_CODE`); a unicidade global é do servidor (B11). Recebe um objeto de entrada (regra "mais de 3 parâmetros → objeto").
 
 ### [ ] A7 — Gerador de códigos puro
 **Ref.:** architecture §5.5 (formato do código).
@@ -271,3 +277,4 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - 2026-11-22 — A1 — o `packages/domain` foi criado **antes do Sprint 0**, autocontido: `package.json`, `tsconfig.json`, `vitest.config.ts` e `.gitignore` próprios, e tipos do agregado em `src/model.ts`. Na integração: a S0.1/S0.2 absorve as configs na raiz; a S0.3a cria os tipos em `@voto/shared` e `model.ts` passa a reexportá-los; a S0.4 deixa de ser necessária (a API pública já existe, implementada). O tipo `DomainApi = typeof import('./index')` pode ser exportado na integração. — permitir que A avançasse sem esperar B.
 - 2026-11-22 — A1 — os códigos de `DOMAIN_ERROR_CODES` precisam estar no `ERROR_CODES` da S0.3a. — contrato com o servidor (mapeamento HTTP) e o front.
 - 2026-11-22 — A3 — `createElection` devolve `Result<Election>` (a §5.2 previa `Election`). — valida nome e prazo.
+- 2026-11-22 — A6/A12/A13/A15 — comandos com mais de 3 parâmetros recebem objeto: `credentialVoters(e, { count, labels? }, codeGen, ctx)`, `openRound(e, { positionId, durationSeconds? }, ctx)`, `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `castVote(e, { roundId, voterId, choice }, ctx)`. — regra do CLAUDE.md; os objetos têm o formato dos corpos das rotas.

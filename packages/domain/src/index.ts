@@ -24,3 +24,9 @@ export {
   type AddCandidateInput,
   type UpdateCandidateInput,
 } from './election/candidates';
+export {
+  credentialVoters,
+  revokeVoter,
+  type CredentialVotersInput,
+  type CredentialedVoters,
+} from './election/voters';
