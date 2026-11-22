@@ -52,6 +52,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `src/voters/code.ts` → `createCodeGenerator`, `CODE_ALPHABET`, `CODE_LENGTH` (A7)
 - `src/eligibility/eligibility.ts` → `eligibleCandidates`, `attachableCandidates`, `attachExistingCandidate` (A8)
 - `src/tiebreak/tiebreak.ts` → `rankByTiebreak` (Strategy por regra + fallback por `createdAt` e id) (A9)
+- `src/tally/compute-result.ts` → `computeResult` e tipos `RoundResult`, `RoundOutcome`, `CandidateCount` (A10)
 
 ---
 
@@ -165,12 +166,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: `test/tiebreak.test.ts` (6).
 - Decisões: depois do `createdAt`, desempata pelo id, para o resultado nunca depender da ordem de entrada.
 
-### [ ] A10 — Apuração do 1º turno
+### [x] A10 — Apuração do 1º turno
 **Ref.:** architecture §5.4 (apuração 1, 2, 3, 6).
 **Fazer:** contagem, válidos × brancos, maioria > 50%, casos de 1 e 2 candidatos, sem votos válidos.
 **Testes (escrever antes):** contagem ordenada com brancos à parte; 50% + 1 elege; exatamente 50% vai para 2º turno; brancos fora da maioria; 2 candidatos; empate entre 2 resolvido pela regra; 1 candidato; só brancos; rodada aberta lança erro.
 **Commit sugerido:** `feat(domain): apura o primeiro turno com maioria sobre votos válidos`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `computeResult(round, position, candidates): RoundResult`.
+- Arquivos: `src/tally/compute-result.ts`.
+- Como usar: o resultado traz `outcome` (`ELECTED`/`RUNOFF_REQUIRED`/`NO_VALID_VOTES`), `counts`, `blank`, `validVotes`, `electedCandidateId?`, `runoffCandidateIds?`, `tiebreakApplied`.
+- Testes: `test/compute-result.test.ts` (9).
+- Decisões: `counts` vem do mais para o menos votado; empates seguem a ordem da cédula.
 
 ### [ ] A11 — Corte para o 2º turno com empates
 **Ref.:** architecture §5.4 (apuração 4).

@@ -33,3 +33,9 @@ export {
 export { CODE_ALPHABET, CODE_LENGTH, createCodeGenerator, type RandomIndexSource } from './voters/code';
 export { eligibleCandidates, attachableCandidates, attachExistingCandidate } from './eligibility/eligibility';
 export { rankByTiebreak } from './tiebreak/tiebreak';
+export {
+  computeResult,
+  type RoundResult,
+  type RoundOutcome,
+  type CandidateCount,
+} from './tally/compute-result';
