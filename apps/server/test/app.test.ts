@@ -1,15 +1,22 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { DomainError } from '@voto/domain';
+import { DomainError, type DomainErrorCode } from '@voto/domain';
 import { afterEach, describe, expect, it } from 'vitest';
 import { HttpError } from '../src/http/errors';
 import { parse } from '../src/http/validate';
 import { makeTestApp } from './support/make-test-app';
 
+const OK = 200;
+const BAD_REQUEST = 400;
+const FORBIDDEN = 403;
 const NOT_FOUND = 404;
 const CONFLICT = 409;
 const GONE = 410;
 const UNSUPPORTED_MEDIA_TYPE = 415;
+const INTERNAL_SERVER_ERROR = 500;
+
+const THROWING_URL = '/throwing';
+const VALIDATING_URL = '/validating';
 
 let app: FastifyInstance | undefined;
 
@@ -18,30 +25,31 @@ afterEach(async () => {
   app = undefined;
 });
 
-/** App de teste com rotas que falham de propósito, uma por tipo de erro. */
-function appWithFailingRoutes(): FastifyInstance {
+/**
+ * Monta o app de teste com uma única rota (`GET /throwing`) que lança o valor recebido.
+ *
+ * @param thrown - O que a rota lança; o teste mostra no próprio *Arrange* qual erro é.
+ * @returns O app, ainda não iniciado.
+ */
+function appThrowing(thrown: unknown): FastifyInstance {
   const built = makeTestApp().app;
-  built.get('/boom/http', () => {
-    throw new HttpError(403, 'FORBIDDEN', 'Not your election');
+  built.get(THROWING_URL, () => {
+    throw thrown;
   });
-  built.get('/boom/domain-conflict', () => {
-    throw new DomainError('ELECTION_NOT_DRAFT', 'Election already started');
-  });
-  built.get('/boom/domain-gone', () => {
-    throw new DomainError('ROUND_EXPIRED', 'Round is over');
-  });
-  built.get('/boom/domain-missing', () => {
-    throw new DomainError('POSITION_NOT_FOUND', 'No such position');
-  });
-  built.post('/boom/validation', (request) =>
+  return built;
+}
+
+/**
+ * Monta o app de teste com uma única rota (`POST /validating`) que valida o corpo
+ * `{ name }` (texto não vazio) com `parse`.
+ *
+ * @returns O app, ainda não iniciado.
+ */
+function appValidatingName(): FastifyInstance {
+  const built = makeTestApp().app;
+  built.post(VALIDATING_URL, (request) =>
     parse(z.object({ name: z.string().min(1) }), request.body),
   );
-  built.get('/boom/unknown', () => {
-    throw new Error('connection to database 10.0.0.5 refused');
-  });
-  built.get('/boom/non-error', () => {
-    throw 'not even an Error object';
-  });
   return built;
 }
 
@@ -51,7 +59,7 @@ describe('GET /api/health', () => {
 
     const response = await app.inject({ method: 'GET', url: '/api/health' });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(OK);
     expect(response.json()).toEqual({ status: 'ok' });
   });
 });
@@ -69,46 +77,46 @@ describe('unknown routes', () => {
 
 describe('error handling', () => {
   it('turns an HttpError into its own status and code', async () => {
-    app = appWithFailingRoutes();
+    app = appThrowing(new HttpError(FORBIDDEN, 'FORBIDDEN', 'Not your election'));
 
-    const response = await app.inject({ method: 'GET', url: '/boom/http' });
+    const response = await app.inject({ method: 'GET', url: THROWING_URL });
 
-    expect(response.statusCode).toBe(403);
+    expect(response.statusCode).toBe(FORBIDDEN);
     expect(response.json()).toEqual({ error: { code: 'FORBIDDEN', message: 'Not your election' } });
   });
 
-  it.each([
-    { url: '/boom/domain-conflict', status: CONFLICT, code: 'ELECTION_NOT_DRAFT' },
-    { url: '/boom/domain-gone', status: GONE, code: 'ROUND_EXPIRED' },
-    { url: '/boom/domain-missing', status: NOT_FOUND, code: 'POSITION_NOT_FOUND' },
-  ])('maps the domain error behind $url to $status $code', async ({ url, status, code }) => {
-    app = appWithFailingRoutes();
+  it.each<{ code: DomainErrorCode; status: number }>([
+    { code: 'ELECTION_NOT_DRAFT', status: CONFLICT },
+    { code: 'ROUND_EXPIRED', status: GONE },
+    { code: 'POSITION_NOT_FOUND', status: NOT_FOUND },
+  ])('maps the domain error $code to $status', async ({ code, status }) => {
+    app = appThrowing(new DomainError(code, 'A domain rule was broken'));
 
-    const response = await app.inject({ method: 'GET', url });
+    const response = await app.inject({ method: 'GET', url: THROWING_URL });
 
     expect(response.statusCode).toBe(status);
     expect(response.json()).toMatchObject({ error: { code } });
   });
 
   it('turns a Zod validation failure into 400 VALIDATION_ERROR', async () => {
-    app = appWithFailingRoutes();
+    app = appValidatingName();
 
     const response = await app.inject({
       method: 'POST',
-      url: '/boom/validation',
+      url: VALIDATING_URL,
       payload: { name: '' },
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(BAD_REQUEST);
     expect(response.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
   });
 
   it('names the offending field in the validation message', async () => {
-    app = appWithFailingRoutes();
+    app = appValidatingName();
 
     const response = await app.inject({
       method: 'POST',
-      url: '/boom/validation',
+      url: VALIDATING_URL,
       payload: { name: '' },
     });
 
@@ -116,33 +124,33 @@ describe('error handling', () => {
   });
 
   it('reports a body that is not an object without a field name', async () => {
-    app = appWithFailingRoutes();
+    app = appValidatingName();
 
-    const response = await app.inject({ method: 'POST', url: '/boom/validation', payload: [] });
+    const response = await app.inject({ method: 'POST', url: VALIDATING_URL, payload: [] });
 
     expect(response.json().error.message).not.toMatch(/^: |^\./);
   });
 
   it('turns a malformed JSON body into 400 VALIDATION_ERROR', async () => {
-    app = appWithFailingRoutes();
+    app = appValidatingName();
 
     const response = await app.inject({
       method: 'POST',
-      url: '/boom/validation',
+      url: VALIDATING_URL,
       headers: { 'content-type': 'application/json' },
       payload: '{ not json',
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(BAD_REQUEST);
     expect(response.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
   });
 
   it('turns an unsupported content type into 415 VALIDATION_ERROR', async () => {
-    app = appWithFailingRoutes();
+    app = appValidatingName();
 
     const response = await app.inject({
       method: 'POST',
-      url: '/boom/validation',
+      url: VALIDATING_URL,
       headers: { 'content-type': 'application/xml' },
       payload: '<name>Ana</name>',
     });
@@ -152,21 +160,21 @@ describe('error handling', () => {
   });
 
   it('hides the internal message of an unexpected error behind 500 INTERNAL_ERROR', async () => {
-    app = appWithFailingRoutes();
+    app = appThrowing(new Error('connection to database 10.0.0.5 refused'));
 
-    const response = await app.inject({ method: 'GET', url: '/boom/unknown' });
+    const response = await app.inject({ method: 'GET', url: THROWING_URL });
 
-    expect(response.statusCode).toBe(500);
+    expect(response.statusCode).toBe(INTERNAL_SERVER_ERROR);
     expect(response.body).not.toContain('10.0.0.5');
     expect(response.json()).toMatchObject({ error: { code: 'INTERNAL_ERROR' } });
   });
 
   it('treats a thrown value that is not an Error as 500 INTERNAL_ERROR', async () => {
-    app = appWithFailingRoutes();
+    app = appThrowing('not even an Error object');
 
-    const response = await app.inject({ method: 'GET', url: '/boom/non-error' });
+    const response = await app.inject({ method: 'GET', url: THROWING_URL });
 
-    expect(response.statusCode).toBe(500);
+    expect(response.statusCode).toBe(INTERNAL_SERVER_ERROR);
     expect(response.json()).toMatchObject({ error: { code: 'INTERNAL_ERROR' } });
   });
 });
