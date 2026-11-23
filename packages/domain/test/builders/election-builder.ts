@@ -1,11 +1,4 @@
-import type {
-  Candidate,
-  Election,
-  ElectionStatus,
-  Position,
-  Round,
-  Voter,
-} from '../../src/index';
+import type { Candidate, Election, ElectionStatus, Position, Round, Voter } from '../../src/index';
 import { FIXED_NOW, secondsAfter } from './fixed-context';
 
 // Test data builders: escondem os campos irrelevantes para cada teste. Os valores que
@@ -20,7 +13,13 @@ const DEFAULT_ROUND_SECONDS = 60;
  * @returns Um `Position`.
  */
 export function aPosition(overrides: Partial<Position> = {}): Position {
-  return { id: 'president', title: 'President', tiebreak: 'OLDEST', status: 'PENDING', ...overrides };
+  return {
+    id: 'president',
+    title: 'President',
+    tiebreak: 'OLDEST',
+    status: 'PENDING',
+    ...overrides,
+  };
 }
 
 /**

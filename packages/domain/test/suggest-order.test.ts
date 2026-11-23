@@ -47,9 +47,17 @@ describe('suggestOrder', () => {
     // Secretary já foi decidido: candidatar-se a ele não gera conflito com cargos pendentes.
     const election = anElection()
       .open()
-      .withPositions(president, treasurer, aPosition({ ...secretary, status: 'DECIDED', electedCandidateId: 'zeca' }))
+      .withPositions(
+        president,
+        treasurer,
+        aPosition({ ...secretary, status: 'DECIDED', electedCandidateId: 'zeca' }),
+      )
       .withCandidates(
-        aCandidate({ id: 'ana', applications: ['president', 'secretary'], firstChoicePositionId: 'secretary' }),
+        aCandidate({
+          id: 'ana',
+          applications: ['president', 'secretary'],
+          firstChoicePositionId: 'secretary',
+        }),
         aCandidate({ id: 'bia', applications: ['president'] }),
         aCandidate({ id: 'caio', applications: ['treasurer'] }),
         aCandidate({ id: 'duda', applications: ['treasurer'] }),

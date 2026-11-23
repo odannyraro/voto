@@ -30,7 +30,12 @@ describe('credentialVoters', () => {
     const election = anElection().build();
     const codes = sequenceCodeGenerator(['AAAA2222', 'BBBB3333']);
 
-    const result = credentialVoters(election, { count: 2, labels: ['Table 1', 'Table 2'] }, codes, fixedContext());
+    const result = credentialVoters(
+      election,
+      { count: 2, labels: ['Table 1', 'Table 2'] },
+      codes,
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({
       ok: true,
@@ -39,9 +44,17 @@ describe('credentialVoters', () => {
   });
 
   it('keeps the voters credentialed before', () => {
-    const election = anElection().open().withVoters(aVoter({ id: 'voter-1', code: 'OLDC0DE2' })).build();
+    const election = anElection()
+      .open()
+      .withVoters(aVoter({ id: 'voter-1', code: 'OLDC0DE2' }))
+      .build();
 
-    const result = credentialVoters(election, { count: 1 }, sequenceCodeGenerator(['NEWC0DE3']), fixedContext());
+    const result = credentialVoters(
+      election,
+      { count: 1 },
+      sequenceCodeGenerator(['NEWC0DE3']),
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({
       ok: true,
@@ -71,9 +84,16 @@ describe('credentialVoters', () => {
   });
 
   it('rejects a generated code that another voter already has', () => {
-    const election = anElection().withVoters(aVoter({ code: 'AAAA2222' })).build();
+    const election = anElection()
+      .withVoters(aVoter({ code: 'AAAA2222' }))
+      .build();
 
-    const result = credentialVoters(election, { count: 1 }, sequenceCodeGenerator(['AAAA2222']), fixedContext());
+    const result = credentialVoters(
+      election,
+      { count: 1 },
+      sequenceCodeGenerator(['AAAA2222']),
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({ ok: false, error: { code: 'DUPLICATE_VOTER_CODE' } });
   });
@@ -94,7 +114,12 @@ describe('credentialVoters', () => {
   it('rejects new voters after the election is finished', () => {
     const election = anElection().withStatus('FINISHED').build();
 
-    const result = credentialVoters(election, { count: 1 }, sequenceCodeGenerator(['AAAA2222']), fixedContext());
+    const result = credentialVoters(
+      election,
+      { count: 1 },
+      sequenceCodeGenerator(['AAAA2222']),
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({ ok: false, error: { code: 'ELECTION_FINISHED' } });
   });
@@ -102,11 +127,16 @@ describe('credentialVoters', () => {
 
 describe('revokeVoter', () => {
   it('revokes the code of a credentialed voter', () => {
-    const election = anElection().withVoters(aVoter({ id: 'voter-1' })).build();
+    const election = anElection()
+      .withVoters(aVoter({ id: 'voter-1' }))
+      .build();
 
     const result = revokeVoter(election, 'voter-1');
 
-    expect(result).toMatchObject({ ok: true, value: { voters: [{ id: 'voter-1', status: 'REVOKED' }] } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { voters: [{ id: 'voter-1', status: 'REVOKED' }] },
+    });
   });
 
   it('rejects an unknown voter', () => {
@@ -118,7 +148,9 @@ describe('revokeVoter', () => {
   });
 
   it('rejects revoking a voter twice', () => {
-    const election = anElection().withVoters(aVoter({ id: 'voter-1', status: 'REVOKED' })).build();
+    const election = anElection()
+      .withVoters(aVoter({ id: 'voter-1', status: 'REVOKED' }))
+      .build();
 
     const result = revokeVoter(election, 'voter-1');
 

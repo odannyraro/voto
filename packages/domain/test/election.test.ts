@@ -8,7 +8,10 @@ const MAX_VOTING_SECONDS = 3600;
 
 describe('createElection', () => {
   it('creates an empty draft election owned by the admin', () => {
-    const result = createElection({ adminId: 'admin-1', name: 'Student Union 2027' }, fixedContext());
+    const result = createElection(
+      { adminId: 'admin-1', name: 'Student Union 2027' },
+      fixedContext(),
+    );
 
     expect(result).toEqual({
       ok: true,

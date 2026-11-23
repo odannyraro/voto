@@ -12,11 +12,17 @@ describe('deferPosition', () => {
 
     const result = deferPosition(election, 'president');
 
-    expect(result).toMatchObject({ ok: true, value: { queue: ['treasurer', 'secretary', 'president'] } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { queue: ['treasurer', 'secretary', 'president'] },
+    });
   });
 
   it('rejects deferring a position that is not waiting in the queue', () => {
-    const election = anElection().open().withPositions(aPosition({ ...president, status: 'DECIDED' })).build();
+    const election = anElection()
+      .open()
+      .withPositions(aPosition({ ...president, status: 'DECIDED' }))
+      .build();
 
     const result = deferPosition(election, 'president');
 
@@ -40,12 +46,18 @@ describe('cancelPosition', () => {
 
     expect(result).toMatchObject({
       ok: true,
-      value: { positions: [{ id: 'president', status: 'CANCELLED' }, { id: 'treasurer' }], queue: ['treasurer'] },
+      value: {
+        positions: [{ id: 'president', status: 'CANCELLED' }, { id: 'treasurer' }],
+        queue: ['treasurer'],
+      },
     });
   });
 
   it('can cancel a position that was waiting for a runoff', () => {
-    const election = anElection().open().withPositions(aPosition({ ...president, status: 'AWAITING_RUNOFF' })).build();
+    const election = anElection()
+      .open()
+      .withPositions(aPosition({ ...president, status: 'AWAITING_RUNOFF' }))
+      .build();
 
     const result = cancelPosition(election, 'president', 'President');
 
@@ -65,7 +77,10 @@ describe('cancelPosition', () => {
   });
 
   it('rejects cancelling a position whose round is in progress', () => {
-    const election = anElection().open().withPositions(aPosition({ ...president, status: 'VOTING' })).build();
+    const election = anElection()
+      .open()
+      .withPositions(aPosition({ ...president, status: 'VOTING' }))
+      .build();
 
     const result = cancelPosition(election, 'president', 'President');
 

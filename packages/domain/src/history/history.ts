@@ -31,7 +31,11 @@ export function createHistory<T>(initial: T): History<T> {
  * @param limit - Máximo de estados anteriores; padrão `HISTORY_LIMIT`.
  * @returns O histórico atualizado.
  */
-export function pushSnapshot<T>(history: History<T>, next: T, limit: number = HISTORY_LIMIT): History<T> {
+export function pushSnapshot<T>(
+  history: History<T>,
+  next: T,
+  limit: number = HISTORY_LIMIT,
+): History<T> {
   return { current: next, past: [...history.past, history.current].slice(-limit) };
 }
 
@@ -43,7 +47,8 @@ export function pushSnapshot<T>(history: History<T>, next: T, limit: number = HI
  */
 export function undo<T>(history: History<T>): Result<History<T>> {
   const previous = history.past.at(-1);
-  if (previous === undefined) return fail('NOTHING_TO_UNDO', 'There is no previous state to restore');
+  if (previous === undefined)
+    return fail('NOTHING_TO_UNDO', 'There is no previous state to restore');
   return ok({ current: previous, past: history.past.slice(0, -1) });
 }
 

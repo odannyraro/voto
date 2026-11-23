@@ -34,10 +34,11 @@ export function findCandidate(election: Election, candidateId: string): Candidat
 export function replacePosition(election: Election, updated: Position): Election {
   return {
     ...election,
-    positions: election.positions.map((position) => (position.id === updated.id ? updated : position)),
+    positions: election.positions.map((position) =>
+      position.id === updated.id ? updated : position,
+    ),
   };
 }
-
 
 /**
  * Devolve uma cópia da eleição com um candidato trocado pela versão nova (mesmo id).
@@ -49,7 +50,9 @@ export function replacePosition(election: Election, updated: Position): Election
 export function replaceCandidate(election: Election, updated: Candidate): Election {
   return {
     ...election,
-    candidates: election.candidates.map((candidate) => (candidate.id === updated.id ? updated : candidate)),
+    candidates: election.candidates.map((candidate) =>
+      candidate.id === updated.id ? updated : candidate,
+    ),
   };
 }
 
@@ -84,5 +87,8 @@ export function findOpenRound(election: Election): Round | undefined {
  * @returns A eleição com a rodada substituída.
  */
 export function replaceRound(election: Election, updated: Round): Election {
-  return { ...election, rounds: election.rounds.map((round) => (round.id === updated.id ? updated : round)) };
+  return {
+    ...election,
+    rounds: election.rounds.map((round) => (round.id === updated.id ? updated : round)),
+  };
 }

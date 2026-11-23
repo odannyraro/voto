@@ -64,11 +64,21 @@ function voterIds(election: Election): [string, string, string] {
  * @param ctx - Contexto do comando.
  * @returns A eleição depois dos três votos (a rodada fecha sozinha no último).
  */
-function everyoneVotes(election: Election, names: [string, string, string], ctx: DomainContext): Election {
+function everyoneVotes(
+  election: Election,
+  names: [string, string, string],
+  ctx: DomainContext,
+): Election {
   const roundId = election.rounds.at(-1)?.id ?? 'missing';
   return voterIds(election).reduce(
     (current, voterId, index) =>
-      valueOf(castVote(current, { roundId, voterId, choice: candidateId(current, names[index] ?? '') }, ctx)),
+      valueOf(
+        castVote(
+          current,
+          { roundId, voterId, choice: candidateId(current, names[index] ?? '') },
+          ctx,
+        ),
+      ),
     election,
   );
 }
@@ -87,10 +97,58 @@ function openedElection(ctx: DomainContext): Election {
   const president = positionId(election, 'President');
   const treasurer = positionId(election, 'Treasurer');
 
-  election = valueOf(addCandidate(election, { name: 'Ana', age: 30, remainingMonths: 12, applications: [president, treasurer], firstChoicePositionId: president }, ctx));
-  election = valueOf(addCandidate(election, { name: 'Bia', age: 25, remainingMonths: 24, applications: [president], firstChoicePositionId: president }, ctx));
-  election = valueOf(addCandidate(election, { name: 'Caio', age: 20, remainingMonths: 36, applications: [president, treasurer], firstChoicePositionId: treasurer }, ctx));
-  election = valueOf(addCandidate(election, { name: 'Duda', age: 22, remainingMonths: 30, applications: [treasurer], firstChoicePositionId: treasurer }, ctx));
+  election = valueOf(
+    addCandidate(
+      election,
+      {
+        name: 'Ana',
+        age: 30,
+        remainingMonths: 12,
+        applications: [president, treasurer],
+        firstChoicePositionId: president,
+      },
+      ctx,
+    ),
+  );
+  election = valueOf(
+    addCandidate(
+      election,
+      {
+        name: 'Bia',
+        age: 25,
+        remainingMonths: 24,
+        applications: [president],
+        firstChoicePositionId: president,
+      },
+      ctx,
+    ),
+  );
+  election = valueOf(
+    addCandidate(
+      election,
+      {
+        name: 'Caio',
+        age: 20,
+        remainingMonths: 36,
+        applications: [president, treasurer],
+        firstChoicePositionId: treasurer,
+      },
+      ctx,
+    ),
+  );
+  election = valueOf(
+    addCandidate(
+      election,
+      {
+        name: 'Duda',
+        age: 22,
+        remainingMonths: 30,
+        applications: [treasurer],
+        firstChoicePositionId: treasurer,
+      },
+      ctx,
+    ),
+  );
 
   const codes = sequenceCodeGenerator(['AAAA2222', 'BBBB3333', 'CCCC4444']);
   election = valueOf(credentialVoters(election, { count: 3 }, codes, ctx)).election;
@@ -123,7 +181,11 @@ describe('a full election through the public API', () => {
 
     expect(voterView(election, voterIds(election)[0])).toMatchObject({
       phase: 'RESULTS',
-      result: { positionTitle: 'President', kind: 'RUNOFF', electedCandidateId: candidateId(election, 'Ana') },
+      result: {
+        positionTitle: 'President',
+        kind: 'RUNOFF',
+        electedCandidateId: candidateId(election, 'Ana'),
+      },
     });
   });
 
@@ -139,7 +201,9 @@ describe('a full election through the public API', () => {
     const ctx = fixedContext();
     const election = electPresident(ctx);
 
-    const withTreasurerRound = valueOf(openRound(election, { positionId: positionId(election, 'Treasurer') }, ctx));
+    const withTreasurerRound = valueOf(
+      openRound(election, { positionId: positionId(election, 'Treasurer') }, ctx),
+    );
 
     expect(withTreasurerRound.rounds.at(-1)?.candidateIds).toEqual([
       candidateId(election, 'Caio'),

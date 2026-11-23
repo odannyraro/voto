@@ -6,7 +6,8 @@ import { fail, ok, type Result } from '../result';
 
 /** O que o admin deve fazer em seguida (formato do `NextPositionDTO`, §6.3). */
 export interface NextPositionInfo {
-  readonly status: 'READY' | 'INSUFFICIENT_CANDIDATES' | 'NONE_LEFT' | 'ROUND_IN_PROGRESS' | 'AWAITING_RUNOFF';
+  readonly status:
+    'READY' | 'INSUFFICIENT_CANDIDATES' | 'NONE_LEFT' | 'ROUND_IN_PROGRESS' | 'AWAITING_RUNOFF';
   /** Cargo a que o status se refere; ausente em `NONE_LEFT`. */
   readonly positionId?: string;
   /** Só em `INSUFFICIENT_CANDIDATES`: candidatos existentes que podem ser anexados ao cargo. */
@@ -25,7 +26,9 @@ export function nextPositionStatus(election: Election): NextPositionInfo {
   const open = findOpenRound(election);
   if (open) return { status: 'ROUND_IN_PROGRESS', positionId: open.positionId };
 
-  const awaitingRunoff = election.positions.find((position) => position.status === 'AWAITING_RUNOFF');
+  const awaitingRunoff = election.positions.find(
+    (position) => position.status === 'AWAITING_RUNOFF',
+  );
   if (awaitingRunoff) return { status: 'AWAITING_RUNOFF', positionId: awaitingRunoff.id };
 
   const [positionId] = election.queue;
@@ -35,7 +38,10 @@ export function nextPositionStatus(election: Election): NextPositionInfo {
   return {
     status: 'INSUFFICIENT_CANDIDATES',
     positionId,
-    attachableCandidates: attachableCandidates(election, positionId).map(({ id, name }) => ({ id, name })),
+    attachableCandidates: attachableCandidates(election, positionId).map(({ id, name }) => ({
+      id,
+      name,
+    })),
   };
 }
 
@@ -57,7 +63,10 @@ export function applyOrder(election: Election, positionIds: readonly string[]): 
     new Set(positionIds).size === positionIds.length &&
     positionIds.every((id) => election.queue.includes(id));
   if (!isSamePositions) {
-    return fail('INVALID_QUEUE_ORDER', 'The new order must contain exactly the positions in the queue');
+    return fail(
+      'INVALID_QUEUE_ORDER',
+      'The new order must contain exactly the positions in the queue',
+    );
   }
   return ok({ ...election, queue: [...positionIds] });
 }

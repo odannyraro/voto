@@ -5,9 +5,15 @@ import { fixedContext } from './builders/fixed-context';
 
 describe('addPosition', () => {
   it('adds a pending position at the end of the voting queue', () => {
-    const election = anElection().withPositions(aPosition({ id: 'president' })).build();
+    const election = anElection()
+      .withPositions(aPosition({ id: 'president' }))
+      .build();
 
-    const result = addPosition(election, { title: 'Treasurer', tiebreak: 'YOUNGEST' }, fixedContext());
+    const result = addPosition(
+      election,
+      { title: 'Treasurer', tiebreak: 'YOUNGEST' },
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({
       ok: true,
@@ -24,7 +30,11 @@ describe('addPosition', () => {
   it('trims spaces around the title', () => {
     const election = anElection().build();
 
-    const result = addPosition(election, { title: '  Treasurer ', tiebreak: 'OLDEST' }, fixedContext());
+    const result = addPosition(
+      election,
+      { title: '  Treasurer ', tiebreak: 'OLDEST' },
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({ ok: true, value: { positions: [{ title: 'Treasurer' }] } });
   });
@@ -38,9 +48,15 @@ describe('addPosition', () => {
   });
 
   it('rejects a title already used by another position, ignoring case', () => {
-    const election = anElection().withPositions(aPosition({ title: 'President' })).build();
+    const election = anElection()
+      .withPositions(aPosition({ title: 'President' }))
+      .build();
 
-    const result = addPosition(election, { title: 'PRESIDENT', tiebreak: 'OLDEST' }, fixedContext());
+    const result = addPosition(
+      election,
+      { title: 'PRESIDENT', tiebreak: 'OLDEST' },
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({ ok: false, error: { code: 'DUPLICATE_POSITION_TITLE' } });
   });
@@ -49,7 +65,11 @@ describe('addPosition', () => {
     const election = anElection().build();
     const unknownRule = 'TALLEST' as TiebreakRule;
 
-    const result = addPosition(election, { title: 'Treasurer', tiebreak: unknownRule }, fixedContext());
+    const result = addPosition(
+      election,
+      { title: 'Treasurer', tiebreak: unknownRule },
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_TIEBREAK_RULE' } });
   });
@@ -57,7 +77,11 @@ describe('addPosition', () => {
   it('rejects new positions once the election is open', () => {
     const election = anElection().open().build();
 
-    const result = addPosition(election, { title: 'Treasurer', tiebreak: 'OLDEST' }, fixedContext());
+    const result = addPosition(
+      election,
+      { title: 'Treasurer', tiebreak: 'OLDEST' },
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({ ok: false, error: { code: 'ELECTION_NOT_DRAFT' } });
   });
@@ -65,7 +89,9 @@ describe('addPosition', () => {
 
 describe('updatePosition', () => {
   it('changes the tiebreak rule of a pending position', () => {
-    const election = anElection().withPositions(aPosition({ id: 'president', tiebreak: 'OLDEST' })).build();
+    const election = anElection()
+      .withPositions(aPosition({ id: 'president', tiebreak: 'OLDEST' }))
+      .build();
 
     const result = updatePosition(election, 'president', { tiebreak: 'MOST_REMAINING_TIME' });
 
@@ -77,7 +103,10 @@ describe('updatePosition', () => {
 
   it('rejects renaming to the title of another position', () => {
     const election = anElection()
-      .withPositions(aPosition({ id: 'president', title: 'President' }), aPosition({ id: 'treasurer', title: 'Treasurer' }))
+      .withPositions(
+        aPosition({ id: 'president', title: 'President' }),
+        aPosition({ id: 'treasurer', title: 'Treasurer' }),
+      )
       .build();
 
     const result = updatePosition(election, 'treasurer', { title: 'president' });
@@ -94,7 +123,10 @@ describe('updatePosition', () => {
   });
 
   it('rejects changes once the election is finished', () => {
-    const election = anElection().withStatus('FINISHED').withPositions(aPosition({ id: 'president' })).build();
+    const election = anElection()
+      .withStatus('FINISHED')
+      .withPositions(aPosition({ id: 'president' }))
+      .build();
 
     const result = updatePosition(election, 'president', { tiebreak: 'YOUNGEST' });
 
@@ -116,12 +148,18 @@ describe('updatePosition', () => {
 describe('removePosition', () => {
   it('removes the position from the election and from the queue', () => {
     const election = anElection()
-      .withPositions(aPosition({ id: 'president', title: 'President' }), aPosition({ id: 'treasurer', title: 'Treasurer' }))
+      .withPositions(
+        aPosition({ id: 'president', title: 'President' }),
+        aPosition({ id: 'treasurer', title: 'Treasurer' }),
+      )
       .build();
 
     const result = removePosition(election, 'president');
 
-    expect(result).toMatchObject({ ok: true, value: { positions: [{ id: 'treasurer' }], queue: ['treasurer'] } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { positions: [{ id: 'treasurer' }], queue: ['treasurer'] },
+    });
   });
 
   it('rejects removing an unknown position', () => {
@@ -144,7 +182,10 @@ describe('removePosition', () => {
   });
 
   it('rejects removing positions once the election is open', () => {
-    const election = anElection().open().withPositions(aPosition({ id: 'president' })).build();
+    const election = anElection()
+      .open()
+      .withPositions(aPosition({ id: 'president' }))
+      .build();
 
     const result = removePosition(election, 'president');
 

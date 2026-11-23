@@ -36,14 +36,24 @@ describe('openRound', () => {
   function readyElection() {
     return anElection()
       .open()
-      .withPositions(aPosition({ id: 'president' }), aPosition({ id: 'treasurer', title: 'Treasurer' }))
+      .withPositions(
+        aPosition({ id: 'president' }),
+        aPosition({ id: 'treasurer', title: 'Treasurer' }),
+      )
       .withCandidates(aCandidate({ id: 'ana' }), aCandidate({ id: 'bia', name: 'Bia' }))
-      .withVoters(aVoter({ id: 'voter-1', code: 'AAAA2222' }), aVoter({ id: 'voter-2', code: 'BBBB3333' }))
+      .withVoters(
+        aVoter({ id: 'voter-1', code: 'AAAA2222' }),
+        aVoter({ id: 'voter-2', code: 'BBBB3333' }),
+      )
       .build();
   }
 
   it('opens a first round with the ballot and the voters frozen at that moment', () => {
-    const result = openRound(readyElection(), { positionId: 'president', durationSeconds: ROUND_SECONDS }, fixedContext());
+    const result = openRound(
+      readyElection(),
+      { positionId: 'president', durationSeconds: ROUND_SECONDS },
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({
       ok: true,
@@ -72,7 +82,10 @@ describe('openRound', () => {
 
     expect(result).toMatchObject({
       ok: true,
-      value: { positions: [{ id: 'president', status: 'VOTING' }, { id: 'treasurer' }], queue: ['treasurer'] },
+      value: {
+        positions: [{ id: 'president', status: 'VOTING' }, { id: 'treasurer' }],
+        queue: ['treasurer'],
+      },
     });
   });
 
@@ -81,7 +94,10 @@ describe('openRound', () => {
 
     const result = openRound(election, { positionId: 'president' }, fixedContext());
 
-    expect(result).toMatchObject({ ok: true, value: { rounds: [{ deadline: secondsAfter(FIXED_NOW, 90).toISOString() }] } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { rounds: [{ deadline: secondsAfter(FIXED_NOW, 90).toISOString() }] },
+    });
   });
 
   it('leaves candidates elected to another position off the ballot', () => {
@@ -91,7 +107,10 @@ describe('openRound', () => {
         aPosition({ id: 'president', status: 'DECIDED', electedCandidateId: 'ana' }),
         aPosition({ id: 'treasurer', title: 'Treasurer' }),
       )
-      .withCandidates(aCandidate({ id: 'ana', applications: ['president', 'treasurer'] }), aCandidate({ id: 'bia', applications: ['treasurer'] }))
+      .withCandidates(
+        aCandidate({ id: 'ana', applications: ['president', 'treasurer'] }),
+        aCandidate({ id: 'bia', applications: ['treasurer'] }),
+      )
       .withVoters(aVoter())
       .build();
 
@@ -105,16 +124,25 @@ describe('openRound', () => {
       .open()
       .withPositions(aPosition({ id: 'president' }))
       .withCandidates(aCandidate({ id: 'ana' }))
-      .withVoters(aVoter({ id: 'voter-1' }), aVoter({ id: 'voter-2', code: 'BBBB3333', status: 'REVOKED' }))
+      .withVoters(
+        aVoter({ id: 'voter-1' }),
+        aVoter({ id: 'voter-2', code: 'BBBB3333', status: 'REVOKED' }),
+      )
       .build();
 
     const result = openRound(election, { positionId: 'president' }, fixedContext());
 
-    expect(result).toMatchObject({ ok: true, value: { rounds: [{ eligibleVoterIds: ['voter-1'] }] } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { rounds: [{ eligibleVoterIds: ['voter-1'] }] },
+    });
   });
 
   it('rejects a second round while another one is open', () => {
-    const election = { ...readyElection(), rounds: [aRound({ positionId: 'treasurer', status: 'OPEN' })] };
+    const election = {
+      ...readyElection(),
+      rounds: [aRound({ positionId: 'treasurer', status: 'OPEN' })],
+    };
 
     const result = openRound(election, { positionId: 'president' }, fixedContext());
 
@@ -124,7 +152,10 @@ describe('openRound', () => {
   it('rejects a new round while a runoff is waiting to be opened', () => {
     const election = anElection()
       .open()
-      .withPositions(aPosition({ id: 'president', status: 'AWAITING_RUNOFF' }), aPosition({ id: 'treasurer', title: 'Treasurer' }))
+      .withPositions(
+        aPosition({ id: 'president', status: 'AWAITING_RUNOFF' }),
+        aPosition({ id: 'treasurer', title: 'Treasurer' }),
+      )
       .withCandidates(aCandidate({ id: 'ana', applications: ['treasurer'] }))
       .withVoters(aVoter())
       .build();
@@ -154,7 +185,11 @@ describe('openRound', () => {
   });
 
   it('rejects a position without eligible candidates', () => {
-    const election = anElection().open().withPositions(aPosition({ id: 'president' })).withVoters(aVoter()).build();
+    const election = anElection()
+      .open()
+      .withPositions(aPosition({ id: 'president' }))
+      .withVoters(aVoter())
+      .build();
 
     const result = openRound(election, { positionId: 'president' }, fixedContext());
 
@@ -162,7 +197,11 @@ describe('openRound', () => {
   });
 
   it('rejects opening a round when no voter is credentialed', () => {
-    const election = anElection().open().withPositions(aPosition({ id: 'president' })).withCandidates(aCandidate()).build();
+    const election = anElection()
+      .open()
+      .withPositions(aPosition({ id: 'president' }))
+      .withCandidates(aCandidate())
+      .build();
 
     const result = openRound(election, { positionId: 'president' }, fixedContext());
 
@@ -170,7 +209,11 @@ describe('openRound', () => {
   });
 
   it('rejects an invalid voting duration', () => {
-    const result = openRound(readyElection(), { positionId: 'president', durationSeconds: 1 }, fixedContext());
+    const result = openRound(
+      readyElection(),
+      { positionId: 'president', durationSeconds: 1 },
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_VOTING_DURATION' } });
   });

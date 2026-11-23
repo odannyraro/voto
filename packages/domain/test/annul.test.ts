@@ -7,7 +7,10 @@ describe('annulRound', () => {
   it('annuls the open round and puts the position back at the front of the queue', () => {
     const election = anElection()
       .open()
-      .withPositions(aPosition({ id: 'president', status: 'VOTING' }), aPosition({ id: 'treasurer', title: 'Treasurer' }))
+      .withPositions(
+        aPosition({ id: 'president', status: 'VOTING' }),
+        aPosition({ id: 'treasurer', title: 'Treasurer' }),
+      )
       .withRounds(aRound({ id: 'round-1', positionId: 'president', status: 'OPEN' }))
       .withQueue('treasurer')
       .build();
@@ -33,13 +36,23 @@ describe('annulRound', () => {
       )
       .withCandidates(aCandidate({ id: 'ana', applications: ['president', 'treasurer'] }))
       .withVoters(aVoter())
-      .withRounds(aRound({ id: 'round-1', positionId: 'president', candidateIds: ['ana'], tally: { ana: 1 }, status: 'CLOSED' }))
+      .withRounds(
+        aRound({
+          id: 'round-1',
+          positionId: 'president',
+          candidateIds: ['ana'],
+          tally: { ana: 1 },
+          status: 'CLOSED',
+        }),
+      )
       .withQueue('treasurer')
       .build();
 
     const annulled = valueOf(annulRound(election, 'round-1'));
 
-    expect(eligibleCandidates(annulled, 'treasurer').map((candidate) => candidate.id)).toEqual(['ana']);
+    expect(eligibleCandidates(annulled, 'treasurer').map((candidate) => candidate.id)).toEqual([
+      'ana',
+    ]);
   });
 
   it('annuls the latest round of a position even if another position voted afterwards', () => {
@@ -47,7 +60,12 @@ describe('annulRound', () => {
       .open()
       .withPositions(
         aPosition({ id: 'president', status: 'DECIDED', electedCandidateId: 'ana' }),
-        aPosition({ id: 'treasurer', title: 'Treasurer', status: 'DECIDED', electedCandidateId: 'bia' }),
+        aPosition({
+          id: 'treasurer',
+          title: 'Treasurer',
+          status: 'DECIDED',
+          electedCandidateId: 'bia',
+        }),
       )
       .withRounds(
         aRound({ id: 'president-round', positionId: 'president', status: 'CLOSED' }),
@@ -59,7 +77,12 @@ describe('annulRound', () => {
 
     expect(result).toMatchObject({
       ok: true,
-      value: { positions: [{ id: 'president', status: 'PENDING' }, { id: 'treasurer', status: 'DECIDED' }] },
+      value: {
+        positions: [
+          { id: 'president', status: 'PENDING' },
+          { id: 'treasurer', status: 'DECIDED' },
+        ],
+      },
     });
   });
 
@@ -68,7 +91,12 @@ describe('annulRound', () => {
       .open()
       .withPositions(
         aPosition({ id: 'president', status: 'DECIDED', electedCandidateId: 'ana' }),
-        aPosition({ id: 'treasurer', title: 'Treasurer', status: 'DECIDED', electedCandidateId: 'bia' }),
+        aPosition({
+          id: 'treasurer',
+          title: 'Treasurer',
+          status: 'DECIDED',
+          electedCandidateId: 'bia',
+        }),
       )
       .withRounds(
         aRound({ id: 'president-round', positionId: 'president', status: 'CLOSED' }),
@@ -96,13 +124,19 @@ describe('annulRound', () => {
 
     const result = annulRound(election, 'valid-round');
 
-    expect(result).toMatchObject({ ok: true, value: { rounds: [{ status: 'ANNULLED' }, { status: 'ANNULLED' }] } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { rounds: [{ status: 'ANNULLED' }, { status: 'ANNULLED' }] },
+    });
   });
 
   it('does not list the position twice when it was already back in the queue', () => {
     const election = anElection()
       .open()
-      .withPositions(aPosition({ id: 'president' }), aPosition({ id: 'treasurer', title: 'Treasurer' }))
+      .withPositions(
+        aPosition({ id: 'president' }),
+        aPosition({ id: 'treasurer', title: 'Treasurer' }),
+      )
       .withRounds(aRound({ id: 'round-1', positionId: 'president', tally: {}, status: 'CLOSED' }))
       .withQueue('president', 'treasurer')
       .build();

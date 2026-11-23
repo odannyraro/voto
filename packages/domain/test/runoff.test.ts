@@ -43,20 +43,33 @@ function electionInRunoff(runoff: Partial<Round>) {
     .withVoters(aVoter({ id: 'voter-1' }), aVoter({ id: 'voter-2', code: 'BBBB3333' }))
     .withRounds(
       firstRoundWithoutMajority,
-      aRound({ id: 'runoff', kind: 'RUNOFF', candidateIds: ['bia', 'caio'], eligibleVoterIds: ['voter-1', 'voter-2'], ...runoff }),
+      aRound({
+        id: 'runoff',
+        kind: 'RUNOFF',
+        candidateIds: ['bia', 'caio'],
+        eligibleVoterIds: ['voter-1', 'voter-2'],
+        ...runoff,
+      }),
     )
     .build();
 }
 
 describe('openRunoff', () => {
   it('opens a runoff round with the two finalists of the first round', () => {
-    const result = openRunoff(electionAwaitingRunoff(), { positionId: 'president' }, fixedContext());
+    const result = openRunoff(
+      electionAwaitingRunoff(),
+      { positionId: 'president' },
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({
       ok: true,
       value: {
         positions: [{ status: 'VOTING' }],
-        rounds: [{ id: 'first-round' }, { id: 'id-1', kind: 'RUNOFF', candidateIds: ['bia', 'caio'], status: 'OPEN' }],
+        rounds: [
+          { id: 'first-round' },
+          { id: 'id-1', kind: 'RUNOFF', candidateIds: ['bia', 'caio'], status: 'OPEN' },
+        ],
       },
     });
   });
@@ -66,17 +79,29 @@ describe('openRunoff', () => {
       ...electionAwaitingRunoff(),
       rounds: [
         firstRoundWithoutMajority,
-        aRound({ id: 'blank-runoff', kind: 'RUNOFF', candidateIds: ['bia', 'caio'], tally: { [BLANK]: 1 }, status: 'CLOSED' }),
+        aRound({
+          id: 'blank-runoff',
+          kind: 'RUNOFF',
+          candidateIds: ['bia', 'caio'],
+          tally: { [BLANK]: 1 },
+          status: 'CLOSED',
+        }),
       ],
     };
 
     const result = openRunoff(election, { positionId: 'president' }, fixedContext());
 
-    expect(result).toMatchObject({ ok: true, value: { rounds: [{}, {}, { kind: 'RUNOFF', candidateIds: ['bia', 'caio'] }] } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { rounds: [{}, {}, { kind: 'RUNOFF', candidateIds: ['bia', 'caio'] }] },
+    });
   });
 
   it('rejects a position that is not waiting for a runoff', () => {
-    const election = anElection().open().withPositions(aPosition({ id: 'president' })).build();
+    const election = anElection()
+      .open()
+      .withPositions(aPosition({ id: 'president' }))
+      .build();
 
     const result = openRunoff(election, { positionId: 'president' }, fixedContext());
 
@@ -104,7 +129,10 @@ describe('closing a runoff', () => {
 
     const result = closeRound(election, 'runoff');
 
-    expect(result).toMatchObject({ ok: true, value: { positions: [{ status: 'DECIDED', electedCandidateId: 'bia' }] } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { positions: [{ status: 'DECIDED', electedCandidateId: 'bia' }] },
+    });
   });
 
   it('breaks a tie between the finalists with the position rule', () => {
@@ -112,7 +140,10 @@ describe('closing a runoff', () => {
 
     const result = closeRound(election, 'runoff');
 
-    expect(result).toMatchObject({ ok: true, value: { positions: [{ status: 'DECIDED', electedCandidateId: 'bia' }] } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { positions: [{ status: 'DECIDED', electedCandidateId: 'bia' }] },
+    });
   });
 
   it('keeps the position waiting for a runoff when the runoff had no valid votes', () => {
@@ -120,6 +151,9 @@ describe('closing a runoff', () => {
 
     const result = closeRound(election, 'runoff');
 
-    expect(result).toMatchObject({ ok: true, value: { positions: [{ status: 'AWAITING_RUNOFF' }], queue: [] } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { positions: [{ status: 'AWAITING_RUNOFF' }], queue: [] },
+    });
   });
 });

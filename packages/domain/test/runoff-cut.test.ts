@@ -13,7 +13,11 @@ const candidates = [
 
 describe('computeResult runoff cut', () => {
   it('sends the two leaders to the runoff without a tiebreak when they tie at the top', () => {
-    const round = aRound({ status: 'CLOSED', candidateIds: ['ana', 'bia', 'caio'], tally: { ana: 2, bia: 2, caio: 1 } });
+    const round = aRound({
+      status: 'CLOSED',
+      candidateIds: ['ana', 'bia', 'caio'],
+      tally: { ana: 2, bia: 2, caio: 1 },
+    });
 
     const result = computeResult(round, position, candidates);
 
@@ -21,7 +25,11 @@ describe('computeResult runoff cut', () => {
   });
 
   it('picks two of three candidates tied at the top using the position rule', () => {
-    const round = aRound({ status: 'CLOSED', candidateIds: ['caio', 'bia', 'ana'], tally: { ana: 2, bia: 2, caio: 2 } });
+    const round = aRound({
+      status: 'CLOSED',
+      candidateIds: ['caio', 'bia', 'ana'],
+      tally: { ana: 2, bia: 2, caio: 2 },
+    });
 
     const result = computeResult(round, position, candidates);
 

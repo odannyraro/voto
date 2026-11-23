@@ -15,7 +15,11 @@ export interface BallotView {
 /** Resultado de uma rodada pronto para exibir (formato do `RoundResultDTO`, §6.3). */
 export interface RoundResultView extends Omit<RoundResult, 'positionId' | 'counts'> {
   readonly positionTitle: string;
-  readonly counts: readonly { readonly candidateId: string; readonly name: string; readonly votes: number }[];
+  readonly counts: readonly {
+    readonly candidateId: string;
+    readonly name: string;
+    readonly votes: number;
+  }[];
 }
 
 /** O que a tela do eleitor deve mostrar agora (formato do `VoterStateDTO`, sem `serverNow`). */
@@ -38,7 +42,8 @@ export type VoterView =
 export function releaseResults(election: Election, roundId: string): Result<Election> {
   const round = election.rounds.find((candidate) => candidate.id === roundId);
   if (!round) return fail('ROUND_NOT_FOUND', `Round ${roundId} does not exist`);
-  if (round.status !== 'CLOSED') return fail('ROUND_NOT_CLOSED', 'Only results of closed rounds can be released');
+  if (round.status !== 'CLOSED')
+    return fail('ROUND_NOT_CLOSED', 'Only results of closed rounds can be released');
   return ok(replaceRound(election, { ...round, resultsReleased: true }));
 }
 
@@ -84,7 +89,8 @@ export function voterView(election: Election, voterId: string): VoterView {
  * @returns `VOTING` com a cédula, `VOTED` se já votou ou `WAITING` se não é apto nesta rodada.
  */
 function openRoundView(election: Election, round: Round, voterId: string): VoterView {
-  if (!round.eligibleVoterIds.includes(voterId)) return { phase: 'WAITING', electionName: election.name };
+  if (!round.eligibleVoterIds.includes(voterId))
+    return { phase: 'WAITING', electionName: election.name };
   if (round.votedVoterIds.includes(voterId)) return { phase: 'VOTED', roundId: round.id };
 
   return {
@@ -109,13 +115,21 @@ function openRoundView(election: Election, round: Round, voterId: string): Voter
  */
 function describeResult(election: Election, round: Round): RoundResultView {
   const position = findPosition(election, round.positionId);
-  if (!position) throw new Error(`Round ${round.id} points to unknown position ${round.positionId}`);
+  if (!position)
+    throw new Error(`Round ${round.id} points to unknown position ${round.positionId}`);
 
-  const { positionId: _positionId, counts, ...rest } = computeResult(round, position, election.candidates);
+  const {
+    positionId: _positionId,
+    counts,
+    ...rest
+  } = computeResult(round, position, election.candidates);
   return {
     ...rest,
     positionTitle: position.title,
-    counts: counts.map((count) => ({ ...count, name: candidateNameOf(election, count.candidateId) })),
+    counts: counts.map((count) => ({
+      ...count,
+      name: candidateNameOf(election, count.candidateId),
+    })),
   };
 }
 

@@ -18,9 +18,13 @@ export function deferPosition(election: Election, positionId: string): Result<El
 
   const position = findPosition(election, positionId);
   if (!position) return fail('POSITION_NOT_FOUND', `Position ${positionId} does not exist`);
-  if (position.status !== 'PENDING') return fail('POSITION_NOT_PENDING', 'Only positions in the queue can be deferred');
+  if (position.status !== 'PENDING')
+    return fail('POSITION_NOT_PENDING', 'Only positions in the queue can be deferred');
 
-  return ok({ ...election, queue: [...election.queue.filter((id) => id !== positionId), positionId] });
+  return ok({
+    ...election,
+    queue: [...election.queue.filter((id) => id !== positionId), positionId],
+  });
 }
 
 /**
@@ -33,17 +37,27 @@ export function deferPosition(election: Election, positionId: string): Result<El
  * @returns A eleição com o cargo `CANCELLED` e fora da fila, ou `ELECTION_FINISHED`,
  *   `POSITION_NOT_FOUND`, `POSITION_NOT_PENDING` ou `CONFIRMATION_MISMATCH`.
  */
-export function cancelPosition(election: Election, positionId: string, confirmTitle: string): Result<Election> {
+export function cancelPosition(
+  election: Election,
+  positionId: string,
+  confirmTitle: string,
+): Result<Election> {
   const finished = requireNotFinished(election);
   if (finished) return finished;
 
   const position = findPosition(election, positionId);
   if (!position) return fail('POSITION_NOT_FOUND', `Position ${positionId} does not exist`);
   if (position.status !== 'PENDING' && position.status !== 'AWAITING_RUNOFF') {
-    return fail('POSITION_NOT_PENDING', 'Only positions that are not being voted or decided can be cancelled');
+    return fail(
+      'POSITION_NOT_PENDING',
+      'Only positions that are not being voted or decided can be cancelled',
+    );
   }
   if (confirmTitle !== position.title) {
-    return fail('CONFIRMATION_MISMATCH', 'Type the exact position title to confirm the cancellation');
+    return fail(
+      'CONFIRMATION_MISMATCH',
+      'Type the exact position title to confirm the cancellation',
+    );
   }
 
   const cancelled = replacePosition(election, { ...position, status: 'CANCELLED' });

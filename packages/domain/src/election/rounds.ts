@@ -30,8 +30,10 @@ export interface StartRoundInput {
  *   `NO_POSITIONS` (nada para votar).
  */
 export function openElection(election: Election): Result<Election> {
-  if (election.status !== 'DRAFT') return fail('ELECTION_NOT_DRAFT', 'The election was already opened');
-  if (election.positions.length === 0) return fail('NO_POSITIONS', 'Add at least one position before opening');
+  if (election.status !== 'DRAFT')
+    return fail('ELECTION_NOT_DRAFT', 'The election was already opened');
+  if (election.positions.length === 0)
+    return fail('NO_POSITIONS', 'Add at least one position before opening');
   return ok({ ...election, status: 'OPEN' });
 }
 
@@ -46,7 +48,11 @@ export function openElection(election: Election): Result<Election> {
  *   `ROUND_IN_PROGRESS`, `RUNOFF_PENDING`, `POSITION_NOT_FOUND`, `POSITION_NOT_PENDING`,
  *   `INVALID_VOTING_DURATION`, `NO_ELIGIBLE_CANDIDATES` ou `NO_CREDENTIALED_VOTERS`.
  */
-export function openRound(election: Election, input: OpenRoundInput, ctx: DomainContext): Result<Election> {
+export function openRound(
+  election: Election,
+  input: OpenRoundInput,
+  ctx: DomainContext,
+): Result<Election> {
   const blocked = checkCanStartRound(election);
   if (blocked) return blocked;
   // Um 2º turno pendente precisa ser resolvido antes, senão um finalista poderia ser
@@ -57,10 +63,12 @@ export function openRound(election: Election, input: OpenRoundInput, ctx: Domain
 
   const position = findPosition(election, input.positionId);
   if (!position) return fail('POSITION_NOT_FOUND', `Position ${input.positionId} does not exist`);
-  if (position.status !== 'PENDING') return fail('POSITION_NOT_PENDING', 'This position is not waiting to be voted');
+  if (position.status !== 'PENDING')
+    return fail('POSITION_NOT_PENDING', 'This position is not waiting to be voted');
 
   const candidateIds = eligibleCandidates(election, position.id).map((candidate) => candidate.id);
-  if (candidateIds.length === 0) return fail('NO_ELIGIBLE_CANDIDATES', 'The position has no eligible candidates');
+  if (candidateIds.length === 0)
+    return fail('NO_ELIGIBLE_CANDIDATES', 'The position has no eligible candidates');
 
   const durationSeconds = input.durationSeconds ?? election.defaultVotingSeconds;
   return startRound(election, { position, kind: 'FIRST', candidateIds, durationSeconds }, ctx);
@@ -89,12 +97,19 @@ export function checkCanStartRound(election: Election): Result<never> | undefine
  * @param ctx - Contexto do comando.
  * @returns A eleição com a rodada, ou `INVALID_VOTING_DURATION` ou `NO_CREDENTIALED_VOTERS`.
  */
-export function startRound(election: Election, input: StartRoundInput, ctx: DomainContext): Result<Election> {
+export function startRound(
+  election: Election,
+  input: StartRoundInput,
+  ctx: DomainContext,
+): Result<Election> {
   const durationError = validateVotingSeconds(input.durationSeconds);
   if (durationError) return durationError;
 
-  const eligibleVoterIds = election.voters.filter((v) => v.status === 'CREDENTIALED').map((v) => v.id);
-  if (eligibleVoterIds.length === 0) return fail('NO_CREDENTIALED_VOTERS', 'Credential voters before opening a round');
+  const eligibleVoterIds = election.voters
+    .filter((v) => v.status === 'CREDENTIALED')
+    .map((v) => v.id);
+  if (eligibleVoterIds.length === 0)
+    return fail('NO_CREDENTIALED_VOTERS', 'Credential voters before opening a round');
 
   const round: Round = {
     id: ctx.newId(),
