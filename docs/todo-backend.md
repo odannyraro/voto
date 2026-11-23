@@ -53,6 +53,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `packages/shared/src/index.ts` → API pública do `shared` (`APP_NAME` + reexporta o resto).
 - `packages/shared/src/dto.ts` → tipos do agregado (`Election`, `Round`...), `BLANK` e DTOs da API (`AdminElectionDTO`, `VoterStateDTO`, `RoundResultDTO`, `RoundView`, `NextPositionDTO`, `ElectionSummaryDTO`, `ErrorDTO`).
 - `packages/shared/src/error-codes.ts` → `ERROR_CODES` (domínio + servidor) e `ErrorCode`.
+- `packages/shared/src/api-schemas.ts` → schemas Zod dos corpos de requisição (§6.1/§6.2) e tipos inferidos.
 - `packages/shared/src/socket-events.ts` → `SOCKET_EVENTS` e tipos `ServerToClientEvents` / `ClientToServerEvents`.
 - `packages/domain/src/model.ts` → só reexporta os tipos do agregado de `@voto/shared`.
 - `apps/server/src/index.ts` → servidor (por ora só `SERVICE_NAME`).
@@ -140,7 +141,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Decisões: (1) `BLANK` também foi para o `shared` (o schema de voto da S0.3b precisa dele). (2) `model.ts` do domínio usa reexportação **nomeada**, não `export *`, para o `index.ts` do domínio não expor `ERROR_CODES`, `SOCKET_EVENTS` e afins. (3) `ElectionSummaryDTO` não existia na §6.3; defini `{ id, name, status, positionCount, voterCount }` (ver "Decisões e desvios"). (4) `ErrorDTO.error.code` é `ErrorCode`, não `string`. (5) `ERROR_CODES` é um array `as const` (igual a `DOMAIN_ERROR_CODES`), para a S0.4 usar `.includes`. (6) Alteração no domínio: só `model.ts` (agora reexportação) e `package.json`. Avisar A.
 
 
-### [ ] S0.3b — Contratos: schemas Zod dos corpos de requisição
+### [x] S0.3b — Contratos: schemas Zod dos corpos de requisição
 **Ref.:** architecture §6.1, §6.2.
 **Fazer:**
 - `packages/shared/src/api-schemas.ts`: um schema Zod para cada corpo de requisição das tabelas §6.1 e §6.2 (login, criar/editar eleição, cargo, fila, candidato, gerar eleitores, abrir rodada, 2º turno, cancelar cargo, sessão de eleitor, voto). Exportar também os tipos inferidos (`LoginBody` etc.).
@@ -149,7 +150,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 **Testes (escrever antes):** para cada schema, ao menos um caso válido e os casos inválidos mais relevantes. Use `it.each` com tabela nomeada só quando forem variações do mesmo comportamento.
 **Pronto quando:** todos os schemas da §6 existem e estão testados; cobertura do `shared` ≥ 80%.
 **Commit sugerido:** `feat(shared): adiciona schemas Zod dos corpos da API`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `@voto/shared` exporta um schema Zod por corpo de requisição das §6.1 e §6.2, com os tipos inferidos (`LoginBody`, `CreateCandidateBody`...). `zod` virou dependência do `shared` (já estava na stack, §2).
+- Arquivos: `packages/shared/src/api-schemas.ts` (reexportado no `index.ts`), `packages/shared/package.json`, `package-lock.json`.
+- Como usar: `loginBodySchema`, `createElectionBodySchema`, `updateElectionBodySchema`, `createPositionBodySchema`, `updatePositionBodySchema`, `queueBodySchema`, `createCandidateBodySchema`, `updateCandidateBodySchema`, `credentialVotersBodySchema`, `openRoundBodySchema`, `openRunoffBodySchema`, `cancelPositionBodySchema`, `voterSessionBodySchema`, `castVoteBodySchema`. Na B4, `parse(schema, data)` usa `schema.parse`; o `ZodError` vira 400 `VALIDATION_ERROR`.
+- Testes: `packages/shared/test/api-schemas.test.ts` (80 execuções novas, sobre os 14 schemas, com limites exatos). `shared` passa de 58 para 138 execuções, com cobertura de 100%. Domínio segue com 205.
+- Decisões: (1) `PATCH` usa `.partial()` do schema de criação. Em `updateCandidateBodySchema`, a regra da primeira opção só vale se `applications` e `firstChoicePositionId` chegam juntos; do contrário o domínio compara com o valor guardado. (2) A senha do login não é "trimada" (espaços podem fazer parte dela); os demais textos são. (3) `durationSeconds`, `defaultVotingSeconds`, idade e `count` repetem os limites do domínio como constantes locais, porque o `shared` não pode importá-lo. (4) `code` do eleitor só confere tamanho 8 e maiúsculas (como o TO-DO pede); código com caractere fora do alfabeto cai em 404 `INVALID_CODE` no serviço. (5) `labels` > `count` não é checado aqui: o domínio devolve `INVALID_VOTER_LABELS`. (6) `choice` não valida contra a cédula (isso é regra do domínio).
 
 ### [ ] S0.4 — Servidor enxergando o domínio real
 **Ref.:** architecture §3, §6.3. (A versão antiga desta tarefa criava stubs do domínio. Não é mais necessário: A já implementou a API pública.)

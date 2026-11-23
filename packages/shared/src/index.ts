@@ -7,3 +7,4 @@ export {
   type ClientToServerEvents,
   type ServerToClientEvents,
 } from './socket-events';
+export * from './api-schemas';
