@@ -11,5 +11,8 @@
   "dependencies": {
     "@voto/domain": "*",
     "@voto/shared": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2"
   }
 }

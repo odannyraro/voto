@@ -64,6 +64,10 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/error-status.ts` → `statusForErrorCode(code)`: código de erro → status HTTP (§6.3).
 - `apps/server/src/ports/` → portas da aplicação (só tipos): repositórios, `Clock`, `Scheduler`, `CodeGenerator`, `Notifier`; `index.ts` reexporta tudo.
 - `apps/server/test/doubles/` → `FakeClock`, `FakeScheduler`, `SpyNotifier`, `StubCodeGenerator` (cada um com teste próprio).
+- `apps/server/src/adapters/` → `InMemoryElectionRepository` e `InMemoryAdminRepository` (cópias com `structuredClone`, índice de códigos de eleitor).
+- `apps/server/src/http/errors.ts` → `HttpError(status, code, message)`.
+- `apps/server/test/contracts/election-repository.contract.ts` → suíte de contrato de `ElectionRepository` (a B17 reutiliza).
+- `apps/server/test/support/election-records.ts` → `anElectionRecord(...)` e `unwrap(result)` para montar registros com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
 - `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
@@ -260,7 +264,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: 21 (`fake-clock` 5, `fake-scheduler` 11, `stub-code-generator` 2, `spy-notifier` 3). Servidor: 45 testes; os 3 testes "negativos" do scheduler (cancelar, 1 ms no futuro, `<=`) foram conferidos com mutação manual.
 - Decisões: (1) `ElectionRepository.create(record)` falha se o id já existe e `save` lança `VERSION_CONFLICT` (contrato exato fica na B2). (2) `Admin = { id, username, passwordHash }` mora em `ports/admin-repository.ts`. (3) `Notifier` é síncrono (emitir no socket não espera nada) e recebe os DTOs reais de `@voto/shared`; a B7a precisará montar um `AdminElectionDTO` mesmo no "placeholder". (4) `CodeGenerator` só reexporta o tipo do domínio. (5) As portas são só tipos, então não entram nos números de cobertura.
 
-### [ ] B2 — Repositórios em memória + suíte de contrato
+### [x] B2 — Repositórios em memória + suíte de contrato
 **Ref.:** architecture §8.1.
 **Fazer:**
 - `apps/server/test/contracts/election-repository.contract.ts`: função `describeElectionRepositoryContract(nome, makeRepo)` com os testes de comportamento de **qualquer** implementação. A B17 vai reutilizar essa função para o Postgres.
@@ -282,7 +286,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** a suíte de contrato roda contra a implementação em memória.
 **Commit sugerido:** `feat(server): implementa repositórios em memória com testes de contrato`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `InMemoryElectionRepository` e `InMemoryAdminRepository`, mais a suíte de contrato `describeElectionRepositoryContract`, que a B17 reaproveita para o Postgres. A `HttpError` mínima nasceu aqui porque `save` precisa lançá-la.
+- Arquivos: `apps/server/src/adapters/{in-memory-election-repository,in-memory-admin-repository}.ts`, `src/http/errors.ts`, `test/contracts/election-repository.contract.ts`, `test/support/election-records.ts`, `test/adapters/*.test.ts`, `apps/server/{package.json,tsconfig.json}`.
+- Como usar: `new InMemoryElectionRepository()` / `new InMemoryAdminRepository()`. Contrato: `describeElectionRepositoryContract('Nome', () => new Repo())` num arquivo `.test.ts`. `anElectionRecord({ id, adminId?, voterCodes?, version? })` monta registros com o domínio real (voter id = `<eleição>:<código>`); `unwrap(result)` entrega o valor ou falha a montagem.
+- Testes: contrato 21 casos (create/get, cópias, `save`, listagens, índice de códigos) + admin 7 = 28. Servidor: 73 testes, 100% de cobertura. Limite da versão (`!==`) conferido nos dois lados (esperada menor e maior que a guardada).
+- Decisões: (1) `save` de eleição inexistente lança `ELECTION_NOT_FOUND` (404) e `create` de id repetido lança `Error` simples; a B17 deve seguir. (2) O índice de códigos é refeito a cada gravação, então o desfazer de um credenciamento libera os códigos. Código de eleitor revogado continua achado por `findByVoterCode` (o serviço decide o 403). (3) `HttpError(status, code, message)` já existe em `http/errors.ts`; a B4 só a usa no error handler. (4) Adicionado `@types/node` (devDependency do server, `types: ["node"]`): sem ele `structuredClone` não tem tipo, e B3/B11 precisam de `process` e `node:crypto`. Não estava explícito na §2.
 
 ### [ ] B3 — Configuração por variáveis de ambiente
 **Ref.:** architecture §8.4, §13.
