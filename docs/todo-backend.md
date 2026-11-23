@@ -57,6 +57,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `packages/shared/src/socket-events.ts` → `SOCKET_EVENTS` e tipos `ServerToClientEvents` / `ClientToServerEvents`.
 - `packages/domain/src/model.ts` → só reexporta os tipos do agregado de `@voto/shared`.
 - `apps/server/src/index.ts` → servidor (por ora só `SERVICE_NAME`).
+- `apps/server/src/http/error-status.ts` → `statusForErrorCode(code)`: código de erro → status HTTP (§6.3).
 - `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
 - `packages/domain/tsconfig.stryker.json` → config do TS usada pelo StrykerJS.
 
@@ -157,7 +158,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `packages/shared/test/api-schemas.test.ts` (80 execuções novas, sobre os 14 schemas, com limites exatos). `shared` passa de 58 para 138 execuções, com cobertura de 100%. Domínio segue com 205.
 - Decisões: (1) `PATCH` usa `.partial()` do schema de criação. Em `updateCandidateBodySchema`, a regra da primeira opção só vale se `applications` e `firstChoicePositionId` chegam juntos; do contrário o domínio compara com o valor guardado. (2) A senha do login não é "trimada" (espaços podem fazer parte dela); os demais textos são. (3) `durationSeconds`, `defaultVotingSeconds`, idade e `count` repetem os limites do domínio como constantes locais, porque o `shared` não pode importá-lo. (4) `code` do eleitor só confere tamanho 8 e maiúsculas (como o TO-DO pede); código com caractere fora do alfabeto cai em 404 `INVALID_CODE` no serviço. (5) `labels` > `count` não é checado aqui: o domínio devolve `INVALID_VOTER_LABELS`. (6) `choice` não valida contra a cédula (isso é regra do domínio).
 
-### [ ] S0.4 — Servidor enxergando o domínio real
+### [x] S0.4 — Servidor enxergando o domínio real
 **Ref.:** architecture §3, §6.3. (A versão antiga desta tarefa criava stubs do domínio. Não é mais necessário: A já implementou a API pública.)
 **Fazer:**
 - `apps/server` passa a depender de `@voto/domain` e `@voto/shared` (dependências de workspace) e a importar o domínio **diretamente**, sem injeção.
@@ -170,7 +171,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** testes verdes; `npm test` na raiz roda domínio, shared e server.
 **Commit sugerido:** `feat(server): integra o domínio real e mapeia códigos de erro para HTTP`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `@voto/server` depende de `@voto/domain` e `@voto/shared` e importa o domínio direto. `statusForErrorCode` traduz qualquer `ErrorCode` em status HTTP.
+- Arquivos: `apps/server/src/http/error-status.ts`, `apps/server/package.json` (dependências de workspace), `package-lock.json`.
+- Como usar: `statusForErrorCode(code: ErrorCode): number` (B4 chama no error handler). `*_NOT_FOUND` (sufixo, então códigos novos do domínio já valem) e `INVALID_CODE` → 404; `VALIDATION_ERROR` → 400; `INVALID_CREDENTIALS`/`INVALID_TOKEN` → 401; `FORBIDDEN`/`VOTER_REVOKED` → 403; `ROUND_EXPIRED` → 410; `RATE_LIMITED` → 429; `INTERNAL_ERROR` → 500; o resto → 409 (inclui `VERSION_CONFLICT`).
+- Testes: `test/http/error-status.test.ts` (21 execuções, `it.each` por faixa), `test/error-codes-contract.test.ts` (1: todo código do domínio está em `ERROR_CODES`; conferi que falha ao remover um código do `shared`), `test/domain-integration.test.ts` (1: `createElection` real devolve `ok: true`). Server: 24 testes, 100% de cobertura; domínio 205; shared 138.
+- Decisões: (1) `VOTER_REVOKED` → 403 (e não 409), porque a §6.2 pede `403 VOTER_REVOKED` na sessão do eleitor; a tabela da §6.3 do TO-DO não o listava. (2) Os testes de contrato e de fumaça já nascem verdes (domínio e shared prontos); só o `statusForErrorCode` passou por RED real (21 falhas de asserção).
 
 ### [ ] S0.5 — Esqueleto do frontend
 **Ref.:** architecture §9, §14. **Atenção:** depois desta tarefa, `apps/web` passa a ser de C.
