@@ -48,7 +48,10 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 
 > Mantido pelo agente. Uma linha por módulo importante: caminho → para que serve.
 
-_(vazio até a primeira tarefa)_
+- `package.json`, `tsconfig.base.json`, `eslint.config.js`, `.prettierrc.json` → raiz do monorepo (scripts `lint`, `format`, `format:check`, `typecheck`; regra de direção de imports no ESLint).
+- `packages/shared/src/index.ts` → contratos compartilhados (por ora só `APP_NAME`).
+- `apps/server/src/index.ts` → servidor (vazio por ora).
+- `packages/domain/tsconfig.stryker.json` → config do TS usada pelo StrykerJS.
 
 ---
 
@@ -58,7 +61,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Ponto de partida:** a `main` com o merge da branch `feat/domain` (que já contém os docs e o `packages/domain`).
 
-### [ ] S0.1 — Monorepo, TypeScript e qualidade de código
+### [x] S0.1 — Monorepo, TypeScript e qualidade de código
 **Ref.:** architecture §2, §3 (regra de direção de imports), §4, §14.
 **Fazer:**
 - Inicializar o git se ainda não existir. Criar `.gitignore` (`node_modules`, `dist`, `coverage`, `playwright-report`, `test-results`, `.env*`), `.gitattributes` com `* text=auto eol=lf` (evita quebras do Prettier no Windows), `.editorconfig` e `.nvmrc` com `24`.
@@ -81,7 +84,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 **Testes (escrever antes):** é uma tarefa de configuração. A verificação é rodar, na raiz, `npm install`, `npm run lint`, `npm run typecheck` e `npm test -w packages/domain` (os 205 testes do domínio continuam passando). Confirme também que um import proibido (teste manual temporário, ex.: `shared` importando `@voto/domain`) é acusado pelo lint, e desfaça o import depois.
 **Pronto quando:** os comandos acima passam; a estrutura bate com a §4; o domínio roda dentro do monorepo sem configuração duplicada.
 **Commit sugerido:** `chore: cria monorepo com workspaces, TypeScript, ESLint e Prettier`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: monorepo com workspaces `domain`, `shared` e `server`; TS, ESLint (flat) e Prettier na raiz; domínio integrado sem config duplicada.
+- Arquivos: `package.json`, `tsconfig.base.json`, `eslint.config.js`, `.prettierrc.json`, `.prettierignore`, `.gitignore`, `.gitattributes`, `.editorconfig`, `.nvmrc`, `.npmrc`, `README.md` novo, `docs/requisitos.md`, `packages/{shared,domain}/*`, `apps/server/*`.
+- Como usar: `npm run lint`, `npm run format[:check]`, `npm run typecheck`; `tsc` é o TS 7 e `tsc6` o TS 6 (só para o ESLint). Mutação: `npm run test:mutation -w packages/domain` (score 89,27%).
+- Testes: sem testes novos (configuração). Os 205 do domínio passam; lint, format:check e typecheck verdes; import proibido (`shared`→`@voto/domain`, `domain`→`@voto/server`) acusado e depois desfeito.
+- Decisões: (1) `typescript-eslint` **não** suporta TS 7 e falha ao carregar, mesmo sem regras com tipos; usei o alias oficial (ver "Decisões e desvios"). (2) Prettier ignora `*.md`, porque formatar os docs reescreveria CLAUDE.md e tabelas de outros integrantes. (3) Regra `no-unused-vars` aceita prefixo `_` (o domínio usa em 2 desestruturações). (4) Regra do `web` está no ESLint, mas não foi exercitada, pois `apps/web` só nasce na S0.5. (5) Alterações no domínio: só `package.json`, `tsconfig.json`, `tsconfig.stryker.json`, `.gitignore` removido e formatação automática do código.
 
 ### [ ] S0.2 — Vitest e cobertura em cada workspace
 **Ref.:** architecture §10.1, §14.
@@ -664,3 +672,4 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - ~~2026-11-22 — planejamento — o domínio é injetado no servidor (`AppDeps.domain: DomainApi`) para permitir stubs antes do marco M1.~~ **Revogada em 2026-11-23**: o domínio ficou pronto antes do Sprint 0, então o servidor o importa direto e testa com ele real (real > fake > stub > mock).
 - 2026-11-23 — replanejamento — o Sprint 0 integra o `packages/domain` já existente (TS 7, Vitest 5): S0.1 e S0.2 absorvem as configs, S0.3a move `model.ts` para `@voto/shared`, e a S0.4 virou "servidor enxergando o domínio real". As assinaturas reais do domínio (`todo-domain.md`, "Decisões e desvios") valem mais que a §5.2.
 - 2026-11-23 — replanejamento — o servidor incrementa `election.version` ao salvar (o domínio mantém o campo, mas não o altera).
+- 2026-11-23 — S0.1 — `typescript-eslint` 8.73 aborta com TS 7 (peer `<6.1`), mesmo na config sem regras de tipos. Solução do post oficial do TS 7: na raiz, `"typescript": "npm:@typescript/typescript6@^6.0.2"` (API usada pelo ESLint) e `"@typescript/native": "npm:typescript@^7.0.2"` (fornece o `tsc` 7). Sem `legacy-peer-deps`. Remover o alias quando o typescript-eslint suportar TS 7.1 (issue #10940).

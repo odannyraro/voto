@@ -1,17 +1,8 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "testRunner": "vitest",
-  "mutate": [
-    "src/**/*.ts",
-    "!src/index.ts",
-    "!src/model.ts",
-    "!src/context.ts"
-  ],
-  "reporters": [
-    "clear-text",
-    "progress",
-    "html"
-  ],
+  "mutate": ["src/**/*.ts", "!src/index.ts", "!src/model.ts", "!src/context.ts"],
+  "reporters": ["clear-text", "progress", "html"],
   "htmlReporter": {
     "fileName": "reports/mutation/index.html"
   },
