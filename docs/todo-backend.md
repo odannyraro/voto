@@ -60,8 +60,21 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/web/src/main.tsx` → composição (`BrowserRouter` + `createRoot`); fora da cobertura.
 - `apps/web/vite.config.ts` → plugin React, proxy `/api` e `/socket.io` e config do Vitest (jsdom, setup, cobertura).
 - `apps/web/test/setup.ts` → setup do Testing Library (`jest-dom` + `cleanup`).
-- `apps/server/src/index.ts` → servidor (por ora só `SERVICE_NAME`).
+- `apps/server/src/config.ts` → `loadConfig(env)`: valida o ambiente com Zod e devolve `Config` (único lugar que lê variáveis de ambiente).
 - `apps/server/src/http/error-status.ts` → `statusForErrorCode(code)`: código de erro → status HTTP (§6.3).
+- `apps/server/src/ports/` → portas da aplicação (só tipos): repositórios, `Clock`, `Scheduler`, `CodeGenerator`, `Notifier`; `index.ts` reexporta tudo.
+- `apps/server/test/doubles/` → `FakeClock`, `FakeScheduler`, `SpyNotifier`, `StubCodeGenerator` (cada um com teste próprio).
+- `apps/server/src/adapters/` → `InMemoryElectionRepository` e `InMemoryAdminRepository` (cópias com `structuredClone`, índice de códigos de eleitor).
+- `apps/server/src/http/errors.ts` → `HttpError(status, code, message)`.
+- `apps/server/src/app.ts` → `AppDeps` e `buildApp(deps)` (Fastify sem `listen`; health e tratadores de erro).
+- `apps/server/src/http/error-handler.ts` → `toErrorResponse(error)` e `registerErrorHandling(app)`: `HttpError`/`DomainError`/`ZodError`/erro do Fastify → `ErrorDTO`.
+- `apps/server/src/http/validate.ts` → `parse(schema, data)` (lança `ZodError`).
+- `apps/server/test/support/make-test-app.ts` → `makeTestApp(overrides?)`: app com doubles e repositórios em memória.
+- `apps/server/test/contracts/election-repository.contract.ts` → suíte de contrato de `ElectionRepository` (a B17 reutiliza).
+- `apps/server/src/services/auth.ts` → `AuthService` (bcrypt + JWT: `login`, `verifyToken`, `issueAdminToken`, `issueVoterToken`, `seedAdmin`).
+- `apps/server/test/support/election-records.ts` → `anElectionRecord(...)` e `unwrap(result)` para montar registros com o domínio real.
+- `apps/server/src/http/auth-plugin.ts` → `registerAuth(app, auth)` (`requireAdmin`, `requireVoter`, `request.auth`) e `getAdminId(request)`.
+- `apps/server/src/http/auth-routes.ts` → `registerAuthRoutes`: `POST /api/admin/login`, `GET /api/admin/me`.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
 - `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
@@ -231,7 +244,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 ## Servidor — fundações
 
-### [ ] B1 — Portas e test doubles
+### [x] B1 — Portas e test doubles
 **Ref.:** architecture §8.1; aulas 17 e 18 (test doubles).
 **Fazer:**
 - `apps/server/src/ports/`: interfaces `ElectionRepository`, `AdminRepository`, `Clock`, `Scheduler`, `CodeGenerator` (reusar o tipo do domínio) e `Notifier`.
@@ -251,9 +264,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** interfaces documentadas com JSDoc curto; doubles testados.
 **Commit sugerido:** `feat(server): define portas da aplicação e test doubles`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: as 6 portas do servidor (`ElectionRepository`, `AdminRepository`, `Clock`, `Scheduler`, `CodeGenerator`, `Notifier`) e os 4 doubles de teste (`FakeClock`, `FakeScheduler`, `SpyNotifier`, `StubCodeGenerator`).
+- Arquivos: `apps/server/src/ports/{election-repository,admin-repository,clock,scheduler,code-generator,notifier,index}.ts`; `apps/server/test/doubles/{fake-clock,fake-scheduler,spy-notifier,stub-code-generator}.ts` (+ um `.test.ts` ao lado de cada).
+- Como usar: `import type { ElectionRepository, ElectionRecord, ... } from '../src/ports'`. Repositórios são **assíncronos** (Postgres). `Scheduler.schedule(at, key, task)` (ordem da §8.1). `FakeScheduler`: `pending()` → `{ key, at }[]`, `await fireDue(now)`, `await fire(key)` (lança se a chave não existe). `SpyNotifier`: arrays `adminStates` (`{ electionId, state }`) e `voterStates` (`{ voterId, state }`). `StubCodeGenerator(codes)` lança ao esgotar. `FakeClock(initial)`: `now()` devolve cópia, `set`, `advance(ms)`.
+- Testes: 21 (`fake-clock` 5, `fake-scheduler` 11, `stub-code-generator` 2, `spy-notifier` 3). Servidor: 45 testes; os 3 testes "negativos" do scheduler (cancelar, 1 ms no futuro, `<=`) foram conferidos com mutação manual.
+- Decisões: (1) `ElectionRepository.create(record)` falha se o id já existe e `save` lança `VERSION_CONFLICT` (contrato exato fica na B2). (2) `Admin = { id, username, passwordHash }` mora em `ports/admin-repository.ts`. (3) `Notifier` é síncrono (emitir no socket não espera nada) e recebe os DTOs reais de `@voto/shared`; a B7a precisará montar um `AdminElectionDTO` mesmo no "placeholder". (4) `CodeGenerator` só reexporta o tipo do domínio. (5) As portas são só tipos, então não entram nos números de cobertura.
 
-### [ ] B2 — Repositórios em memória + suíte de contrato
+### [x] B2 — Repositórios em memória + suíte de contrato
 **Ref.:** architecture §8.1.
 **Fazer:**
 - `apps/server/test/contracts/election-repository.contract.ts`: função `describeElectionRepositoryContract(nome, makeRepo)` com os testes de comportamento de **qualquer** implementação. A B17 vai reutilizar essa função para o Postgres.
@@ -275,9 +293,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** a suíte de contrato roda contra a implementação em memória.
 **Commit sugerido:** `feat(server): implementa repositórios em memória com testes de contrato`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `InMemoryElectionRepository` e `InMemoryAdminRepository`, mais a suíte de contrato `describeElectionRepositoryContract`, que a B17 reaproveita para o Postgres. A `HttpError` mínima nasceu aqui porque `save` precisa lançá-la.
+- Arquivos: `apps/server/src/adapters/{in-memory-election-repository,in-memory-admin-repository}.ts`, `src/http/errors.ts`, `test/contracts/election-repository.contract.ts`, `test/support/election-records.ts`, `test/adapters/*.test.ts`, `apps/server/{package.json,tsconfig.json}`.
+- Como usar: `new InMemoryElectionRepository()` / `new InMemoryAdminRepository()`. Contrato: `describeElectionRepositoryContract('Nome', () => new Repo())` num arquivo `.test.ts`. `anElectionRecord({ id, adminId?, voterCodes?, version? })` monta registros com o domínio real (voter id = `<eleição>:<código>`); `unwrap(result)` entrega o valor ou falha a montagem.
+- Testes: contrato 21 casos (create/get, cópias, `save`, listagens, índice de códigos) + admin 7 = 28. Servidor: 73 testes, 100% de cobertura. Limite da versão (`!==`) conferido nos dois lados (esperada menor e maior que a guardada).
+- Decisões: (1) `save` de eleição inexistente lança `ELECTION_NOT_FOUND` (404) e `create` de id repetido lança `Error` simples; a B17 deve seguir. (2) O índice de códigos é refeito a cada gravação, então o desfazer de um credenciamento libera os códigos. Código de eleitor revogado continua achado por `findByVoterCode` (o serviço decide o 403). (3) `HttpError(status, code, message)` já existe em `http/errors.ts`; a B4 só a usa no error handler. (4) Adicionado `@types/node` (devDependency do server, `types: ["node"]`): sem ele `structuredClone` não tem tipo, e B3/B11 precisam de `process` e `node:crypto`. Não estava explícito na §2.
 
-### [ ] B3 — Configuração por variáveis de ambiente
+### [x] B3 — Configuração por variáveis de ambiente
 **Ref.:** architecture §8.4, §13.
 **Fazer:** `apps/server/src/config.ts` com a função pura `loadConfig(env)`, que valida com Zod e devolve um objeto tipado.
 
@@ -302,9 +325,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** nenhum outro módulo lê `process.env` diretamente.
 **Commit sugerido:** `feat(server): valida configuração de ambiente com Zod`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `loadConfig(env)` valida o ambiente com Zod e devolve `Config` tipada, com os padrões da tabela. Erros saem numa única mensagem, uma linha por variável (`- PORT: must be an integer between 1 and 65535`).
+- Arquivos: `apps/server/src/config.ts`, `apps/server/test/config.test.ts`, `apps/server/package.json` (dependência `zod`, mesma versão do `shared`), `package-lock.json`.
+- Como usar: `loadConfig(process.env)` só no `main.ts` (B20); o resto recebe `Config` por `AppDeps` (B4). Campos: `port`, `nodeEnv`, `jwtSecret`, `adminUsername?`, `adminPassword?`, `repository`, `databaseUrl?`, `bcryptRounds`, `voteGraceMs`, `historyLimit`, `webDistDir?`. Produção exige `JWT_SECRET`, `ADMIN_USERNAME` e `ADMIN_PASSWORD`; `REPOSITORY=pg` exige `DATABASE_URL`.
+- Testes: `test/config.test.ts`, 30 execuções (padrões, leitura completa, produção, repositório, 12 valores rejeitados e 6 limites aceitos, erros agregados). Servidor: 103 testes, 100% de cobertura. Domínio 223, shared 138, web 2.
+- Decisões: (1) variável **vazia** vale como ausente (`.env` e painéis de deploy deixam `VAR=` em branco). (2) Limites além da tabela: `PORT` 1–65535, `BCRYPT_ROUNDS` 4–31 (faixa do bcryptjs), `VOTE_GRACE_MS` ≥ 0, `HISTORY_LIMIT` ≥ 1. (3) Sem `z.coerce`: `Number('')` e `Number('80x')` enganam; o inteiro é validado por regex. (4) `ADMIN_USERNAME`/`ADMIN_PASSWORD` são opcionais fora de produção (sem seed). (5) O segredo JWT de dev é uma constante fixa e não exportada; os testes só exigem que seja o mesmo em dev e teste.
 
-### [ ] B4 — `buildApp`, health e tratamento de erros
+### [x] B4 — `buildApp`, health e tratamento de erros
 **Ref.:** architecture §6.3 (mapeamento de erros), §8.1.
 **Fazer:**
 - `apps/server/src/app.ts`: `buildApp(deps: AppDeps)`, que devolve a instância Fastify sem chamar `listen`. `AppDeps` tem `config`, `clock`, `scheduler`, `notifier`, `codeGenerator`, `newId` e os repositórios. O domínio **não** entra nas deps: é importado direto (é puro e determinístico, então não precisa de double).
@@ -325,9 +353,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** todas as respostas de erro seguem `ErrorDTO`.
 **Commit sugerido:** `feat(server): cria app Fastify com health check e mapeamento de erros`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `buildApp(deps)` devolve o Fastify sem `listen`, com `GET /api/health` e tratamento global de erros: toda resposta de erro (inclusive rota inexistente) segue `ErrorDTO`.
+- Arquivos: `apps/server/src/app.ts` (`AppDeps`, `buildApp`), `src/http/error-handler.ts` (`toErrorResponse`, `registerErrorHandling`), `src/http/validate.ts` (`parse`), `test/support/make-test-app.ts`, `package.json` (dependência `fastify` ^5), `package-lock.json`.
+- Como usar: `makeTestApp(overrides?)` → `{ app, deps, clock, scheduler, notifier }`; registre rotas de teste no `app` antes do 1º `inject` e feche com `app.close()` no `afterEach`. Rotas lançam `HttpError`, `DomainError` ou deixam o `parse(schema, body)` lançar `ZodError`; o handler traduz. Novas rotas entram no `buildApp` (plugins `register`).
+- Testes: `test/app.test.ts` (13 execuções: health, 404, `HttpError`, 3 códigos de domínio, Zod, JSON malformado, 415, mensagem com/sem campo, 500 sem vazar a mensagem, valor lançado que não é `Error`) e `test/http/validate.test.ts` (2). Servidor: 118 testes, cobertura 100% de linhas.
+- Decisões: (1) `ZodError` e erros 4xx do próprio Fastify (JSON malformado, tipo não suportado) viram `VALIDATION_ERROR` mantendo o status (400/415). (2) Erro desconhecido → 500 `INTERNAL_ERROR` com mensagem fixa; a causa só vai para o log (`request.log.error`). (3) Logger do Fastify desligado só com `NODE_ENV=test`. (4) O tratador ficou em `http/error-handler.ts` (e não em `errors.ts`, que mantém só a `HttpError`). (5) `fastify` é dependência nova do `server`, prevista na §2. (6) Em `makeTestApp`, `StubCodeGenerator([])` é o padrão; testes de credenciamento (B11) sobrescrevem.
 
-### [ ] B5 — `AuthService`
+### [x] B5 — `AuthService`
 **Ref.:** architecture §8.4.
 **Fazer:** `services/auth.ts` com:
 - `hashPassword` / `verifyPassword` (`bcryptjs`, número de rodadas vindo da config; nos testes, use 4 para ficarem rápidos);
@@ -346,9 +379,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** testes verdes; nenhuma senha em texto puro é guardada.
 **Commit sugerido:** `feat(server): implementa autenticação com bcrypt e JWT`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `AuthService` com hash de senha (bcryptjs), tokens JWT HS256 (jose) de admin (12h) e de eleitor, `verifyToken`, `login` e `seedAdmin` idempotente. A validade usa o `Clock` injetado (`currentDate` do `jwtVerify`).
+- Arquivos: `apps/server/src/services/auth.ts`, `apps/server/test/services/auth.test.ts`, `apps/server/package.json` (deps `bcryptjs`, `jose`), `package-lock.json`.
+- Como usar: `new AuthService({ adminRepository, clock, jwtSecret, bcryptRounds, newId })` (a B6 monta a partir de `AppDeps`/`config`). `login(u, p)` → token ou `HttpError 401 INVALID_CREDENTIALS`; `issueAdminToken(adminId)`; `issueVoterToken({ electionId, voterId })`; `verifyToken(token)` → `{ role: 'admin', adminId } | { role: 'voter', electionId, voterId }` ou `HttpError 401 INVALID_TOKEN`; `seedAdmin(u, p)` (o `main.ts` chama no boot, B20).
+- Testes: `test/services/auth.test.ts`, 16 (hash 4, login 3, seed 3, expiração 2 com limite exato 12h−1s/12h, token de eleitor 1, adulterado/outro segredo/lixo 3). Servidor: 134 testes, 100% de cobertura.
+- Decisões: (1) Expiração exata: em 12h o token já é rejeitado (`exp <= agora`). (2) Token de eleitor vale 7 dias (a §6 diz "enquanto a eleição durar", mas o token não conhece o fim da eleição). (3) `login` compara com um hash de isca quando o usuário não existe, para o tempo de resposta não revelar usuários. (4) `seedAdmin` com usuário já existente mantém a senha antiga. (5) Claims conferidas com Zod depois do `jwtVerify`; o `sub` guarda `adminId` ou `voterId`. (6) `bcryptjs` e `jose` são da stack (§2).
 
-### [ ] B6 — Rotas de login e autorização por papel
+### [x] B6 — Rotas de login e autorização por papel
 **Ref.:** architecture §6.1 (`/admin/login`, `/admin/me`).
 **Fazer:**
 - `http/auth-plugin.ts`: *preHandlers* `requireAdmin` e `requireVoter`, que leem `Authorization: Bearer` e preenchem `request.auth` (tipado via *declaration merging* do Fastify).
@@ -365,7 +403,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** testes verdes.
 **Commit sugerido:** `feat(server): adiciona login de admin e proteção de rotas por papel`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST /api/admin/login` e `GET /api/admin/me`, mais os *preHandlers* `requireAdmin` / `requireVoter`, que preenchem `request.auth`. O `buildApp` agora cria o `AuthService` a partir das deps.
+- Arquivos: `apps/server/src/http/{auth-plugin,auth-routes}.ts`, `src/app.ts`, `test/http/{auth-plugin,auth-routes}.test.ts`, `test/support/make-test-app.ts` (`TestApp.auth`).
+- Como usar: `registerAuth(app, auth)` devolve `{ requireAdmin, requireVoter }` para `{ preHandler }`; `getAdminId(request)` lê o admin dentro de rota com `requireAdmin` (lança erro simples se esqueceram o hook → 500). Token ausente, não-Bearer ou inválido → 401 `INVALID_TOKEN`; token válido de outro papel → 403 `FORBIDDEN`. Nos testes, `makeTestApp()` devolve `auth` (mesmo repositório, relógio e segredo do app) para criar admins e emitir tokens.
+- Testes: `auth-routes.test.ts` (7) e `auth-plugin.test.ts` (8, 4 deles `it.each` de cabeçalhos inválidos). Servidor: 149 testes, 100% de cobertura. Domínio 223, shared 138, web 2.
+- Decisões: (1) `/me` com token de admin que não existe mais no repositório → 401 `INVALID_TOKEN`. (2) `request.auth` é `TokenClaims | undefined`; as rotas pegam o id por `getAdminId`, sem cast. (3) `AuthService` é construído no `buildApp` e de novo no `makeTestApp` (não entra em `AppDeps`, para a `AppDeps` da §8.1 não mudar). (4) Rate limit do login (§ riscos) não faz parte desta tarefa.
 
 ---
 
