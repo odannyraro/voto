@@ -61,6 +61,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/web/vite.config.ts` → plugin React, proxy `/api` e `/socket.io` e config do Vitest (jsdom, setup, cobertura).
 - `apps/web/test/setup.ts` → setup do Testing Library (`jest-dom` + `cleanup`).
 - `apps/server/src/index.ts` → servidor (por ora só `SERVICE_NAME`).
+- `apps/server/src/config.ts` → `loadConfig(env)`: valida o ambiente com Zod e devolve `Config` (único lugar que lê variáveis de ambiente).
 - `apps/server/src/http/error-status.ts` → `statusForErrorCode(code)`: código de erro → status HTTP (§6.3).
 - `apps/server/src/ports/` → portas da aplicação (só tipos): repositórios, `Clock`, `Scheduler`, `CodeGenerator`, `Notifier`; `index.ts` reexporta tudo.
 - `apps/server/test/doubles/` → `FakeClock`, `FakeScheduler`, `SpyNotifier`, `StubCodeGenerator` (cada um com teste próprio).
@@ -293,7 +294,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: contrato 21 casos (create/get, cópias, `save`, listagens, índice de códigos) + admin 7 = 28. Servidor: 73 testes, 100% de cobertura. Limite da versão (`!==`) conferido nos dois lados (esperada menor e maior que a guardada).
 - Decisões: (1) `save` de eleição inexistente lança `ELECTION_NOT_FOUND` (404) e `create` de id repetido lança `Error` simples; a B17 deve seguir. (2) O índice de códigos é refeito a cada gravação, então o desfazer de um credenciamento libera os códigos. Código de eleitor revogado continua achado por `findByVoterCode` (o serviço decide o 403). (3) `HttpError(status, code, message)` já existe em `http/errors.ts`; a B4 só a usa no error handler. (4) Adicionado `@types/node` (devDependency do server, `types: ["node"]`): sem ele `structuredClone` não tem tipo, e B3/B11 precisam de `process` e `node:crypto`. Não estava explícito na §2.
 
-### [ ] B3 — Configuração por variáveis de ambiente
+### [x] B3 — Configuração por variáveis de ambiente
 **Ref.:** architecture §8.4, §13.
 **Fazer:** `apps/server/src/config.ts` com a função pura `loadConfig(env)`, que valida com Zod e devolve um objeto tipado.
 
@@ -318,7 +319,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** nenhum outro módulo lê `process.env` diretamente.
 **Commit sugerido:** `feat(server): valida configuração de ambiente com Zod`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `loadConfig(env)` valida o ambiente com Zod e devolve `Config` tipada, com os padrões da tabela. Erros saem numa única mensagem, uma linha por variável (`- PORT: must be an integer between 1 and 65535`).
+- Arquivos: `apps/server/src/config.ts`, `apps/server/test/config.test.ts`, `apps/server/package.json` (dependência `zod`, mesma versão do `shared`), `package-lock.json`.
+- Como usar: `loadConfig(process.env)` só no `main.ts` (B20); o resto recebe `Config` por `AppDeps` (B4). Campos: `port`, `nodeEnv`, `jwtSecret`, `adminUsername?`, `adminPassword?`, `repository`, `databaseUrl?`, `bcryptRounds`, `voteGraceMs`, `historyLimit`, `webDistDir?`. Produção exige `JWT_SECRET`, `ADMIN_USERNAME` e `ADMIN_PASSWORD`; `REPOSITORY=pg` exige `DATABASE_URL`.
+- Testes: `test/config.test.ts`, 30 execuções (padrões, leitura completa, produção, repositório, 12 valores rejeitados e 6 limites aceitos, erros agregados). Servidor: 103 testes, 100% de cobertura. Domínio 223, shared 138, web 2.
+- Decisões: (1) variável **vazia** vale como ausente (`.env` e painéis de deploy deixam `VAR=` em branco). (2) Limites além da tabela: `PORT` 1–65535, `BCRYPT_ROUNDS` 4–31 (faixa do bcryptjs), `VOTE_GRACE_MS` ≥ 0, `HISTORY_LIMIT` ≥ 1. (3) Sem `z.coerce`: `Number('')` e `Number('80x')` enganam; o inteiro é validado por regex. (4) `ADMIN_USERNAME`/`ADMIN_PASSWORD` são opcionais fora de produção (sem seed). (5) O segredo JWT de dev é uma constante fixa e não exportada; os testes só exigem que seja o mesmo em dev e teste.
 
 ### [ ] B4 — `buildApp`, health e tratamento de erros
 **Ref.:** architecture §6.3 (mapeamento de erros), §8.1.
