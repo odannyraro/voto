@@ -15,5 +15,8 @@
   "devDependencies": {
     "@stryker-mutator/core": "^10.1.1",
     "@stryker-mutator/vitest-runner": "^10.1.1"
+  },
+  "dependencies": {
+    "@voto/shared": "*"
   }
 }

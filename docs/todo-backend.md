@@ -50,7 +50,11 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 
 - `package.json`, `tsconfig.base.json`, `eslint.config.js`, `.prettierrc.json` → raiz do monorepo (scripts `lint`, `format`, `format:check`, `typecheck`; regra de direção de imports no ESLint).
 - `vitest.shared.ts` → `coverageConfig(exclude?)`: cobertura v8, lcov e limite de 80%, usada por todo `vitest.config.ts`.
-- `packages/shared/src/index.ts` → contratos compartilhados (por ora só `APP_NAME`).
+- `packages/shared/src/index.ts` → API pública do `shared` (`APP_NAME` + reexporta o resto).
+- `packages/shared/src/dto.ts` → tipos do agregado (`Election`, `Round`...), `BLANK` e DTOs da API (`AdminElectionDTO`, `VoterStateDTO`, `RoundResultDTO`, `RoundView`, `NextPositionDTO`, `ElectionSummaryDTO`, `ErrorDTO`).
+- `packages/shared/src/error-codes.ts` → `ERROR_CODES` (domínio + servidor) e `ErrorCode`.
+- `packages/shared/src/socket-events.ts` → `SOCKET_EVENTS` e tipos `ServerToClientEvents` / `ClientToServerEvents`.
+- `packages/domain/src/model.ts` → só reexporta os tipos do agregado de `@voto/shared`.
 - `apps/server/src/index.ts` → servidor (por ora só `SERVICE_NAME`).
 - `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
 - `packages/domain/tsconfig.stryker.json` → config do TS usada pelo StrykerJS.
@@ -110,7 +114,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `packages/shared/test/app-name.test.ts` (1) e `apps/server/test/service-name.test.ts` (1). Domínio segue com 205.
 - Decisões: (1) o `server` ganhou `SERVICE_NAME = 'voto-server'` em `src/index.ts` só para ter o que testar; sai ou é reaproveitado na B4. (2) O StrykerJS roda numa cópia em `.stryker-tmp/`, onde `../../vitest.shared` não existe, então ele usa `vitest.stryker.config.ts` (sem cobertura), apontado em `stryker.config.json`; mutação conferida em `src/ordering/queue.ts` (96%). (3) Alteração no domínio: só configuração (`vitest.config.ts`, `tsconfig.json`, `stryker.config.json`, novo `vitest.stryker.config.ts`). Avisar A. (4) O teste do `shared` já nasceu verde (`APP_NAME` existia); conferi que falha se o valor mudar.
 
-### [ ] S0.3a — Contratos: DTOs, códigos de erro e eventos de socket
+### [x] S0.3a — Contratos: DTOs, códigos de erro e eventos de socket
 **Ref.:** architecture §5.1, §6.3, §7; `packages/domain/src/model.ts`, `src/errors.ts`, `src/views/views.ts`, `src/ordering/queue.ts`.
 **Fazer:**
 - `packages/shared/src/dto.ts`:
@@ -128,7 +132,13 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 **Testes (escrever antes):** os nomes dos eventos são únicos e seguem o padrão `<papel>:<ação>`; os códigos de erro são únicos e estão em `UPPER_SNAKE_CASE`. Os tipos são validados pelo `typecheck`.
 **Pronto quando:** `typecheck` e testes passam **em todos os workspaces**, inclusive os 205 testes do domínio, agora usando os tipos do `shared`.
 **Commit sugerido:** `feat(shared): define DTOs, códigos de erro e eventos de tempo real`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `@voto/shared` agora tem os tipos do agregado (movidos do domínio), os DTOs da §6.3, `ERROR_CODES` e os eventos de socket. O domínio reexporta os tipos de `@voto/shared` e roda com eles.
+- Arquivos: `packages/shared/src/{dto,error-codes,socket-events,index}.ts`, `packages/domain/src/model.ts` (só reexporta), `packages/domain/package.json` (dependência `@voto/shared`), `package-lock.json`.
+- Como usar: `import { type AdminElectionDTO, ERROR_CODES, type ErrorCode, SOCKET_EVENTS, BLANK, ... } from '@voto/shared'`. Os tipos do domínio (`BallotView`, `RoundResultView`, `NextPositionInfo`, `VoterView`) são atribuíveis a `RoundView`, `RoundResultDTO`, `NextPositionDTO` e `VoterStateDTO` (menos `serverNow`); conferi com um arquivo temporário de typecheck, já removido. O B7b só acrescenta `serverNow`, `canUndo` e o progresso.
+- Testes: `packages/shared/test/error-codes.test.ts` (3 casos, 1 deles `it.each` sobre todos os códigos) e `socket-events.test.ts` (2 casos, 1 deles `it.each`); no total, 57 execuções novas, 58 no `shared`. Domínio segue com 205; `lint`, `format:check`, `typecheck` e `test:coverage` verdes; Stryker ainda roda (`queue.ts` 96%).
+- Decisões: (1) `BLANK` também foi para o `shared` (o schema de voto da S0.3b precisa dele). (2) `model.ts` do domínio usa reexportação **nomeada**, não `export *`, para o `index.ts` do domínio não expor `ERROR_CODES`, `SOCKET_EVENTS` e afins. (3) `ElectionSummaryDTO` não existia na §6.3; defini `{ id, name, status, positionCount, voterCount }` (ver "Decisões e desvios"). (4) `ErrorDTO.error.code` é `ErrorCode`, não `string`. (5) `ERROR_CODES` é um array `as const` (igual a `DOMAIN_ERROR_CODES`), para a S0.4 usar `.includes`. (6) Alteração no domínio: só `model.ts` (agora reexportação) e `package.json`. Avisar A.
+
 
 ### [ ] S0.3b — Contratos: schemas Zod dos corpos de requisição
 **Ref.:** architecture §6.1, §6.2.
@@ -680,3 +690,4 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - 2026-11-23 — replanejamento — o Sprint 0 integra o `packages/domain` já existente (TS 7, Vitest 5): S0.1 e S0.2 absorvem as configs, S0.3a move `model.ts` para `@voto/shared`, e a S0.4 virou "servidor enxergando o domínio real". As assinaturas reais do domínio (`todo-domain.md`, "Decisões e desvios") valem mais que a §5.2.
 - 2026-11-23 — replanejamento — o servidor incrementa `election.version` ao salvar (o domínio mantém o campo, mas não o altera).
 - 2026-11-23 — S0.1 — `typescript-eslint` 8.73 aborta com TS 7 (peer `<6.1`), mesmo na config sem regras de tipos. Solução do post oficial do TS 7: na raiz, `"typescript": "npm:@typescript/typescript6@^6.0.2"` (API usada pelo ESLint) e `"@typescript/native": "npm:typescript@^7.0.2"` (fornece o `tsc` 7). Sem `legacy-peer-deps`. Remover o alias quando o typescript-eslint suportar TS 7.1 (issue #10940).
+- 2026-11-23 — S0.3a — `ElectionSummaryDTO` (citado na §6.1, mas sem forma na §6.3) é `{ id, name, status, positionCount, voterCount }`; basta para a lista de eleições do admin. `ErrorDTO.error.code` é `ErrorCode` (a §6.3 dizia `string`), para o front checar códigos com o compilador. `RoundResultDTO` não tem `positionId` (como o `RoundResultView` do domínio).
