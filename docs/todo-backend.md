@@ -56,6 +56,10 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `packages/shared/src/api-schemas.ts` → schemas Zod dos corpos de requisição (§6.1/§6.2) e tipos inferidos.
 - `packages/shared/src/socket-events.ts` → `SOCKET_EVENTS` e tipos `ServerToClientEvents` / `ClientToServerEvents`.
 - `packages/domain/src/model.ts` → só reexporta os tipos do agregado de `@voto/shared`.
+- `apps/web/src/App.tsx` → `App`: tabela de `Routes` (hoje só `/` com o título); o roteador vem de fora.
+- `apps/web/src/main.tsx` → composição (`BrowserRouter` + `createRoot`); fora da cobertura.
+- `apps/web/vite.config.ts` → plugin React, proxy `/api` e `/socket.io` e config do Vitest (jsdom, setup, cobertura).
+- `apps/web/test/setup.ts` → setup do Testing Library (`jest-dom` + `cleanup`).
 - `apps/server/src/index.ts` → servidor (por ora só `SERVICE_NAME`).
 - `apps/server/src/http/error-status.ts` → `statusForErrorCode(code)`: código de erro → status HTTP (§6.3).
 - `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
@@ -178,7 +182,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `test/http/error-status.test.ts` (21 execuções, `it.each` por faixa), `test/error-codes-contract.test.ts` (1: todo código do domínio está em `ERROR_CODES`; conferi que falha ao remover um código do `shared`), `test/domain-integration.test.ts` (1: `createElection` real devolve `ok: true`). Server: 24 testes, 100% de cobertura; domínio 205; shared 138.
 - Decisões: (1) `VOTER_REVOKED` → 403 (e não 409), porque a §6.2 pede `403 VOTER_REVOKED` na sessão do eleitor; a tabela da §6.3 do TO-DO não o listava. (2) Os testes de contrato e de fumaça já nascem verdes (domínio e shared prontos); só o `statusForErrorCode` passou por RED real (21 falhas de asserção).
 
-### [ ] S0.5 — Esqueleto do frontend
+### [x] S0.5 — Esqueleto do frontend
 **Ref.:** architecture §9, §14. **Atenção:** depois desta tarefa, `apps/web` passa a ser de C.
 **Fazer:**
 - `apps/web` (`@voto/web`) com Vite + React + TypeScript + React Router. Rota `/` com um título "Voto", vindo de `APP_NAME` do `@voto/shared`, para provar que o import entre workspaces funciona.
@@ -189,7 +193,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 **Testes (escrever antes):** `App` renderiza o título "Voto" (busca por `getByRole('heading')`).
 **Pronto quando:** `npm test`, `npm run typecheck` e `npm run build -w apps/web` passam.
 **Commit sugerido:** `feat(web): cria esqueleto do frontend com React, Vite e Testing Library`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `@voto/web` existe com Vite 8, React 19 e React Router 8; a rota `/` mostra o `<h1>` com `APP_NAME` de `@voto/shared`. Vitest com jsdom e Testing Library; `build`, `typecheck` e cobertura passam.
+- Arquivos: `apps/web/{package.json,tsconfig.json,vite.config.ts,index.html}`, `src/{App.tsx,main.tsx}`, `test/{setup.ts,App.test.tsx}`, `package-lock.json`.
+- Como usar: `App` só declara as `Routes`; quem monta fornece o roteador (`BrowserRouter` no `main.tsx`, `MemoryRouter` nos testes, que escolhem a rota inicial). Um único `vite.config.ts` guarda o proxy (`/api` e `/socket.io` com `ws: true` → `localhost:3000`) e o bloco `test` (jsdom, `test/setup.ts`, `coverageConfig(['src/main.tsx'])`). `test/setup.ts` importa `jest-dom/vitest` e roda `cleanup` no `afterEach`. Novas rotas entram em `App.tsx`.
+- Testes: `test/App.test.tsx` (2: título na home; rota desconhecida sem o título). Web: 2 testes, 100% de cobertura. Domínio 205, shared 138, server 24. `lint`, `format:check`, `typecheck` e `build -w apps/web` verdes. Conferi que `apps/web` importando `@voto/domain` é acusado pelo ESLint (arquivo temporário já removido).
+- Decisões: (1) pacote `react-router` (v8 já unifica o antigo `react-router-dom`). (2) `vite.config.ts` importa `../../vitest.shared.ts` **com extensão** e o tsconfig do web liga `allowImportingTsExtensions` (seguro, pois `noEmit`), para evitar o aviso do `configLoader: 'native'` do Vite; `server` e `shared` ainda importam sem extensão e emitem esse aviso (inofensivo). (3) `vite-env.d.ts` não foi criado: nenhum import de CSS/asset ainda. (4) Sem MSW por ora (não há chamada de rede); entra com as tarefas de C. (5) A partir daqui `apps/web` é de C.
 
 ### [ ] S0.6 — CI no GitHub Actions + Codecov
 **Ref.:** architecture §12.
