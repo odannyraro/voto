@@ -1,0 +1,54 @@
+# Configuração do Codecov (architecture §12).
+# Os uploads vêm do job do Ubuntu no .github/workflows/ci.yml, um por flag.
+codecov:
+  # O CI roda em 3 sistemas operacionais, mas só o Ubuntu envia cobertura.
+  notify:
+    after_n_builds: 4
+
+coverage:
+  precision: 2
+  round: down
+  range: '70...100'
+  status:
+    # Meta do projeto: cobertura total de pelo menos 80%, com folga de 1 ponto
+    # para oscilações pequenas entre commits.
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+    # Código novo de cada PR também precisa de 80% de cobertura.
+    patch:
+      default:
+        target: 80%
+
+# Uma flag por workspace. `carryforward` reaproveita a última cobertura da flag
+# quando um upload falha, para o total não despencar por engano.
+flags:
+  shared:
+    paths:
+      - packages/shared/
+    carryforward: true
+  domain:
+    paths:
+      - packages/domain/
+    carryforward: true
+  server:
+    paths:
+      - apps/server/
+    carryforward: true
+  web:
+    paths:
+      - apps/web/
+    carryforward: true
+
+# Comentário automático no PR com a cobertura por flag e por arquivo alterado.
+comment:
+  layout: 'header, diff, flags, files'
+  behavior: default
+  require_changes: false
+
+ignore:
+  - '**/test/**'
+  - '**/*.config.ts'
+  - 'apps/server/src/main.ts'
+  - 'apps/web/src/main.tsx'
