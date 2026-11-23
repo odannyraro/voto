@@ -72,6 +72,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/validate.ts` → `parse(schema, data)` (lança `ZodError`).
 - `apps/server/test/support/make-test-app.ts` → `makeTestApp(overrides?)`: app com doubles e repositórios em memória.
 - `apps/server/test/contracts/election-repository.contract.ts` → suíte de contrato de `ElectionRepository` (a B17 reutiliza).
+- `apps/server/src/services/auth.ts` → `AuthService` (bcrypt + JWT: `login`, `verifyToken`, `issueAdminToken`, `issueVoterToken`, `seedAdmin`).
 - `apps/server/test/support/election-records.ts` → `anElectionRecord(...)` e `unwrap(result)` para montar registros com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
@@ -358,7 +359,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `test/app.test.ts` (13 execuções: health, 404, `HttpError`, 3 códigos de domínio, Zod, JSON malformado, 415, mensagem com/sem campo, 500 sem vazar a mensagem, valor lançado que não é `Error`) e `test/http/validate.test.ts` (2). Servidor: 118 testes, cobertura 100% de linhas.
 - Decisões: (1) `ZodError` e erros 4xx do próprio Fastify (JSON malformado, tipo não suportado) viram `VALIDATION_ERROR` mantendo o status (400/415). (2) Erro desconhecido → 500 `INTERNAL_ERROR` com mensagem fixa; a causa só vai para o log (`request.log.error`). (3) Logger do Fastify desligado só com `NODE_ENV=test`. (4) O tratador ficou em `http/error-handler.ts` (e não em `errors.ts`, que mantém só a `HttpError`). (5) `fastify` é dependência nova do `server`, prevista na §2. (6) Em `makeTestApp`, `StubCodeGenerator([])` é o padrão; testes de credenciamento (B11) sobrescrevem.
 
-### [ ] B5 — `AuthService`
+### [x] B5 — `AuthService`
 **Ref.:** architecture §8.4.
 **Fazer:** `services/auth.ts` com:
 - `hashPassword` / `verifyPassword` (`bcryptjs`, número de rodadas vindo da config; nos testes, use 4 para ficarem rápidos);
@@ -377,7 +378,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** testes verdes; nenhuma senha em texto puro é guardada.
 **Commit sugerido:** `feat(server): implementa autenticação com bcrypt e JWT`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `AuthService` com hash de senha (bcryptjs), tokens JWT HS256 (jose) de admin (12h) e de eleitor, `verifyToken`, `login` e `seedAdmin` idempotente. A validade usa o `Clock` injetado (`currentDate` do `jwtVerify`).
+- Arquivos: `apps/server/src/services/auth.ts`, `apps/server/test/services/auth.test.ts`, `apps/server/package.json` (deps `bcryptjs`, `jose`), `package-lock.json`.
+- Como usar: `new AuthService({ adminRepository, clock, jwtSecret, bcryptRounds, newId })` (a B6 monta a partir de `AppDeps`/`config`). `login(u, p)` → token ou `HttpError 401 INVALID_CREDENTIALS`; `issueAdminToken(adminId)`; `issueVoterToken({ electionId, voterId })`; `verifyToken(token)` → `{ role: 'admin', adminId } | { role: 'voter', electionId, voterId }` ou `HttpError 401 INVALID_TOKEN`; `seedAdmin(u, p)` (o `main.ts` chama no boot, B20).
+- Testes: `test/services/auth.test.ts`, 16 (hash 4, login 3, seed 3, expiração 2 com limite exato 12h−1s/12h, token de eleitor 1, adulterado/outro segredo/lixo 3). Servidor: 134 testes, 100% de cobertura.
+- Decisões: (1) Expiração exata: em 12h o token já é rejeitado (`exp <= agora`). (2) Token de eleitor vale 7 dias (a §6 diz "enquanto a eleição durar", mas o token não conhece o fim da eleição). (3) `login` compara com um hash de isca quando o usuário não existe, para o tempo de resposta não revelar usuários. (4) `seedAdmin` com usuário já existente mantém a senha antiga. (5) Claims conferidas com Zod depois do `jwtVerify`; o `sub` guarda `adminId` ou `voterId`. (6) `bcryptjs` e `jose` são da stack (§2).
 
 ### [ ] B6 — Rotas de login e autorização por papel
 **Ref.:** architecture §6.1 (`/admin/login`, `/admin/me`).
