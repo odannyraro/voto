@@ -1,5 +1,5 @@
 import { DomainError } from '@voto/domain';
-import type { ErrorDTO } from '@voto/shared';
+import type { ErrorCode, ErrorDTO } from '@voto/shared';
 import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { HttpError } from './errors';
@@ -13,6 +13,19 @@ const INTERNAL_SERVER_ERROR = 500;
 interface ErrorResponse {
   readonly status: number;
   readonly body: ErrorDTO;
+}
+
+/**
+ * Monta uma resposta de erro no formato da API, para que todo ramo do tratador produza o
+ * mesmo `ErrorDTO` e só diga o que muda: status, código e mensagem.
+ *
+ * @param status - Status HTTP da resposta.
+ * @param code - Código de erro da API.
+ * @param message - Mensagem que vai para o cliente.
+ * @returns Status e corpo `ErrorDTO`.
+ */
+function errorResponse(status: number, code: ErrorCode, message: string): ErrorResponse {
+  return { status, body: { error: { code, message } } };
 }
 
 /**
@@ -55,29 +68,17 @@ function describeZodIssues(error: ZodError): string {
  * @returns Status e corpo `ErrorDTO` da resposta.
  */
 export function toErrorResponse(error: unknown): ErrorResponse {
-  if (error instanceof HttpError) {
-    return { status: error.status, body: { error: { code: error.code, message: error.message } } };
-  }
+  if (error instanceof HttpError) return errorResponse(error.status, error.code, error.message);
   if (error instanceof DomainError) {
-    const status = statusForErrorCode(error.code);
-    return { status, body: { error: { code: error.code, message: error.message } } };
+    return errorResponse(statusForErrorCode(error.code), error.code, error.message);
   }
   if (error instanceof ZodError) {
-    return {
-      status: BAD_REQUEST,
-      body: { error: { code: 'VALIDATION_ERROR', message: describeZodIssues(error) } },
-    };
+    return errorResponse(BAD_REQUEST, 'VALIDATION_ERROR', describeZodIssues(error));
   }
   if (isFastifyClientError(error)) {
-    return {
-      status: error.statusCode,
-      body: { error: { code: 'VALIDATION_ERROR', message: error.message } },
-    };
+    return errorResponse(error.statusCode, 'VALIDATION_ERROR', error.message);
   }
-  return {
-    status: INTERNAL_SERVER_ERROR,
-    body: { error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } },
-  };
+  return errorResponse(INTERNAL_SERVER_ERROR, 'INTERNAL_ERROR', 'Internal server error');
 }
 
 /**
@@ -97,7 +98,7 @@ export function registerErrorHandling(app: FastifyInstance): void {
 
   app.setNotFoundHandler((request, reply) => {
     const message = `Route ${request.method} ${request.url} not found`;
-    const body: ErrorDTO = { error: { code: 'NOT_FOUND', message } };
-    return reply.status(NOT_FOUND).send(body);
+    const { status, body } = errorResponse(NOT_FOUND, 'NOT_FOUND', message);
+    return reply.status(status).send(body);
   });
 }
