@@ -99,6 +99,16 @@ describe('addCandidate', () => {
     expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_CANDIDATE_AGE' } });
   });
 
+  it('accepts a candidate in the last month at the university', () => {
+    const result = addCandidate(
+      electionWithTwoPositions(),
+      candidacy({ remainingMonths: 0 }),
+      fixedContext(),
+    );
+
+    expect(result).toMatchObject({ ok: true, value: { candidates: [{ remainingMonths: 0 }] } });
+  });
+
   it('rejects a negative remaining time at the university', () => {
     const result = addCandidate(
       electionWithTwoPositions(),
@@ -202,6 +212,51 @@ describe('updateCandidate', () => {
     expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_FIRST_CHOICE' } });
   });
 
+  it('trims spaces around the new name', () => {
+    const election = anElection()
+      .withPositions(aPosition({ id: 'president' }))
+      .withCandidates(aCandidate({ id: 'ana', name: 'Ana' }))
+      .build();
+
+    const result = updateCandidate(election, 'ana', { name: '  Ana Maria  ' });
+
+    expect(result).toMatchObject({ ok: true, value: { candidates: [{ name: 'Ana Maria' }] } });
+  });
+
+  it('leaves the other candidates unchanged', () => {
+    const election = anElection()
+      .withPositions(aPosition({ id: 'president' }))
+      .withCandidates(
+        aCandidate({ id: 'ana', name: 'Ana' }),
+        aCandidate({ id: 'bia', name: 'Bia' }),
+      )
+      .build();
+
+    const result = updateCandidate(election, 'bia', { name: 'Bia Lima' });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        candidates: [
+          { id: 'ana', name: 'Ana' },
+          { id: 'bia', name: 'Bia Lima' },
+        ],
+      },
+    });
+  });
+
+  it('rejects changes after the election is finished', () => {
+    const election = anElection()
+      .withStatus('FINISHED')
+      .withPositions(aPosition({ id: 'president' }))
+      .withCandidates(aCandidate({ id: 'ana' }))
+      .build();
+
+    const result = updateCandidate(election, 'ana', { name: 'Ana Maria' });
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'ELECTION_FINISHED' } });
+  });
+
   it('rejects an unknown candidate', () => {
     const result = updateCandidate(electionWithTwoPositions(), 'ghost', { name: 'Ghost' });
 
@@ -256,6 +311,18 @@ describe('removeCandidate', () => {
     const result = removeCandidate(election, 'ana');
 
     expect(result).toMatchObject({ ok: false, error: { code: 'CANDIDATE_ALREADY_ELECTED' } });
+  });
+
+  it('rejects removing candidates after the election is finished', () => {
+    const election = anElection()
+      .withStatus('FINISHED')
+      .withPositions(aPosition({ id: 'president' }))
+      .withCandidates(aCandidate({ id: 'ana' }))
+      .build();
+
+    const result = removeCandidate(election, 'ana');
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'ELECTION_FINISHED' } });
   });
 
   it('rejects an unknown candidate', () => {

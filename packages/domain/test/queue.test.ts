@@ -93,6 +93,7 @@ describe('applyOrder', () => {
       label: 'includes a position that is not in the queue',
       order: ['treasurer', 'president', 'ghost'],
     },
+    { label: 'swaps a queued position for an unknown one', order: ['treasurer', 'ghost'] },
   ])('rejects an order that $label', ({ order }) => {
     const election = anElection().withPositions(president, treasurer).build();
 

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { BLANK, castVote, type Round } from '../src/index';
+import { BLANK, castVote, revokeVoter, type Round } from '../src/index';
 import { aCandidate, anElection, aPosition, aRound, aVoter } from './builders/election-builder';
 import { FIXED_NOW, fixedContext, secondsAfter } from './builders/fixed-context';
+import { valueOf } from './builders/result-helpers';
 
 const DEADLINE = secondsAfter(FIXED_NOW, 60);
 
@@ -123,6 +124,18 @@ describe('castVote', () => {
     const result = castVote(
       revoked,
       { roundId: 'round-1', voterId: 'voter-1', choice: 'ana' },
+      fixedContext(),
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'VOTER_REVOKED' } });
+  });
+
+  it('rejects only the revoked voter while the others stay credentialed', () => {
+    const election = valueOf(revokeVoter(electionVoting(), 'voter-2'));
+
+    const result = castVote(
+      election,
+      { roundId: 'round-1', voterId: 'voter-2', choice: 'ana' },
       fixedContext(),
     );
 

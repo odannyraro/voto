@@ -114,6 +114,18 @@ describe('attachExistingCandidate', () => {
     expect(result).toMatchObject({ ok: false, error: { code: 'CANDIDATE_ALREADY_ELECTED' } });
   });
 
+  it('rejects attaching after the election is finished', () => {
+    const election = anElection()
+      .withStatus('FINISHED')
+      .withPositions(president, treasurer)
+      .withCandidates(aCandidate({ id: 'ana', applications: ['president'] }))
+      .build();
+
+    const result = attachExistingCandidate(election, 'treasurer', 'ana');
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'ELECTION_FINISHED' } });
+  });
+
   it('rejects an unknown candidate', () => {
     const election = anElection().open().withPositions(treasurer).build();
 

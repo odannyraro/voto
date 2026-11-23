@@ -8,6 +8,12 @@ describe('history', () => {
     expect(canUndo(history)).toBe(false);
   });
 
+  it('allows undo once a new state was pushed', () => {
+    const history = pushSnapshot(createHistory('draft'), 'open');
+
+    expect(canUndo(history)).toBe(true);
+  });
+
   it('keeps the previous state when a new one is pushed', () => {
     const history = pushSnapshot(createHistory('draft'), 'open');
 
@@ -20,6 +26,14 @@ describe('history', () => {
     const result = undo(history);
 
     expect(result).toEqual({ ok: true, value: { current: 'open', past: ['draft'] } });
+  });
+
+  it('undoes one step at a time, starting from the newest state', () => {
+    const history = pushSnapshot(pushSnapshot(pushSnapshot(createHistory('s0'), 's1'), 's2'), 's3');
+
+    const result = undo(history);
+
+    expect(result).toEqual({ ok: true, value: { current: 's2', past: ['s0', 's1'] } });
   });
 
   it('rejects undo when there is no previous state', () => {
