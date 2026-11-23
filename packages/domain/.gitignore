@@ -1,0 +1,6 @@
+# Provisório até o Sprint 0: depois disso as dependências ficam na raiz do monorepo
+node_modules/
+coverage/
+package-lock.json
+reports/
+.stryker-tmp/
