@@ -3,6 +3,7 @@ import { buildApp, type AppDeps } from '../../src/app';
 import { InMemoryAdminRepository } from '../../src/adapters/in-memory-admin-repository';
 import { InMemoryElectionRepository } from '../../src/adapters/in-memory-election-repository';
 import { loadConfig } from '../../src/config';
+import { AuthService } from '../../src/services/auth';
 import { FakeClock } from '../doubles/fake-clock';
 import { FakeScheduler } from '../doubles/fake-scheduler';
 import { SpyNotifier } from '../doubles/spy-notifier';
@@ -16,6 +17,8 @@ const TEST_BCRYPT_ROUNDS = '4';
 export interface TestApp {
   readonly app: FastifyInstance;
   readonly deps: AppDeps;
+  /** Serviço de auth com os mesmos repositório, relógio e segredo do app: semeia admins e emite tokens. */
+  readonly auth: AuthService;
   readonly clock: FakeClock;
   readonly scheduler: FakeScheduler;
   readonly notifier: SpyNotifier;
@@ -43,5 +46,12 @@ export function makeTestApp(overrides: Partial<AppDeps> = {}): TestApp {
     adminRepository: new InMemoryAdminRepository(),
     ...overrides,
   };
-  return { app: buildApp(deps), deps, clock, scheduler, notifier };
+  const auth = new AuthService({
+    adminRepository: deps.adminRepository,
+    clock: deps.clock,
+    jwtSecret: deps.config.jwtSecret,
+    bcryptRounds: deps.config.bcryptRounds,
+    newId: deps.newId,
+  });
+  return { app: buildApp(deps), deps, auth, clock, scheduler, notifier };
 }

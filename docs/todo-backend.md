@@ -74,6 +74,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/test/contracts/election-repository.contract.ts` → suíte de contrato de `ElectionRepository` (a B17 reutiliza).
 - `apps/server/src/services/auth.ts` → `AuthService` (bcrypt + JWT: `login`, `verifyToken`, `issueAdminToken`, `issueVoterToken`, `seedAdmin`).
 - `apps/server/test/support/election-records.ts` → `anElectionRecord(...)` e `unwrap(result)` para montar registros com o domínio real.
+- `apps/server/src/http/auth-plugin.ts` → `registerAuth(app, auth)` (`requireAdmin`, `requireVoter`, `request.auth`) e `getAdminId(request)`.
+- `apps/server/src/http/auth-routes.ts` → `registerAuthRoutes`: `POST /api/admin/login`, `GET /api/admin/me`.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
 - `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
@@ -385,7 +387,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `test/services/auth.test.ts`, 16 (hash 4, login 3, seed 3, expiração 2 com limite exato 12h−1s/12h, token de eleitor 1, adulterado/outro segredo/lixo 3). Servidor: 134 testes, 100% de cobertura.
 - Decisões: (1) Expiração exata: em 12h o token já é rejeitado (`exp <= agora`). (2) Token de eleitor vale 7 dias (a §6 diz "enquanto a eleição durar", mas o token não conhece o fim da eleição). (3) `login` compara com um hash de isca quando o usuário não existe, para o tempo de resposta não revelar usuários. (4) `seedAdmin` com usuário já existente mantém a senha antiga. (5) Claims conferidas com Zod depois do `jwtVerify`; o `sub` guarda `adminId` ou `voterId`. (6) `bcryptjs` e `jose` são da stack (§2).
 
-### [ ] B6 — Rotas de login e autorização por papel
+### [x] B6 — Rotas de login e autorização por papel
 **Ref.:** architecture §6.1 (`/admin/login`, `/admin/me`).
 **Fazer:**
 - `http/auth-plugin.ts`: *preHandlers* `requireAdmin` e `requireVoter`, que leem `Authorization: Bearer` e preenchem `request.auth` (tipado via *declaration merging* do Fastify).
@@ -402,7 +404,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** testes verdes.
 **Commit sugerido:** `feat(server): adiciona login de admin e proteção de rotas por papel`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST /api/admin/login` e `GET /api/admin/me`, mais os *preHandlers* `requireAdmin` / `requireVoter`, que preenchem `request.auth`. O `buildApp` agora cria o `AuthService` a partir das deps.
+- Arquivos: `apps/server/src/http/{auth-plugin,auth-routes}.ts`, `src/app.ts`, `test/http/{auth-plugin,auth-routes}.test.ts`, `test/support/make-test-app.ts` (`TestApp.auth`).
+- Como usar: `registerAuth(app, auth)` devolve `{ requireAdmin, requireVoter }` para `{ preHandler }`; `getAdminId(request)` lê o admin dentro de rota com `requireAdmin` (lança erro simples se esqueceram o hook → 500). Token ausente, não-Bearer ou inválido → 401 `INVALID_TOKEN`; token válido de outro papel → 403 `FORBIDDEN`. Nos testes, `makeTestApp()` devolve `auth` (mesmo repositório, relógio e segredo do app) para criar admins e emitir tokens.
+- Testes: `auth-routes.test.ts` (7) e `auth-plugin.test.ts` (8, 4 deles `it.each` de cabeçalhos inválidos). Servidor: 149 testes, 100% de cobertura. Domínio 223, shared 138, web 2.
+- Decisões: (1) `/me` com token de admin que não existe mais no repositório → 401 `INVALID_TOKEN`. (2) `request.auth` é `TokenClaims | undefined`; as rotas pegam o id por `getAdminId`, sem cast. (3) `AuthService` é construído no `buildApp` e de novo no `makeTestApp` (não entra em `AppDeps`, para a `AppDeps` da §8.1 não mudar). (4) Rate limit do login (§ riscos) não faz parte desta tarefa.
 
 ---
 
