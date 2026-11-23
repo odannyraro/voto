@@ -62,6 +62,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/web/test/setup.ts` → setup do Testing Library (`jest-dom` + `cleanup`).
 - `apps/server/src/index.ts` → servidor (por ora só `SERVICE_NAME`).
 - `apps/server/src/http/error-status.ts` → `statusForErrorCode(code)`: código de erro → status HTTP (§6.3).
+- `apps/server/src/ports/` → portas da aplicação (só tipos): repositórios, `Clock`, `Scheduler`, `CodeGenerator`, `Notifier`; `index.ts` reexporta tudo.
+- `apps/server/test/doubles/` → `FakeClock`, `FakeScheduler`, `SpyNotifier`, `StubCodeGenerator` (cada um com teste próprio).
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
 - `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
@@ -231,7 +233,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 ## Servidor — fundações
 
-### [ ] B1 — Portas e test doubles
+### [x] B1 — Portas e test doubles
 **Ref.:** architecture §8.1; aulas 17 e 18 (test doubles).
 **Fazer:**
 - `apps/server/src/ports/`: interfaces `ElectionRepository`, `AdminRepository`, `Clock`, `Scheduler`, `CodeGenerator` (reusar o tipo do domínio) e `Notifier`.
@@ -251,7 +253,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** interfaces documentadas com JSDoc curto; doubles testados.
 **Commit sugerido:** `feat(server): define portas da aplicação e test doubles`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: as 6 portas do servidor (`ElectionRepository`, `AdminRepository`, `Clock`, `Scheduler`, `CodeGenerator`, `Notifier`) e os 4 doubles de teste (`FakeClock`, `FakeScheduler`, `SpyNotifier`, `StubCodeGenerator`).
+- Arquivos: `apps/server/src/ports/{election-repository,admin-repository,clock,scheduler,code-generator,notifier,index}.ts`; `apps/server/test/doubles/{fake-clock,fake-scheduler,spy-notifier,stub-code-generator}.ts` (+ um `.test.ts` ao lado de cada).
+- Como usar: `import type { ElectionRepository, ElectionRecord, ... } from '../src/ports'`. Repositórios são **assíncronos** (Postgres). `Scheduler.schedule(at, key, task)` (ordem da §8.1). `FakeScheduler`: `pending()` → `{ key, at }[]`, `await fireDue(now)`, `await fire(key)` (lança se a chave não existe). `SpyNotifier`: arrays `adminStates` (`{ electionId, state }`) e `voterStates` (`{ voterId, state }`). `StubCodeGenerator(codes)` lança ao esgotar. `FakeClock(initial)`: `now()` devolve cópia, `set`, `advance(ms)`.
+- Testes: 21 (`fake-clock` 5, `fake-scheduler` 11, `stub-code-generator` 2, `spy-notifier` 3). Servidor: 45 testes; os 3 testes "negativos" do scheduler (cancelar, 1 ms no futuro, `<=`) foram conferidos com mutação manual.
+- Decisões: (1) `ElectionRepository.create(record)` falha se o id já existe e `save` lança `VERSION_CONFLICT` (contrato exato fica na B2). (2) `Admin = { id, username, passwordHash }` mora em `ports/admin-repository.ts`. (3) `Notifier` é síncrono (emitir no socket não espera nada) e recebe os DTOs reais de `@voto/shared`; a B7a precisará montar um `AdminElectionDTO` mesmo no "placeholder". (4) `CodeGenerator` só reexporta o tipo do domínio. (5) As portas são só tipos, então não entram nos números de cobertura.
 
 ### [ ] B2 — Repositórios em memória + suíte de contrato
 **Ref.:** architecture §8.1.
