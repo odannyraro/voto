@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { jwtVerify, SignJWT } from 'jose';
 import { z } from 'zod';
-import { HttpError } from '../http/errors';
+import { httpErrorFor } from '../http/errors';
 import type { AdminRepository, Clock } from '../ports';
 
 /** Dados do token de um administrador. */
@@ -137,7 +137,7 @@ export class AuthService {
     const hash = admin?.passwordHash ?? (await this.getDecoyHash());
     const passwordMatches = await this.verifyPassword(password, hash);
     if (!admin || !passwordMatches) {
-      throw new HttpError(401, 'INVALID_CREDENTIALS', 'Invalid username or password');
+      throw httpErrorFor('INVALID_CREDENTIALS', 'Invalid username or password');
     }
     return this.issueAdminToken(admin.id);
   }
@@ -177,7 +177,7 @@ export class AuthService {
       });
       return claimsSchema.parse(payload);
     } catch {
-      throw new HttpError(401, 'INVALID_TOKEN', 'Invalid or expired token');
+      throw httpErrorFor('INVALID_TOKEN', 'Invalid or expired token');
     }
   }
 

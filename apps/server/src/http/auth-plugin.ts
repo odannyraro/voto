@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
 import type { AuthService, TokenClaims } from '../services/auth';
-import { HttpError } from './errors';
+import { httpErrorFor } from './errors';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -27,7 +27,7 @@ const BEARER_PREFIX = 'Bearer ';
 function bearerTokenOf(request: FastifyRequest): string {
   const header = request.headers.authorization;
   const token = header?.startsWith(BEARER_PREFIX) ? header.slice(BEARER_PREFIX.length).trim() : '';
-  if (token === '') throw new HttpError(401, 'INVALID_TOKEN', 'Missing bearer token');
+  if (token === '') throw httpErrorFor('INVALID_TOKEN', 'Missing bearer token');
   return token;
 }
 
@@ -47,7 +47,7 @@ export function registerAuth(app: FastifyInstance, auth: AuthService): AuthHooks
     async (request) => {
       const claims = await auth.verifyToken(bearerTokenOf(request));
       if (claims.role !== role) {
-        throw new HttpError(403, 'FORBIDDEN', `This route requires the ${role} role`);
+        throw httpErrorFor('FORBIDDEN', `This route requires the ${role} role`);
       }
       request.auth = claims;
     };

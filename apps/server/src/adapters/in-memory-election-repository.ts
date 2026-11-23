@@ -1,5 +1,4 @@
-import { HttpError } from '../http/errors';
-import { statusForErrorCode } from '../http/error-status';
+import { httpErrorFor } from '../http/errors';
 import type { ElectionRecord, ElectionRepository, VoterCodeOwner } from '../ports';
 
 /**
@@ -45,9 +44,12 @@ export class InMemoryElectionRepository implements ElectionRepository {
    */
   save(record: ElectionRecord, expectedVersion: number): Promise<void> {
     const stored = this.records.get(record.current.id);
-    if (!stored) return Promise.reject(httpError('ELECTION_NOT_FOUND', 'Election does not exist'));
+    if (!stored)
+      return Promise.reject(httpErrorFor('ELECTION_NOT_FOUND', 'Election does not exist'));
     if (stored.current.version !== expectedVersion)
-      return Promise.reject(httpError('VERSION_CONFLICT', 'Election was changed by someone else'));
+      return Promise.reject(
+        httpErrorFor('VERSION_CONFLICT', 'Election was changed by someone else'),
+      );
     this.store(record);
     return Promise.resolve();
   }
@@ -103,8 +105,4 @@ export class InMemoryElectionRepository implements ElectionRepository {
       this.codeOwners.set(voter.code, { electionId: id, voterId: voter.id });
     }
   }
-}
-
-function httpError(code: 'ELECTION_NOT_FOUND' | 'VERSION_CONFLICT', message: string): HttpError {
-  return new HttpError(statusForErrorCode(code), code, message);
 }

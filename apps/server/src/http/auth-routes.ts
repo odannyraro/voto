@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AdminRepository } from '../ports';
 import type { AuthService } from '../services/auth';
 import { getAdminId, type AuthHooks } from './auth-plugin';
-import { HttpError } from './errors';
+import { httpErrorFor } from './errors';
 import { parse } from './validate';
 
 /** O que as rotas de autenticação do admin precisam. */
@@ -29,7 +29,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
   app.get('/api/admin/me', { preHandler: deps.hooks.requireAdmin }, async (request) => {
     const admin = await deps.adminRepository.findById(getAdminId(request));
     // Token ainda válido, mas o admin foi removido: a sessão deixa de valer.
-    if (!admin) throw new HttpError(401, 'INVALID_TOKEN', 'Admin no longer exists');
+    if (!admin) throw httpErrorFor('INVALID_TOKEN', 'Admin no longer exists');
     return { id: admin.id, username: admin.username };
   });
 }
