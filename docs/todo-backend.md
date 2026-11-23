@@ -67,6 +67,10 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/test/doubles/` → `FakeClock`, `FakeScheduler`, `SpyNotifier`, `StubCodeGenerator` (cada um com teste próprio).
 - `apps/server/src/adapters/` → `InMemoryElectionRepository` e `InMemoryAdminRepository` (cópias com `structuredClone`, índice de códigos de eleitor).
 - `apps/server/src/http/errors.ts` → `HttpError(status, code, message)`.
+- `apps/server/src/app.ts` → `AppDeps` e `buildApp(deps)` (Fastify sem `listen`; health e tratadores de erro).
+- `apps/server/src/http/error-handler.ts` → `toErrorResponse(error)` e `registerErrorHandling(app)`: `HttpError`/`DomainError`/`ZodError`/erro do Fastify → `ErrorDTO`.
+- `apps/server/src/http/validate.ts` → `parse(schema, data)` (lança `ZodError`).
+- `apps/server/test/support/make-test-app.ts` → `makeTestApp(overrides?)`: app com doubles e repositórios em memória.
 - `apps/server/test/contracts/election-repository.contract.ts` → suíte de contrato de `ElectionRepository` (a B17 reutiliza).
 - `apps/server/test/support/election-records.ts` → `anElectionRecord(...)` e `unwrap(result)` para montar registros com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
@@ -326,7 +330,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `test/config.test.ts`, 30 execuções (padrões, leitura completa, produção, repositório, 12 valores rejeitados e 6 limites aceitos, erros agregados). Servidor: 103 testes, 100% de cobertura. Domínio 223, shared 138, web 2.
 - Decisões: (1) variável **vazia** vale como ausente (`.env` e painéis de deploy deixam `VAR=` em branco). (2) Limites além da tabela: `PORT` 1–65535, `BCRYPT_ROUNDS` 4–31 (faixa do bcryptjs), `VOTE_GRACE_MS` ≥ 0, `HISTORY_LIMIT` ≥ 1. (3) Sem `z.coerce`: `Number('')` e `Number('80x')` enganam; o inteiro é validado por regex. (4) `ADMIN_USERNAME`/`ADMIN_PASSWORD` são opcionais fora de produção (sem seed). (5) O segredo JWT de dev é uma constante fixa e não exportada; os testes só exigem que seja o mesmo em dev e teste.
 
-### [ ] B4 — `buildApp`, health e tratamento de erros
+### [x] B4 — `buildApp`, health e tratamento de erros
 **Ref.:** architecture §6.3 (mapeamento de erros), §8.1.
 **Fazer:**
 - `apps/server/src/app.ts`: `buildApp(deps: AppDeps)`, que devolve a instância Fastify sem chamar `listen`. `AppDeps` tem `config`, `clock`, `scheduler`, `notifier`, `codeGenerator`, `newId` e os repositórios. O domínio **não** entra nas deps: é importado direto (é puro e determinístico, então não precisa de double).
@@ -347,7 +351,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** todas as respostas de erro seguem `ErrorDTO`.
 **Commit sugerido:** `feat(server): cria app Fastify com health check e mapeamento de erros`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `buildApp(deps)` devolve o Fastify sem `listen`, com `GET /api/health` e tratamento global de erros: toda resposta de erro (inclusive rota inexistente) segue `ErrorDTO`.
+- Arquivos: `apps/server/src/app.ts` (`AppDeps`, `buildApp`), `src/http/error-handler.ts` (`toErrorResponse`, `registerErrorHandling`), `src/http/validate.ts` (`parse`), `test/support/make-test-app.ts`, `package.json` (dependência `fastify` ^5), `package-lock.json`.
+- Como usar: `makeTestApp(overrides?)` → `{ app, deps, clock, scheduler, notifier }`; registre rotas de teste no `app` antes do 1º `inject` e feche com `app.close()` no `afterEach`. Rotas lançam `HttpError`, `DomainError` ou deixam o `parse(schema, body)` lançar `ZodError`; o handler traduz. Novas rotas entram no `buildApp` (plugins `register`).
+- Testes: `test/app.test.ts` (13 execuções: health, 404, `HttpError`, 3 códigos de domínio, Zod, JSON malformado, 415, mensagem com/sem campo, 500 sem vazar a mensagem, valor lançado que não é `Error`) e `test/http/validate.test.ts` (2). Servidor: 118 testes, cobertura 100% de linhas.
+- Decisões: (1) `ZodError` e erros 4xx do próprio Fastify (JSON malformado, tipo não suportado) viram `VALIDATION_ERROR` mantendo o status (400/415). (2) Erro desconhecido → 500 `INTERNAL_ERROR` com mensagem fixa; a causa só vai para o log (`request.log.error`). (3) Logger do Fastify desligado só com `NODE_ENV=test`. (4) O tratador ficou em `http/error-handler.ts` (e não em `errors.ts`, que mantém só a `HttpError`). (5) `fastify` é dependência nova do `server`, prevista na §2. (6) Em `makeTestApp`, `StubCodeGenerator([])` é o padrão; testes de credenciamento (B11) sobrescrevem.
 
 ### [ ] B5 — `AuthService`
 **Ref.:** architecture §8.4.
