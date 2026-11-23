@@ -2,6 +2,8 @@
 
 Este documento complementa o [architecture.md](architecture.md) e divide o trabalho entre os três integrantes. As seções citadas como "§x" são seções do architecture.md. A divisão é **por camada**, com contratos definidos antes. Cada pessoa é dona de pastas diferentes, então quase não há conflito de merge. Também ninguém precisa esperar o código de outra pessoa para escrever e testar o seu: quem depende de outra parte usa *test doubles* até a integração.
 
+> **Situação em 2026-11-23:** A ficou com o domínio e já entregou A1–A24 na branch `feat/domain` (205 testes, cobertura ~97%), antes do Sprint 0. Por isso o Sprint 0 passou a **integrar** esse pacote ao monorepo (detalhes no [todo-backend.md](todo-backend.md)). Pendentes de A: A25 (depois da B6 e da B13) e A26 (depois da S0.6). C ficou com o Daniel; B com o Gustavo.
+
 | Integrante | Área | Pastas de que é dono | Testes principais |
 |---|---|---|---|
 | **A** | Domínio: regras da eleição | `packages/domain` | Unidade (muitos), mutação |
@@ -18,7 +20,7 @@ Tarefas do grupo todo (README final, vídeo, revisão cruzada) estão na seção
 2. **Contratos (`packages/shared`) são de B**, mas qualquer mudança é combinada no grupo antes. Ela entra em um PR próprio (`feat(shared): ...`) e é avisada no chat do grupo.
 3. **Arquivos da raiz** (`package.json` raiz, `tsconfig.base.json`, `eslint.config.js`, workflows) são de B. Dependências de um workspace são instaladas no próprio workspace (`npm i -w apps/web <pacote>`). Isso altera só o `package.json` dele e o `package-lock.json`. Conflito no lock se resolve rodando `npm install` de novo.
 4. **Fluxo Git:** uma branch por tarefa (`feat/<area>-<nº>-<slug>`, ex.: `feat/domain-07-tally`). PR pequeno para a `main`, merge só com CI verde, *merge commit* (sem squash), **um commit por tarefa**.
-5. **A `main` sempre compila e passa nos testes.** Funções do domínio ainda não implementadas existem como *stub* que lança `NotImplementedError`. Assim, o servidor compila desde o primeiro dia.
+5. **A `main` sempre compila e passa nos testes.**
 6. **TO-DO do agente:** cada integrante mantém `docs/todo-<area>.md` (`todo-domain.md`, `todo-backend.md`, `todo-frontend.md`) com as tarefas abaixo detalhadas e as notas do agente.
 
 ---
@@ -39,7 +41,7 @@ Marco M3      Todos: README, vídeo, revisão cruzada
 | Dependência | Quem espera | O que faz enquanto isso |
 |---|---|---|
 | Sprint 0 (base comum) | A, C | Nada: o Sprint 0 fica pronto antes de eles começarem |
-| Domínio real (M1) | B (tarefa B16) | B15 e as anteriores usam stubs/fakes do domínio, o que já cumpre o tema *test doubles* |
+| Domínio real (M1) | B | **Já atingido** (2026-11-23): A entregou A1–A24 antes do Sprint 0, então o servidor usa o domínio real desde o início |
 | Rotas de login e de eleitor (B6, B13) | A (tarefa A25) | A24 e as anteriores; a A25 fica para o fim |
 | Servidor real (M2) | C (tarefas de e2e) | C2–C16 usam MSW e socket fake |
 
@@ -99,7 +101,7 @@ O objetivo é que A e C abram o projeto e só "preencham os vazios": tudo compil
 | S0.1 | Monorepo: npm workspaces, `tsconfig.base`, ESLint (com a regra de direção de imports), Prettier, `.nvmrc`, scripts raiz | raiz |
 | S0.2 | Vitest + cobertura v8 com limite de 80% em cada workspace, com um teste "fumaça" em cada | configs |
 | S0.3 | `packages/shared`: DTOs, schemas Zod e constantes de eventos (§5.1, §6, §7), com testes dos schemas | `packages/shared` |
-| S0.4 | `packages/domain`: todas as funções da API pública (§5.2) declaradas com a assinatura final e lançando `NotImplementedError` | `packages/domain/src/index.ts` |
+| S0.4 | Servidor enxergando o domínio real: teste de contrato `DOMAIN_ERROR_CODES` ⊂ `ERROR_CODES` e mapeamento de códigos para status HTTP (a versão antiga, com stubs, ficou desnecessária) | `apps/server` |
 | S0.5 | Esqueleto do `apps/web`: Vite + React + Router, Vitest com jsdom + RTL + user-event, proxy de `/api` e `/socket.io`, uma página "Olá" com teste de fumaça | `apps/web` |
 | S0.6 | `ci.yml` com matriz de 3 SOs (lint, typecheck, testes com cobertura) + upload no Codecov | `.github/` |
 
@@ -115,7 +117,7 @@ Depois do Sprint 0, `packages/domain` passa a ser só de A e `apps/web` só de C
 | B4 | `buildApp(deps)` + `GET /api/health` + mapeamento `DomainError`/Zod → `ErrorDTO` e status HTTP | `app.ts`, `http/errors.ts` |
 | B5 | `AuthService`: hash com bcryptjs, emissão e verificação de JWT (`jose`), seed do admin | `services/auth.ts` |
 | B6 | `POST /admin/login`, `GET /admin/me`, plugin de autenticação por papel (admin/eleitor) | `http/auth-routes.ts` |
-| B7 | `ElectionService` — esqueleto do fluxo padrão (§8.2): carregar → autorizar → comando → salvar → notificar, testado com stub do domínio | `services/election.ts` |
+| B7 | `ElectionService` — esqueleto do fluxo padrão (§8.2): carregar → autorizar → comando → salvar → notificar, testado com o domínio real | `services/election.ts` |
 | B8 | Rotas de eleição: criar, listar, obter, editar | `http/election-routes.ts` |
 | B9 | Rotas de cargos e fila (`positions`, `queue`, `queue/suggestion`) | `http/position-routes.ts` |
 | B10 | Rotas de candidatos e anexar candidato existente | `http/candidate-routes.ts` |
@@ -124,7 +126,7 @@ Depois do Sprint 0, `packages/domain` passa a ser só de A e `apps/web` só de C
 | B13 | `VoterService` + rotas do eleitor: `POST /voter/session`, `GET /voter/state`, `POST /voter/votes` | `services/voter.ts`, `http/voter-routes.ts` |
 | B14 | Scheduler real (`TimeoutScheduler`) + fechamento automático no prazo e "fechamento preguiçoso" (§8.3), testados com `FakeScheduler`/`FakeClock` | `adapters/timeout-scheduler.ts` |
 | B15 | Gateway Socket.IO: autenticação no handshake, salas, `admin:watch`, `SocketNotifier`, com teste de integração usando um cliente real em porta efêmera | `realtime/` |
-| B16 | **Integração com o domínio real** (depois do M1): remover os stubs e rodar a suíte de integração completa (fluxo de uma eleição via HTTP) | — |
+| B16 | Cenários de integração completos via HTTP (fluxo básico, 2º turno, candidatos insuficientes, desfazer) | `test/integration/` |
 | B17 | `PgElectionRepository` + `PgAdminRepository` + migração idempotente, testados com `pg-mem` | `adapters/pg-*.ts` |
 | B18 | `main.ts` (composição humilde), reagendamento das rodadas abertas no boot, `@fastify/static` servindo o front com fallback SPA | `main.ts` |
 | B20 | Build de produção (`tsup`/`tsc`) e scripts `build`/`start` funcionando nos 3 SOs | — |

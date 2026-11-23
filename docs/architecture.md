@@ -242,6 +242,8 @@ Decisões importantes:
 
 ### 5.2 Estilo de implementação do domínio
 
+> **Atualização (2026-11-23):** o domínio já foi implementado. Algumas assinaturas mudaram em relação à lista abaixo (ex.: `openRound` e `castVote` recebem um objeto; `createElection` devolve `Result`). A referência exata é `packages/domain/src/index.ts`, e as mudanças estão em `docs/todo-domain.md`, seção "Decisões e desvios".
+
 O agregado é **imutável**. Cada operação é uma função pura:
 
 ```ts
@@ -578,7 +580,7 @@ A divisão detalhada está em [divisao-tarefas.md](divisao-tarefas.md). A arquit
 | Área | Pastas | Depende de | Como trabalhar sem esperar os outros |
 |---|---|---|---|
 | **Domínio** (regras da eleição) | `packages/domain` | `packages/shared` (tipos) | Totalmente isolado: só funções puras e testes de unidade |
-| **Backend + infra** (API, tempo real, persistência, CI/CD, deploy) | `apps/server`, `.github/`, `codecov.yml`, deploy | `packages/domain`, `packages/shared` | Programa contra a API pública da seção 5.2. Até o domínio ficar pronto, os testes dos serviços usam stubs de funções do domínio, e as rotas são testadas com o contrato da seção 6 |
+| **Backend + infra** (API, tempo real, persistência, CI/CD, deploy) | `apps/server`, `.github/`, `codecov.yml`, deploy | `packages/domain`, `packages/shared` | Programa contra a API pública do domínio (já implementada por A) e testa com o domínio real; as rotas seguem o contrato da seção 6 |
 | **Frontend + e2e** | `apps/web`, `e2e/` | `packages/shared` | MSW implementa o contrato REST e um socket fake implementa a seção 7. Os e2e entram por último, quando servidor e domínio estiverem integrados |
 
 **Sprint 0 (feito por uma pessoa antes da divisão, em poucos commits pequenos; a lista oficial, que também inclui o esqueleto do `apps/web`, está em [divisao-tarefas.md](divisao-tarefas.md)):**

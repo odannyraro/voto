@@ -6,6 +6,13 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - [architecture.md](architecture.md): stack, arquitetura, contratos (§5 domínio, §6 REST, §7 socket, §8 backend, §10 testes, §12 CI, §13 deploy).
 - [divisao-tarefas.md](divisao-tarefas.md): o que é de A, B e C, e as regras de convivência.
 - `CLAUDE.md` (raiz): como codar (TDD, convenções). Tem prioridade sobre este arquivo em caso de conflito.
+- [todo-domain.md](todo-domain.md): notas de A sobre o domínio. **Leia as "Notas do agente" e a seção "Decisões e desvios" sempre que for chamar uma função do domínio.**
+
+> **Contexto (2026-11-23).** O domínio (`packages/domain`, parte A) **já está implementado** (A1–A24: 205 testes, cobertura ~97%) e foi criado antes do Sprint 0 como pacote autocontido (TypeScript 7, Vitest 5, StrykerJS). Consequências para este TO-DO:
+> - O Sprint 0 **integra** esse pacote ao monorepo em vez de criar o domínio do zero (S0.4 mudou).
+> - O servidor usa **o domínio real desde a B1**, sem stub. É o que o material da disciplina recomenda: implementação real > fake > stub > mock.
+> - **As assinaturas reais do domínio valem mais que a §5.2 do `architecture.md`.** Onde divergem, siga `packages/domain/src/index.ts` e o `todo-domain.md`. Exemplos: `openRound(e, { positionId, durationSeconds? }, ctx)`, `castVote(e, { roundId, voterId, choice }, ctx)`, `closeRound(e, roundId)`, `cancelPosition(e, positionId, confirmTitle)`, `createElection(...)` devolve `Result`.
+> - Os builders de teste do domínio (`packages/domain/test/builders`) **não** são exportados. No servidor, monte o estado chamando os comandos públicos do domínio (helper em `apps/server/test/support/`, B7a).
 
 ---
 
@@ -21,7 +28,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
    - atualize o "Mapa rápido do código" se criou módulos novos;
    - **não faça commit.** Termine a resposta com a mensagem de commit sugerida na tarefa (Conventional Commits, em português), ajustada ao que foi realmente feito. O usuário revisa e faz o commit de tudo (código, testes e este arquivo).
 6. **Contratos.** Se perceber que precisa mudar algo em `packages/shared` (DTOs, schemas, eventos) depois do Sprint 0, ou divergir do `architecture.md`, **pare e pergunte ao usuário**. Essas mudanças afetam A e C. Divergências aprovadas são registradas em "Decisões e desvios" no fim deste arquivo.
-7. **Pastas.** A parte B é dona da raiz do monorepo, de `packages/shared`, `apps/server`, `.github/` e dos arquivos de deploy. `packages/domain` é de A e `apps/web` é de C. Depois do Sprint 0, não altere essas pastas.
+7. **Pastas.** A parte B é dona da raiz do monorepo, de `packages/shared`, `apps/server`, `.github/` e dos arquivos de deploy. `packages/domain` é de A e `apps/web` é de C. Depois do Sprint 0, não altere essas pastas. **Exceção combinada:** na S0.1, S0.2 e S0.3a, o agente pode mexer só na **configuração** do `packages/domain` (`package.json`, `tsconfig.json`, `.gitignore`, formatação automática) e trocar o conteúdo de `src/model.ts` por uma reexportação. Nenhuma regra de negócio ou teste do domínio é alterado; avise A no resumo.
 
 **Modelo das Notas do agente** (substitua o `_pendente_`):
 
@@ -45,9 +52,11 @@ _(vazio até a primeira tarefa)_
 
 ---
 
-## Sprint 0 — Base comum (antes de A e C começarem)
+## Sprint 0 — Base comum
 
-O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios": tudo compila, todo workspace tem um teste rodando e o CI está verde.
+O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que o domínio já pronto de A rode dentro do monorepo: tudo compila, todo workspace tem testes rodando e o CI está verde.
+
+**Ponto de partida:** a `main` com o merge da branch `feat/domain` (que já contém os docs e o `packages/domain`).
 
 ### [ ] S0.1 — Monorepo, TypeScript e qualidade de código
 **Ref.:** architecture §2, §3 (regra de direção de imports), §4, §14.
@@ -56,21 +65,29 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 - Mover o conteúdo atual do `README.md` (requisitos do sistema) para `docs/requisitos.md`. Criar um `README.md` novo só com os títulos exigidos pelo enunciado (Integrantes, Sobre o sistema, Tecnologias, Uso de IA, Execução dos testes), com marcadores "a preencher".
 - `package.json` raiz: `private`, `"type": "module"`, `engines.node >= 24`, `workspaces: ["packages/*", "apps/*"]`. O C adiciona `e2e` mais tarde.
 - `.npmrc` com `engine-strict=true`, para o `npm install` falhar logo se alguém estiver com o Node errado (o "ambiente" do projeto é: Node fixado no `.nvmrc` + dependências locais em `node_modules` travadas pelo `package-lock.json`; não há venv nem Docker).
-- `tsconfig.base.json`: `strict`, `noUncheckedIndexedAccess`, `module`/`moduleResolution` `"Bundler"` (ou `NodeNext`, com justificativa nas notas), `target ES2023`.
-- Criar os workspaces `packages/shared` (`@voto/shared`), `packages/domain` (`@voto/domain`) e `apps/server` (`@voto/server`), cada um com `package.json`, `tsconfig.json` e `src/index.ts` mínimo. `shared` e `domain` exportam o código-fonte TS direto (`"exports": { ".": "./src/index.ts" }`), sem passo de build.
+- `tsconfig.base.json` com as mesmas opções do `packages/domain/tsconfig.json` atual (`strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `verbatimModuleSyntax`, `module ESNext`, `moduleResolution Bundler`, `target ES2023`). O `packages/domain/tsconfig.json` passa a estender a base, mantendo só o que é dele.
+- **Versões:** usar as mesmas majors que o domínio já usa: **TypeScript 7** e **Vitest 5** (+ `@vitest/coverage-v8` 5). Ferramentas comuns (TypeScript, Vitest, ESLint, Prettier) vão para os `devDependencies` da raiz; o `package.json` do domínio fica só com o que é dele (StrykerJS e scripts).
+- Criar os workspaces novos `packages/shared` (`@voto/shared`) e `apps/server` (`@voto/server`), cada um com `package.json`, `tsconfig.json` e `src/index.ts` mínimo. `shared` exporta o código-fonte TS direto (`"exports": { ".": "./src/index.ts" }`), como o domínio já faz.
+- **Integrar o `packages/domain`:**
+  - remover o `.gitignore` provisório dele, levando para o `.gitignore` da raiz as entradas `reports/` e `.stryker-tmp/`;
+  - **não** ignorar o `stryker.config.json` (hoje ele está no `.gitignore`, apesar de commitado);
+  - o `stryker.config.json` aponta para um `tsconfig.stryker.json` que não existe: crie o arquivo (estendendo o `tsconfig.json` do pacote) ou remova a opção, e confirme que `npm run test:mutation -w packages/domain` ainda roda;
+  - apagar o `package-lock.json` local do domínio, se houver: o único lock é o da raiz.
 - ESLint (flat config, `typescript-eslint`) + Prettier. Regra `no-restricted-imports` para a direção das dependências: `shared` não importa nada de `@voto/*`; `domain` só importa `@voto/shared`; o `web` não pode importar `@voto/domain` nem `@voto/server`.
+  - **Risco a verificar:** confirme que a versão instalada do `typescript-eslint` suporta TypeScript 7. Se não suportar, use a configuração sem regras que dependem de tipos (`recommended`, não `recommendedTypeChecked`) e registre em "Decisões e desvios".
+- Rodar `npm run format` e `npm run lint` também no `packages/domain`. Correções de **formatação** podem ser aplicadas. Se o lint apontar problemas no código do domínio, **não reescreva a lógica**: ajuste a regra, se for de estilo, ou liste os pontos para o usuário repassar ao A.
 - Scripts raiz: `lint`, `format`, `format:check`, `typecheck` (roda em todos os workspaces), todos multiplataforma.
 
-**Testes (escrever antes):** é uma tarefa de configuração. A verificação é rodar `npm install`, `npm run lint` e `npm run typecheck` sem erros, e confirmar que um import proibido (teste manual temporário, ex.: `shared` importando `@voto/domain`) é acusado pelo lint. Desfaça o import depois.
-**Pronto quando:** os comandos acima passam; a estrutura bate com a §4.
+**Testes (escrever antes):** é uma tarefa de configuração. A verificação é rodar, na raiz, `npm install`, `npm run lint`, `npm run typecheck` e `npm test -w packages/domain` (os 205 testes do domínio continuam passando). Confirme também que um import proibido (teste manual temporário, ex.: `shared` importando `@voto/domain`) é acusado pelo lint, e desfaça o import depois.
+**Pronto quando:** os comandos acima passam; a estrutura bate com a §4; o domínio roda dentro do monorepo sem configuração duplicada.
 **Commit sugerido:** `chore: cria monorepo com workspaces, TypeScript, ESLint e Prettier`
 **Notas do agente:** _pendente_
 
 ### [ ] S0.2 — Vitest e cobertura em cada workspace
 **Ref.:** architecture §10.1, §14.
 **Fazer:**
-- Instalar `vitest` e `@vitest/coverage-v8`. Criar um `vitest.config.ts` por workspace com: provider `v8`, reporters `text` e `lcov`, saída em `<workspace>/coverage/`, `include: ['src/**']` e thresholds de 80% (linhas, branches, funções, statements). No servidor, excluir `src/main.ts` da cobertura.
-- Um teste "fumaça" por workspace (ex.: `shared` exporta `APP_NAME = 'Voto'` e o teste verifica o valor). Os nomes dos testes ficam em inglês e descrevem comportamento (ver CLAUDE.md).
+- O `packages/domain/vitest.config.ts` já existe e é o modelo: provider `v8`, reporters `text` e `lcov`, saída em `<workspace>/coverage/`, `include: ['src/**']` e thresholds de 80% (linhas, branches, funções, statements). Criar o mesmo para `shared` e `server`. No servidor, excluir `src/main.ts` da cobertura. Se quiser evitar repetição, extraia a parte comum para um `vitest.shared.ts` na raiz e faça os três usarem (inclusive o domínio, só a configuração).
+- Um teste "fumaça" em `shared` e `server` (ex.: `shared` exporta `APP_NAME = 'Voto'` e o teste verifica o valor). O domínio já tem testes de verdade. Os nomes dos testes ficam em inglês e descrevem comportamento (ver CLAUDE.md).
 - Scripts por workspace: `test` e `test:coverage`. Scripts raiz: `test` e `test:coverage`, que rodam em todos os workspaces com `--workspaces --if-present`.
 
 **Testes (escrever antes):** os testes fumaça de cada workspace.
@@ -79,15 +96,22 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 **Notas do agente:** _pendente_
 
 ### [ ] S0.3a — Contratos: DTOs, códigos de erro e eventos de socket
-**Ref.:** architecture §5.1, §6.3, §7.
+**Ref.:** architecture §5.1, §6.3, §7; `packages/domain/src/model.ts`, `src/errors.ts`, `src/views/views.ts`, `src/ordering/queue.ts`.
 **Fazer:**
-- `packages/shared/src/dto.ts`: todos os tipos da §5.1 (`Election`, `Position`, `Candidate`, `Voter`, `Round`, `TiebreakRule`, os status) e da §6.3 (`AdminElectionDTO`, `VoterStateDTO`, `RoundResultDTO`, `NextPositionDTO`, `RoundView`, `ElectionSummaryDTO`, `ErrorDTO`).
-- `packages/shared/src/error-codes.ts`: constante `ERROR_CODES` (`as const`) com todos os códigos citados no architecture (`VALIDATION_ERROR`, `INVALID_CREDENTIALS`, `ELECTION_NOT_FOUND`, `VOTER_ALREADY_VOTED`, `ROUND_EXPIRED`, `INVALID_FIRST_CHOICE`, `CANDIDATE_ALREADY_ELECTED`, `ROUND_NOT_OPEN`, `NOTHING_TO_UNDO`, `INVALID_CODE`, `VOTER_REVOKED`, `VERSION_CONFLICT`...) e o tipo `ErrorCode`.
+- `packages/shared/src/dto.ts`:
+  - **mover** para cá os tipos do agregado que hoje estão em `packages/domain/src/model.ts` (`Election`, `Position`, `Candidate`, `Voter`, `Round`, `TiebreakRule`, os status...), **sem mudar formato nem nomes**;
+  - `packages/domain/src/model.ts` passa a ser só `export * from '@voto/shared'` (ou reexportações nomeadas), para que o código do domínio não mude;
+  - adicionar os DTOs da §6.3 (`AdminElectionDTO`, `VoterStateDTO`, `RoundResultDTO`, `NextPositionDTO`, `RoundView`, `ElectionSummaryDTO`, `ErrorDTO`). Use como base os tipos que o domínio **já devolve** (`RoundResultView`, `VoterView`, `BallotView`, `NextPositionInfo`). O objetivo é que o apresentador do servidor (B7b) só acrescente `serverNow`, `canUndo` e progresso, sem converter formatos. Se for preciso divergir da §6.3, registre em "Decisões e desvios".
+- `packages/shared/src/error-codes.ts`: constante `ERROR_CODES` (`as const`) e tipo `ErrorCode`, contendo:
+  - **todos** os códigos de `DOMAIN_ERROR_CODES` (`packages/domain/src/errors.ts`);
+  - os códigos de servidor: `VALIDATION_ERROR`, `INVALID_CREDENTIALS`, `INVALID_TOKEN`, `FORBIDDEN`, `ELECTION_NOT_FOUND`, `INVALID_CODE`, `VERSION_CONFLICT`, `NOT_FOUND`, `INTERNAL_ERROR`, `RATE_LIMITED`.
+
+  O `shared` não pode importar o domínio, então a lista é escrita aqui. A S0.4 cria o teste que garante que as duas listas não se descolem.
 - `packages/shared/src/socket-events.ts`: `SOCKET_EVENTS = { ADMIN_STATE: 'admin:state', VOTER_STATE: 'voter:state', ADMIN_WATCH: 'admin:watch' }` + tipos `ServerToClientEvents` / `ClientToServerEvents` (formato do Socket.IO).
 - Reexportar tudo em `src/index.ts`.
 
 **Testes (escrever antes):** os nomes dos eventos são únicos e seguem o padrão `<papel>:<ação>`; os códigos de erro são únicos e estão em `UPPER_SNAKE_CASE`. Os tipos são validados pelo `typecheck`.
-**Pronto quando:** `typecheck` e testes passam; os tipos refletem exatamente o architecture.
+**Pronto quando:** `typecheck` e testes passam **em todos os workspaces**, inclusive os 205 testes do domínio, agora usando os tipos do `shared`.
 **Commit sugerido:** `feat(shared): define DTOs, códigos de erro e eventos de tempo real`
 **Notas do agente:** _pendente_
 
@@ -102,17 +126,19 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 **Commit sugerido:** `feat(shared): adiciona schemas Zod dos corpos da API`
 **Notas do agente:** _pendente_
 
-### [ ] S0.4 — Esqueleto da API pública do domínio
-**Ref.:** architecture §5.2. **Atenção:** depois desta tarefa, `packages/domain` passa a ser de A.
+### [ ] S0.4 — Servidor enxergando o domínio real
+**Ref.:** architecture §3, §6.3. (A versão antiga desta tarefa criava stubs do domínio. Não é mais necessário: A já implementou a API pública.)
 **Fazer:**
-- `packages/domain/src/errors.ts`: classe `DomainError` (`code: ErrorCode`, `message`) e classe `NotImplementedError`. A1 (de A) poderá ampliar esse arquivo.
-- `packages/domain/src/types.ts`: `Result<T>`, `DomainContext`, `RoundResult`, `NextPositionInfo`, `History<T> = { current: T; past: T[] }`, `CodeGenerator`.
-- `packages/domain/src/index.ts`: **todas** as funções listadas na §5.2, mais `finishElection`, `annulRound`, `pushSnapshot`, `undo` e as visões por papel (`toVoterView` ou equivalente, citadas em A16). Cada função tem a assinatura final tipada e corpo `throw new NotImplementedError('<nome>')`.
-- Exportar `type DomainApi = typeof import('./index')`. O servidor recebe o domínio por injeção usando esse tipo.
+- `apps/server` passa a depender de `@voto/domain` e `@voto/shared` (dependências de workspace) e a importar o domínio **diretamente**, sem injeção.
+- `apps/server/src/http/error-status.ts`: função pura `statusForErrorCode(code: ErrorCode): number`, com a tabela da §6.3: `*_NOT_FOUND` → 404, `ROUND_EXPIRED` → 410, validação → 400, credenciais/token → 401, `FORBIDDEN` → 403, `RATE_LIMITED` → 429, `INTERNAL_ERROR` → 500, demais erros de domínio → 409. A B4 usa essa função.
 
-**Testes (escrever antes):** um teste temporário, `test/public-api.test.ts`, que verifica que cada função exportada lança `NotImplementedError` (`it.each` sobre a lista de nomes). Isso mantém a cobertura ≥ 80% enquanto nada está implementado. Deixe um comentário dizendo que A remove cada item ao implementar a função.
-**Pronto quando:** o servidor consegue `import type { DomainApi } from '@voto/domain'` e tudo compila.
-**Commit sugerido:** `feat(domain): declara a API pública do domínio com stubs`
+**Testes (escrever antes):**
+- **contrato de erros:** todo código de `DOMAIN_ERROR_CODES` existe em `ERROR_CODES`. Esse teste fica no servidor, o único workspace que enxerga os dois;
+- `statusForErrorCode`: um caso por faixa (`POSITION_NOT_FOUND` → 404, `ROUND_EXPIRED` → 410, `VOTER_ALREADY_VOTED` → 409, `VALIDATION_ERROR` → 400...);
+- **fumaça de integração:** o servidor chama `createElection` do domínio real e recebe `ok: true`.
+
+**Pronto quando:** testes verdes; `npm test` na raiz roda domínio, shared e server.
+**Commit sugerido:** `feat(server): integra o domínio real e mapeia códigos de erro para HTTP`
 **Notas do agente:** _pendente_
 
 ### [ ] S0.5 — Esqueleto do frontend
@@ -137,7 +163,11 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
   - `actions/setup-node` com `node-version-file: .nvmrc` e `cache: npm`;
   - `npm ci`, `npm run lint`, `npm run format:check`, `npm run typecheck` e `npm run test:coverage`.
 - Upload no Codecov (`codecov/codecov-action`) **só no Ubuntu**, um passo por flag (`shared`, `domain`, `server`, `web`), cada um com o `lcov.info` do workspace e o token `secrets.CODECOV_TOKEN`.
-- Escrever em `docs/setup-repositorio.md` os passos manuais que **o usuário** precisa fazer: criar o repositório no GitHub, conectar o Codecov e criar o secret `CODECOV_TOKEN`.
+- Escrever em `docs/setup-repositorio.md` os passos manuais que **o usuário** precisa fazer. O repositório `odannyraro/voto` já existe; o que precisa de permissão de **admin** é feito pelo dono ou por quem ele tornar admin:
+  - entrar em codecov.io com o GitHub e ativar o repositório `voto` (hoje ele aparece como inativo);
+  - copiar o token e criar o secret `CODECOV_TOKEN` em Settings → Secrets and variables → Actions;
+  - opcional: em Settings → Branches, proteger a `main` exigindo o CI verde antes do merge.
+- O teste de mutação (`test:mutation`) **não** entra no CI, porque é lento demais para rodar a cada commit nos 3 SOs. Ele é rodado à mão por A.
 
 **Testes (escrever antes):** não se aplica (configuração). Valide a sintaxe do YAML, por exemplo com `npx --yes yaml-lint` ou revisão cuidadosa. Garanta que os comandos funcionam localmente.
 **Pronto quando:** o workflow existe e os comandos que ele roda passam localmente. Depois que o usuário fizer o push, a execução precisa ficar verde nos 3 SOs. Se falhar, a correção vira parte desta tarefa.
@@ -152,7 +182,7 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 **Ref.:** architecture §8.1; aulas 17 e 18 (test doubles).
 **Fazer:**
 - `apps/server/src/ports/`: interfaces `ElectionRepository`, `AdminRepository`, `Clock`, `Scheduler`, `CodeGenerator` (reusar o tipo do domínio) e `Notifier`.
-- O repositório guarda um `ElectionRecord = History<Election>` (eleição atual + snapshots anteriores), para o desfazer sobreviver a reinícios. Métodos: `get(id)`, `create(record)`, `save(record, expectedVersion)`, `listByAdmin(adminId)`, `listAll()`, `findByVoterCode(code) → { electionId, voterId } | null`, `isCodeTaken(code)`.
+- O repositório guarda um `ElectionRecord = History<Election>`, tipo que já existe no domínio (`{ current, past }`, criado com `createHistory(election)`). Ele guarda a eleição atual e os snapshots anteriores, para o desfazer sobreviver a reinícios. **O domínio não incrementa `election.version`** (ele nasce `0`): quem incrementa é o servidor, ao salvar (B7a). Métodos: `get(id)`, `create(record)`, `save(record, expectedVersion)`, `listByAdmin(adminId)`, `listAll()`, `findByVoterCode(code) → { electionId, voterId } | null`, `isCodeTaken(code)`.
 - `AdminRepository`: `findByUsername`, `findById`, `create`.
 - `apps/server/test/doubles/`:
   - `FakeClock` (`now`, `set`, `advance(ms)`);
@@ -224,11 +254,11 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 ### [ ] B4 — `buildApp`, health e tratamento de erros
 **Ref.:** architecture §6.3 (mapeamento de erros), §8.1.
 **Fazer:**
-- `apps/server/src/app.ts`: `buildApp(deps: AppDeps)`, que devolve a instância Fastify sem chamar `listen`. `AppDeps` tem `config`, `clock`, `scheduler`, `notifier`, `codeGenerator`, os repositórios e `domain: DomainApi`.
+- `apps/server/src/app.ts`: `buildApp(deps: AppDeps)`, que devolve a instância Fastify sem chamar `listen`. `AppDeps` tem `config`, `clock`, `scheduler`, `notifier`, `codeGenerator`, `newId` e os repositórios. O domínio **não** entra nas deps: é importado direto (é puro e determinístico, então não precisa de double).
 - `GET /api/health` → `{ status: 'ok' }`.
 - `http/errors.ts`:
   - classe `HttpError(status, code, message)`;
-  - `statusForDomainError(code)`: códigos `*_NOT_FOUND` → 404, `ROUND_EXPIRED` → 410, demais → 409;
+  - usar `statusForErrorCode` (S0.4) para traduzir `DomainError` e `HttpError` em status;
   - error handler global: Zod → 400 `VALIDATION_ERROR`, `HttpError` → seu status, desconhecido → 500 `INTERNAL_ERROR` sem vazar a stack;
   - handler de rota inexistente → 404 em formato `ErrorDTO`.
 - `http/validate.ts`: `parse(schema, data)`, que lança o erro de validação.
@@ -288,30 +318,30 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 
 ## Servidor — casos de uso e rotas
 
-> Até o marco M1 (A1–A14 prontas na `main`), os testes usam um **domínio stub** (`test/doubles/stub-domain.ts`, criado na B7a). Ele é injetado em `AppDeps.domain`. A B16a troca para o domínio real.
+> Todos os testes daqui em diante usam o **domínio real**. Doubles só nas fronteiras: `FakeClock`, `FakeScheduler`, `SpyNotifier`, `StubCodeGenerator` e repositório em memória (fake).
 
 ### [ ] B7a — `ElectionService`: o fluxo padrão de comandos
-**Ref.:** architecture §8.2.
+**Ref.:** architecture §8.2; `todo-domain.md` (A14: `closeRoundIfDue` devolve a mesma instância quando nada muda; A20: `History`).
 **Fazer:**
-- `test/doubles/stub-domain.ts`: `createStubDomain(overrides?)`. Por padrão, cada função de comando devolve `ok(eleição recebida)` e `closeRoundIfDue` devolve a mesma eleição. Os testes sobrescrevem funções específicas com `vi.fn`.
+- `test/support/election-fixtures.ts`: funções curtas que montam estados comuns **chamando os comandos públicos do domínio**, por exemplo `draftElectionWithPosition(...)` e `openElectionWithVoters(...)`. Os builders do domínio não são exportados, então isso substitui eles no servidor. Mantenha DAMP: os valores que importam ficam visíveis no teste.
 - `services/election-service.ts`: método privado e genérico `execute(actor, electionId, command)`, que:
   1. carrega o registro (404 `ELECTION_NOT_FOUND`);
   2. verifica o dono (403);
-  3. aplica `closeRoundIfDue`;
-  4. aplica o comando;
-  5. se o resultado for erro, lança `DomainError`;
-  6. empilha o snapshot (`pushSnapshot`, limite `HISTORY_LIMIT`);
-  7. salva com a versão esperada;
+  3. aplica `closeRoundIfDue(current, ctx)`;
+  4. aplica o comando (uma função `(election, ctx) => Result<Election>` que chama o domínio);
+  5. se o resultado for erro, lança o `DomainError` (vira HTTP na borda);
+  6. incrementa `version` e empilha o snapshot com `pushSnapshot(record, next, HISTORY_LIMIT)`;
+  7. salva com a versão esperada (a versão lida no passo 1);
   8. reagenda ou cancela o fechamento (chave `round:<electionId>`, no `deadline + VOTE_GRACE_MS` da rodada aberta, se houver);
   9. notifica.
 
-  O `DomainContext` usa `clock.now()` e um gerador de ids (`crypto.randomUUID` injetável).
+  O `DomainContext` usa `clock.now()` e o `newId` das deps (`crypto.randomUUID` em produção, sequência nos testes).
 - A notificação ainda é simples: `notifier.adminState(electionId, <placeholder>)`. A B7b troca pelos DTOs reais.
 
-**Testes (escrever antes, com `SpyNotifier`, `FakeScheduler` e stub do domínio):**
+**Testes (escrever antes, com domínio real, `SpyNotifier`, `FakeScheduler` e repositório em memória):**
 - eleição inexistente → 404;
 - admin de outra eleição → 403;
-- erro do domínio é propagado e **nada é salvo nem notificado**;
+- erro do domínio é propagado e **nada é salvo nem notificado**. Provoque um erro real, ex.: `addPosition` com título em branco → `INVALID_POSITION_TITLE`;
 - sucesso salva com a versão incrementada e notifica o admin;
 - com rodada aberta, agenda o fechamento; sem rodada aberta, cancela;
 - o snapshot anterior é empilhado.
@@ -323,14 +353,20 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 ### [ ] B7b — Apresentadores: `AdminElectionDTO` e `VoterStateDTO`
 **Ref.:** architecture §6.3, §7.
 **Fazer:**
-- `services/presenters.ts`: `toAdminElectionDTO(record, now, domain)` e `toVoterStateDTO(record, voterId, now, domain)`. O cálculo de resultado e das visões fica no domínio (`computeResult`, `nextPositionStatus` e as visões por papel). O apresentador só monta o DTO e adiciona `serverNow`, `canUndo`, `votedCount` e `eligibleCount`.
+- `services/presenters.ts`: `toAdminElectionDTO(record, now)` e `toVoterStateDTO(record, voterId, now)`. O cálculo fica no domínio:
+  - `voterView(election, voterId)` → base do `VoterStateDTO`;
+  - `lastResultView(election)` → `lastResult`;
+  - `nextPositionStatus(election)` → `next`;
+  - `canUndo(record)` → `canUndo`.
+
+  O apresentador só junta essas peças e acrescenta `serverNow`, `votedCount` e `eligibleCount`.
 - O `execute` da B7a passa a notificar `adminState` com o DTO real e `voterState` para cada eleitor credenciado da eleição.
 
 **Testes (escrever antes):**
 - `serverNow` reflete o relógio;
 - `canUndo` é falso sem histórico e verdadeiro com histórico;
 - progresso x/y da rodada aberta;
-- o DTO de eleitor **nunca** contém códigos de outros eleitores nem contagem de votos antes da liberação (use o stub do domínio para produzir os dados);
+- o DTO de eleitor **nunca** contém códigos de outros eleitores nem contagem de votos antes da liberação (monte o cenário com os fixtures: rodada fechada e ainda não liberada);
 - depois de um comando, cada eleitor recebe o próprio estado.
 
 **Pronto quando:** testes verdes.
@@ -358,7 +394,7 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 **Ref.:** architecture §6.1 (`positions`, `queue`, `queue/suggestion`).
 **Fazer:** métodos no serviço e `http/position-routes.ts`: criar, editar e remover cargo; `PUT /queue` (aplica a ordem); `GET /queue/suggestion` (só leitura, chama `suggestOrder`, não salva).
 **Testes (escrever antes):**
-- cada rota chama a função certa do domínio com os argumentos validados (verifique com o stub);
+- cada rota produz o estado esperado no DTO de resposta (ex.: criar cargo → o cargo aparece em `election.positions`; `PUT /queue` → `election.queue` na nova ordem). Verifique o **estado**, não as chamadas;
 - `tiebreak` inválido → 400;
 - erro do domínio (ex.: remover cargo fora de `DRAFT`) → 409;
 - `suggestion` não salva nem notifica.
@@ -381,7 +417,7 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 ### [ ] B11 — Credenciamento de eleitores e gerador de códigos
 **Ref.:** architecture §5.5 (formato do código), §6.1 (`voters`).
 **Fazer:**
-- `adapters/crypto-code-generator.ts`: usa o gerador puro do domínio (A7) com `crypto.randomInt` como fonte de aleatoriedade. Se a A7 ainda não estiver pronta, implemente aqui o mesmo alfabeto e tamanho e registre nas notas para unificar depois.
+- `adapters/crypto-code-generator.ts`: `createCodeGenerator((max) => crypto.randomInt(max))`, usando o gerador puro do domínio (A7) com `crypto` como fonte de aleatoriedade. Chamada do domínio: `credentialVoters(election, { count, labels? }, codeGenerator, ctx)` → `Result<{ election, codes }>`.
 - **Unicidade global:** o eleitor entra só com o código, então o código não pode existir em nenhuma eleição. O serviço gera N códigos, confere cada um com `repo.isCodeTaken` (e contra os já gerados na mesma leva) e passa ao domínio um gerador que devolve exatamente esses códigos.
 - Rotas `POST /voters` (devolve `codes` + DTO) e `DELETE /voters/:vid` (revoga).
 
@@ -397,6 +433,7 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 ### [ ] B12a — Rotas do ciclo de votação (parte 1)
 **Ref.:** architecture §5.3, §6.1.
 **Fazer:**
+- Funções do domínio: `openElection(e)`, `nextPositionStatus(e)`, `openRound(e, { positionId, durationSeconds? }, ctx)`, `closeRound(e, roundId)`. Note que `openRound` também falha com `RUNOFF_PENDING` e `NO_CREDENTIALED_VOTERS` (`todo-domain.md`, A12).
 - `POST /open` (abre a eleição);
 - `GET /next` (só leitura);
 - `POST /rounds` (abre rodada; `durationSeconds` padrão = `defaultVotingSeconds` da eleição);
@@ -421,6 +458,8 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 - `POST /rounds/:rid/annul`;
 - `POST /undo`;
 - `POST /finish`.
+
+Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `releaseResults(e, roundId)`, `deferPosition(e, positionId)`, `cancelPosition(e, positionId, confirmTitle)`, `annulRound(e, roundId)`, `finishElection(e)` e `undo(record)`. Confira as assinaturas exatas no `index.ts` do domínio.
 
 `undo` é especial: em vez de um comando do domínio sobre a eleição, aplica `undo` sobre o histórico do registro. Sem histórico → 409 `NOTHING_TO_UNDO`. O `undo` **não** empilha um novo snapshot.
 
@@ -456,7 +495,7 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 ### [ ] B13b — Registro de votos
 **Ref.:** architecture §5.4 (votação), §6.2, §8.3.
 **Fazer:**
-- `VoterService.castVote(voterId, electionId, roundId, choice)`: usa o mesmo fluxo da B7a, mas a autorização é do eleitor, não do dono.
+- `VoterService.castVote(voterId, electionId, roundId, choice)`: usa o mesmo fluxo da B7a, mas a autorização é do eleitor, não do dono. Chamada do domínio: `castVote(e, { roundId, voterId, choice }, ctx)`.
 - Tolerância de prazo: o `DomainContext` do voto usa `now = clock.now() - VOTE_GRACE_MS`.
 - Rota `POST /api/voter/votes` → 204.
 
@@ -479,7 +518,7 @@ O objetivo do Sprint 0 é que A e C abram o projeto e só "preencham os vazios":
 
 **Testes (escrever antes):**
 - `TimeoutScheduler` com `vi.useFakeTimers()`: dispara no tempo certo, `cancel` impede, reagendar substitui;
-- `handleDeadline` com `FakeClock` + stub do domínio: fecha e notifica quando venceu; não salva quando nada mudou.
+- `handleDeadline` com `FakeClock` + domínio real: fecha e notifica quando o prazo venceu; não salva quando nada mudou (`closeRoundIfDue` devolve a mesma instância, compare com `===`).
 
 **Commit sugerido:** `feat(server): fecha rodadas automaticamente ao fim do prazo`
 **Notas do agente:** _pendente_
@@ -509,11 +548,10 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 
 ## Integração, persistência e produção
 
-### [ ] B16a — Integração com o domínio real (fluxo básico)
-**Depende de:** A1–A14 de A na `main` (marco M1). Confira se `packages/domain/test/public-api.test.ts` não lista mais essas funções como não implementadas.
+### [ ] B16a — Cenário de integração HTTP completo (fluxo básico)
+**Depende de:** nada pendente (o domínio de A já está pronto; o marco M1 foi atingido antes do Sprint 0). Referência útil: `packages/domain/test/scenarios/full-election.test.ts` (A22) mostra a sequência de comandos.
 **Fazer:**
-- `buildApp` passa a usar o domínio real por padrão. O stub continua disponível para os testes de unidade que já o usam.
-- `test/integration/election-flow.test.ts`, um cenário só por HTTP com o domínio real:
+- `test/integration/election-flow.test.ts`, um cenário só por HTTP:
   1. login;
   2. criar eleição, 1 cargo e 2 candidatos;
   3. gerar 3 códigos e abrir a eleição;
@@ -526,7 +564,7 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
   Escreva-o em passos pequenos e nomeados (funções auxiliares), para não virar um teste gigante e ilegível.
 - Corrigir divergências reais entre o servidor e o domínio. Se a divergência estiver no domínio, avise o usuário/A.
 
-**Commit sugerido:** `test(server): integra servidor ao domínio real com cenário de votação completo`
+**Commit sugerido:** `test(server): cobre cenário completo de votação via HTTP`
 **Notas do agente:** _pendente_
 
 ### [ ] B17 — Repositórios PostgreSQL
@@ -592,8 +630,8 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 **Commit sugerido:** `ci: publica em produção no Render após CI verde na main`
 **Notas do agente:** _pendente_
 
-### [ ] B16b — Integração com o domínio real (cenários avançados)
-**Depende de:** A15–A20 de A na `main`.
+### [ ] B16b — Cenários de integração HTTP avançados
+**Depende de:** nada pendente (A15–A20 já prontas).
 **Fazer:** novos testes de integração só por HTTP com o domínio real, um arquivo por cenário:
 - 2º turno: 3 candidatos e votos divididos → `AWAITING_RUNOFF` → `runoff` → eleito;
 - exclusão do eleito: eleito no cargo A não aparece na cédula do cargo B;
@@ -623,4 +661,6 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 
 - 2026-11-22 — planejamento — o repositório guarda `ElectionRecord = History<Election>` (atual + snapshots), não só a `Election`. Assim o desfazer sobrevive a reinícios. Detalha a §8.1.
 - 2026-11-22 — planejamento — os códigos de eleitor são **únicos globalmente**, não só por eleição, porque o eleitor entra apenas com o código. Garantido pelo serviço (B11) e pela chave primária de `voter_codes` (B17). Detalha a §5.5.
-- 2026-11-22 — planejamento — o domínio é injetado no servidor (`AppDeps.domain: DomainApi`) para permitir stubs antes do marco M1.
+- ~~2026-11-22 — planejamento — o domínio é injetado no servidor (`AppDeps.domain: DomainApi`) para permitir stubs antes do marco M1.~~ **Revogada em 2026-11-23**: o domínio ficou pronto antes do Sprint 0, então o servidor o importa direto e testa com ele real (real > fake > stub > mock).
+- 2026-11-23 — replanejamento — o Sprint 0 integra o `packages/domain` já existente (TS 7, Vitest 5): S0.1 e S0.2 absorvem as configs, S0.3a move `model.ts` para `@voto/shared`, e a S0.4 virou "servidor enxergando o domínio real". As assinaturas reais do domínio (`todo-domain.md`, "Decisões e desvios") valem mais que a §5.2.
+- 2026-11-23 — replanejamento — o servidor incrementa `election.version` ao salvar (o domínio mantém o campo, mas não o altera).
