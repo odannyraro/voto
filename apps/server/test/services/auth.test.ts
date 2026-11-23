@@ -91,9 +91,9 @@ describe('login', () => {
     const { auth } = makeAuth();
     await auth.seedAdmin('root', 's3cret');
 
-    const error = await rejectionOf(auth.login('root', 'wrong'));
+    const attempt = auth.login('root', 'wrong');
 
-    expect(error).toMatchObject({ status: 401, code: 'INVALID_CREDENTIALS' });
+    await expect(attempt).rejects.toMatchObject({ status: 401, code: 'INVALID_CREDENTIALS' });
   });
 
   it('answers an unknown username exactly like a wrong password', async () => {
@@ -153,8 +153,9 @@ describe('admin token expiry', () => {
 
     clock.advance(ADMIN_TOKEN_TTL_MS);
 
-    const error = await rejectionOf(auth.verifyToken(token));
-    expect(error).toMatchObject({ status: 401, code: 'INVALID_TOKEN' });
+    const verification = auth.verifyToken(token);
+
+    await expect(verification).rejects.toMatchObject({ status: 401, code: 'INVALID_TOKEN' });
   });
 });
 
@@ -181,9 +182,9 @@ describe('verifyToken', () => {
       JSON.stringify({ role: 'admin', sub: 'admin-1', exp: 9999999999 }),
     ).toString('base64url');
 
-    const error = await rejectionOf(auth.verifyToken(`${header}.${forgedPayload}.${signature}`));
+    const verification = auth.verifyToken(`${header}.${forgedPayload}.${signature}`);
 
-    expect(error).toMatchObject({ status: 401, code: 'INVALID_TOKEN' });
+    await expect(verification).rejects.toMatchObject({ status: 401, code: 'INVALID_TOKEN' });
   });
 
   it('rejects a token signed with another secret', async () => {
@@ -191,17 +192,17 @@ describe('verifyToken', () => {
     const verifier = makeAuth({ jwtSecret: 'test-secret' }).auth;
     const token = await issuer.issueAdminToken('admin-1');
 
-    const error = await rejectionOf(verifier.verifyToken(token));
+    const verification = verifier.verifyToken(token);
 
-    expect(error).toMatchObject({ status: 401, code: 'INVALID_TOKEN' });
+    await expect(verification).rejects.toMatchObject({ status: 401, code: 'INVALID_TOKEN' });
   });
 
   it('rejects text that is not a token', async () => {
     const { auth } = makeAuth();
 
-    const error = await rejectionOf(auth.verifyToken('not-a-jwt'));
+    const verification = auth.verifyToken('not-a-jwt');
 
-    expect(error).toBeInstanceOf(HttpError);
-    expect(error).toMatchObject({ status: 401, code: 'INVALID_TOKEN' });
+    await expect(verification).rejects.toBeInstanceOf(HttpError);
+    await expect(verification).rejects.toMatchObject({ status: 401, code: 'INVALID_TOKEN' });
   });
 });
