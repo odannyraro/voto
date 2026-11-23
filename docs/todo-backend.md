@@ -60,7 +60,6 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/web/src/main.tsx` → composição (`BrowserRouter` + `createRoot`); fora da cobertura.
 - `apps/web/vite.config.ts` → plugin React, proxy `/api` e `/socket.io` e config do Vitest (jsdom, setup, cobertura).
 - `apps/web/test/setup.ts` → setup do Testing Library (`jest-dom` + `cleanup`).
-- `apps/server/src/index.ts` → servidor (por ora só `SERVICE_NAME`).
 - `apps/server/src/config.ts` → `loadConfig(env)`: valida o ambiente com Zod e devolve `Config` (único lugar que lê variáveis de ambiente).
 - `apps/server/src/http/error-status.ts` → `statusForErrorCode(code)`: código de erro → status HTTP (§6.3).
 - `apps/server/src/ports/` → portas da aplicação (só tipos): repositórios, `Clock`, `Scheduler`, `CodeGenerator`, `Notifier`; `index.ts` reexporta tudo.
