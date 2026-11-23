@@ -37,7 +37,11 @@ type CandidateFields = Omit<Candidate, 'id' | 'createdAt'>;
  *   `INVALID_CANDIDATE_AGE`, `INVALID_REMAINING_MONTHS`, `INVALID_APPLICATIONS`,
  *   `POSITION_NOT_FOUND` ou `INVALID_FIRST_CHOICE`.
  */
-export function addCandidate(election: Election, input: AddCandidateInput, ctx: DomainContext): Result<Election> {
+export function addCandidate(
+  election: Election,
+  input: AddCandidateInput,
+  ctx: DomainContext,
+): Result<Election> {
   const finished = requireNotFinished(election);
   if (finished) return finished;
 
@@ -59,7 +63,11 @@ export function addCandidate(election: Election, input: AddCandidateInput, ctx: 
  * @returns A eleição alterada, ou `ELECTION_FINISHED`, `CANDIDATE_NOT_FOUND`,
  *   `CANDIDATE_ALREADY_ELECTED` ou os mesmos erros de validação de `addCandidate`.
  */
-export function updateCandidate(election: Election, candidateId: string, input: UpdateCandidateInput): Result<Election> {
+export function updateCandidate(
+  election: Election,
+  candidateId: string,
+  input: UpdateCandidateInput,
+): Result<Election> {
   const finished = requireNotFinished(election);
   if (finished) return finished;
 
@@ -69,7 +77,11 @@ export function updateCandidate(election: Election, candidateId: string, input: 
     return fail('CANDIDATE_ALREADY_ELECTED', 'An elected candidate cannot be changed');
   }
 
-  const updated: Candidate = { ...candidate, ...input, name: (input.name ?? candidate.name).trim() };
+  const updated: Candidate = {
+    ...candidate,
+    ...input,
+    name: (input.name ?? candidate.name).trim(),
+  };
   const invalid = validateCandidate(election, updated);
   if (invalid) return invalid;
 
@@ -112,12 +124,20 @@ function validateCandidate(election: Election, fields: CandidateFields): Result<
   if (fields.name === '') return fail('INVALID_CANDIDATE_NAME', 'Candidate name must not be blank');
 
   const isValidAge =
-    Number.isInteger(fields.age) && fields.age >= MIN_CANDIDATE_AGE && fields.age <= MAX_CANDIDATE_AGE;
+    Number.isInteger(fields.age) &&
+    fields.age >= MIN_CANDIDATE_AGE &&
+    fields.age <= MAX_CANDIDATE_AGE;
   if (!isValidAge) {
-    return fail('INVALID_CANDIDATE_AGE', `Age must be a whole number from ${MIN_CANDIDATE_AGE} to ${MAX_CANDIDATE_AGE}`);
+    return fail(
+      'INVALID_CANDIDATE_AGE',
+      `Age must be a whole number from ${MIN_CANDIDATE_AGE} to ${MAX_CANDIDATE_AGE}`,
+    );
   }
   if (!Number.isInteger(fields.remainingMonths) || fields.remainingMonths < 0) {
-    return fail('INVALID_REMAINING_MONTHS', 'Remaining months must be a whole number of at least 0');
+    return fail(
+      'INVALID_REMAINING_MONTHS',
+      'Remaining months must be a whole number of at least 0',
+    );
   }
   return validateApplications(election, fields.applications, fields.firstChoicePositionId);
 }
@@ -136,7 +156,10 @@ function validateApplications(
   firstChoicePositionId: string,
 ): Result<never> | undefined {
   if (applications.length === 0 || new Set(applications).size !== applications.length) {
-    return fail('INVALID_APPLICATIONS', 'A candidate must run for at least one position, each listed once');
+    return fail(
+      'INVALID_APPLICATIONS',
+      'A candidate must run for at least one position, each listed once',
+    );
   }
   const unknownId = applications.find((positionId) => !findPosition(election, positionId));
   if (unknownId) return fail('POSITION_NOT_FOUND', `Position ${unknownId} does not exist`);

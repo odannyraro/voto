@@ -15,7 +15,14 @@ function electionWithRound(round: Partial<Round>) {
     .withPositions(aPosition({ id: 'president', title: 'President', status: 'VOTING' }))
     .withCandidates(aCandidate({ id: 'ana', name: 'Ana' }), aCandidate({ id: 'bia', name: 'Bia' }))
     .withVoters(aVoter({ id: 'voter-1' }), aVoter({ id: 'late-voter', code: 'CCCC4444' }))
-    .withRounds(aRound({ id: 'round-1', candidateIds: ['ana', 'bia'], eligibleVoterIds: ['voter-1'], ...round }))
+    .withRounds(
+      aRound({
+        id: 'round-1',
+        candidateIds: ['ana', 'bia'],
+        eligibleVoterIds: ['voter-1'],
+        ...round,
+      }),
+    )
     .build();
 }
 
@@ -116,7 +123,11 @@ describe('voterView', () => {
   });
 
   it('hides the result from voters until the admin releases it', () => {
-    const election = electionWithRound({ status: 'CLOSED', tally: { ana: 1 }, resultsReleased: false });
+    const election = electionWithRound({
+      status: 'CLOSED',
+      tally: { ana: 1 },
+      resultsReleased: false,
+    });
 
     const view = voterView(election, 'voter-1');
 
@@ -124,11 +135,18 @@ describe('voterView', () => {
   });
 
   it('shows the released result to the voters', () => {
-    const election = electionWithRound({ status: 'CLOSED', tally: { ana: 1 }, resultsReleased: true });
+    const election = electionWithRound({
+      status: 'CLOSED',
+      tally: { ana: 1 },
+      resultsReleased: true,
+    });
 
     const view = voterView(election, 'voter-1');
 
-    expect(view).toMatchObject({ phase: 'RESULTS', result: { roundId: 'round-1', electedCandidateId: 'ana' } });
+    expect(view).toMatchObject({
+      phase: 'RESULTS',
+      result: { roundId: 'round-1', electedCandidateId: 'ana' },
+    });
   });
 
   it('shows the closing screen once the election is finished', () => {

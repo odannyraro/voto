@@ -25,7 +25,11 @@ export interface CastVoteInput {
  *   `ROUND_EXPIRED`, `VOTER_NOT_ELIGIBLE`, `VOTER_REVOKED`, `VOTER_ALREADY_VOTED` ou
  *   `INVALID_CHOICE`.
  */
-export function castVote(election: Election, input: CastVoteInput, ctx: DomainContext): Result<Election> {
+export function castVote(
+  election: Election,
+  input: CastVoteInput,
+  ctx: DomainContext,
+): Result<Election> {
   const round = election.rounds.find((candidate) => candidate.id === input.roundId);
   if (!round) return fail('ROUND_NOT_FOUND', `Round ${input.roundId} does not exist`);
 
@@ -51,17 +55,24 @@ export function castVote(election: Election, input: CastVoteInput, ctx: DomainCo
  * @param now - Instante considerado para o prazo.
  * @returns O `Result` de falha da primeira regra violada, ou `undefined` se o voto vale.
  */
-function checkVote(election: Election, round: Round, input: CastVoteInput, now: Date): Result<never> | undefined {
+function checkVote(
+  election: Election,
+  round: Round,
+  input: CastVoteInput,
+  now: Date,
+): Result<never> | undefined {
   if (round.status !== 'OPEN') return fail('ROUND_NOT_OPEN', 'This round is not accepting votes');
   // §5.4: o prazo vale mesmo que a rodada ainda não tenha sido fechada formalmente.
-  if (now.getTime() > Date.parse(round.deadline)) return fail('ROUND_EXPIRED', 'The voting deadline has passed');
+  if (now.getTime() > Date.parse(round.deadline))
+    return fail('ROUND_EXPIRED', 'The voting deadline has passed');
 
   if (!round.eligibleVoterIds.includes(input.voterId)) {
     return fail('VOTER_NOT_ELIGIBLE', 'Only voters credentialed when the round opened can vote');
   }
   const voter = election.voters.find((v) => v.id === input.voterId);
   if (voter?.status !== 'CREDENTIALED') return fail('VOTER_REVOKED', 'This voter code was revoked');
-  if (round.votedVoterIds.includes(input.voterId)) return fail('VOTER_ALREADY_VOTED', 'This voter already voted');
+  if (round.votedVoterIds.includes(input.voterId))
+    return fail('VOTER_ALREADY_VOTED', 'This voter already voted');
 
   if (input.choice !== BLANK && !round.candidateIds.includes(input.choice)) {
     return fail('INVALID_CHOICE', 'The choice must be a candidate on the ballot or a blank vote');

@@ -2,8 +2,7 @@ import { DomainError, type DomainErrorCode } from './errors';
 
 /** Resultado de um comando do domínio: o valor novo ou o erro de negócio que o impediu. */
 export type Result<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: DomainError };
+  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: DomainError };
 
 /**
  * Embrulha um valor de sucesso.

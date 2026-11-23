@@ -26,12 +26,16 @@ export function annulRound(election: Election, roundId: string): Result<Election
   }
 
   const position = findPosition(election, round.positionId);
-  if (!position) throw new Error(`Round ${round.id} points to unknown position ${round.positionId}`);
+  if (!position)
+    throw new Error(`Round ${round.id} points to unknown position ${round.positionId}`);
 
   const { electedCandidateId: _discarded, ...withoutWinner } = position;
   const annulled = replaceRound(election, { ...round, status: 'ANNULLED' });
   const pending = replacePosition(annulled, { ...withoutWinner, status: 'PENDING' });
-  return ok({ ...pending, queue: [position.id, ...election.queue.filter((id) => id !== position.id)] });
+  return ok({
+    ...pending,
+    queue: [position.id, ...election.queue.filter((id) => id !== position.id)],
+  });
 }
 
 /**
@@ -42,5 +46,7 @@ export function annulRound(election: Election, roundId: string): Result<Election
  * @returns A rodada, ou `undefined` se não houver.
  */
 function latestValidRound(election: Election, positionId: string): Round | undefined {
-  return election.rounds.findLast((round) => round.positionId === positionId && round.status !== 'ANNULLED');
+  return election.rounds.findLast(
+    (round) => round.positionId === positionId && round.status !== 'ANNULLED',
+  );
 }

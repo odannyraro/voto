@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { addCandidate, removeCandidate, updateCandidate, type AddCandidateInput } from '../src/index';
+import {
+  addCandidate,
+  removeCandidate,
+  updateCandidate,
+  type AddCandidateInput,
+} from '../src/index';
 import { aCandidate, anElection, aPosition, aRound } from './builders/election-builder';
 import { FIXED_NOW, fixedContext } from './builders/fixed-context';
 
@@ -9,7 +14,10 @@ const MAX_AGE = 120;
 /** Eleição com dois cargos, base dos testes de cadastro. */
 function electionWithTwoPositions() {
   return anElection()
-    .withPositions(aPosition({ id: 'president', title: 'President' }), aPosition({ id: 'treasurer', title: 'Treasurer' }))
+    .withPositions(
+      aPosition({ id: 'president', title: 'President' }),
+      aPosition({ id: 'treasurer', title: 'Treasurer' }),
+    )
     .build();
 }
 
@@ -32,7 +40,11 @@ function candidacy(overrides: Partial<AddCandidateInput> = {}): AddCandidateInpu
 
 describe('addCandidate', () => {
   it('registers the candidate with the creation instant used as last tiebreak criterion', () => {
-    const result = addCandidate(electionWithTwoPositions(), candidacy({ name: '  Ana ' }), fixedContext());
+    const result = addCandidate(
+      electionWithTwoPositions(),
+      candidacy({ name: '  Ana ' }),
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({
       ok: true,
@@ -51,7 +63,10 @@ describe('addCandidate', () => {
   });
 
   it('accepts new candidates while the election is open', () => {
-    const election = anElection().open().withPositions(aPosition({ id: 'president' })).build();
+    const election = anElection()
+      .open()
+      .withPositions(aPosition({ id: 'president' }))
+      .build();
 
     const result = addCandidate(
       election,
@@ -63,7 +78,11 @@ describe('addCandidate', () => {
   });
 
   it('rejects a blank name', () => {
-    const result = addCandidate(electionWithTwoPositions(), candidacy({ name: '' }), fixedContext());
+    const result = addCandidate(
+      electionWithTwoPositions(),
+      candidacy({ name: '' }),
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_CANDIDATE_NAME' } });
   });
@@ -81,7 +100,11 @@ describe('addCandidate', () => {
   });
 
   it('rejects a negative remaining time at the university', () => {
-    const result = addCandidate(electionWithTwoPositions(), candidacy({ remainingMonths: -1 }), fixedContext());
+    const result = addCandidate(
+      electionWithTwoPositions(),
+      candidacy({ remainingMonths: -1 }),
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_REMAINING_MONTHS' } });
   });
@@ -90,7 +113,11 @@ describe('addCandidate', () => {
     { label: 'no position', applications: [] },
     { label: 'the same position twice', applications: ['president', 'president'] },
   ])('rejects applications with $label', ({ applications }) => {
-    const result = addCandidate(electionWithTwoPositions(), candidacy({ applications }), fixedContext());
+    const result = addCandidate(
+      electionWithTwoPositions(),
+      candidacy({ applications }),
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_APPLICATIONS' } });
   });
@@ -116,9 +143,16 @@ describe('addCandidate', () => {
   });
 
   it('rejects new candidates after the election is finished', () => {
-    const election = anElection().withStatus('FINISHED').withPositions(aPosition({ id: 'president' })).build();
+    const election = anElection()
+      .withStatus('FINISHED')
+      .withPositions(aPosition({ id: 'president' }))
+      .build();
 
-    const result = addCandidate(election, candidacy({ applications: ['president'] }), fixedContext());
+    const result = addCandidate(
+      election,
+      candidacy({ applications: ['president'] }),
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({ ok: false, error: { code: 'ELECTION_FINISHED' } });
   });
@@ -127,19 +161,40 @@ describe('addCandidate', () => {
 describe('updateCandidate', () => {
   it('moves the first choice to another position the candidate applies to', () => {
     const election = anElection()
-      .withPositions(aPosition({ id: 'president', title: 'President' }), aPosition({ id: 'treasurer', title: 'Treasurer' }))
-      .withCandidates(aCandidate({ id: 'ana', applications: ['president', 'treasurer'], firstChoicePositionId: 'president' }))
+      .withPositions(
+        aPosition({ id: 'president', title: 'President' }),
+        aPosition({ id: 'treasurer', title: 'Treasurer' }),
+      )
+      .withCandidates(
+        aCandidate({
+          id: 'ana',
+          applications: ['president', 'treasurer'],
+          firstChoicePositionId: 'president',
+        }),
+      )
       .build();
 
     const result = updateCandidate(election, 'ana', { firstChoicePositionId: 'treasurer' });
 
-    expect(result).toMatchObject({ ok: true, value: { candidates: [{ firstChoicePositionId: 'treasurer' }] } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { candidates: [{ firstChoicePositionId: 'treasurer' }] },
+    });
   });
 
   it('rejects dropping the application that is the first choice', () => {
     const election = anElection()
-      .withPositions(aPosition({ id: 'president', title: 'President' }), aPosition({ id: 'treasurer', title: 'Treasurer' }))
-      .withCandidates(aCandidate({ id: 'ana', applications: ['president', 'treasurer'], firstChoicePositionId: 'president' }))
+      .withPositions(
+        aPosition({ id: 'president', title: 'President' }),
+        aPosition({ id: 'treasurer', title: 'Treasurer' }),
+      )
+      .withCandidates(
+        aCandidate({
+          id: 'ana',
+          applications: ['president', 'treasurer'],
+          firstChoicePositionId: 'president',
+        }),
+      )
       .build();
 
     const result = updateCandidate(election, 'ana', { applications: ['treasurer'] });

@@ -30,8 +30,17 @@ export {
   type CredentialVotersInput,
   type CredentialedVoters,
 } from './election/voters';
-export { CODE_ALPHABET, CODE_LENGTH, createCodeGenerator, type RandomIndexSource } from './voters/code';
-export { eligibleCandidates, attachableCandidates, attachExistingCandidate } from './eligibility/eligibility';
+export {
+  CODE_ALPHABET,
+  CODE_LENGTH,
+  createCodeGenerator,
+  type RandomIndexSource,
+} from './voters/code';
+export {
+  eligibleCandidates,
+  attachableCandidates,
+  attachExistingCandidate,
+} from './eligibility/eligibility';
 export { rankByTiebreak } from './tiebreak/tiebreak';
 export {
   computeResult,
@@ -54,6 +63,13 @@ export {
 export { nextPositionStatus, applyOrder, type NextPositionInfo } from './ordering/queue';
 export { deferPosition, cancelPosition } from './election/position-actions';
 export { suggestOrder } from './ordering/suggest';
-export { createHistory, pushSnapshot, undo, canUndo, HISTORY_LIMIT, type History } from './history/history';
+export {
+  createHistory,
+  pushSnapshot,
+  undo,
+  canUndo,
+  HISTORY_LIMIT,
+  type History,
+} from './history/history';
 export { annulRound } from './election/annul';
 export { finishElection } from './election/finish';

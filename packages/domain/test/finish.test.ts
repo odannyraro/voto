@@ -6,7 +6,10 @@ import { valueOf } from './builders/result-helpers';
 
 describe('finishElection', () => {
   it('finishes an open election with no round in progress', () => {
-    const election = anElection().open().withPositions(aPosition({ status: 'DECIDED', electedCandidateId: 'ana' })).build();
+    const election = anElection()
+      .open()
+      .withPositions(aPosition({ status: 'DECIDED', electedCandidateId: 'ana' }))
+      .build();
 
     const result = finishElection(election);
 
@@ -34,9 +37,16 @@ describe('finishElection', () => {
   });
 
   it('blocks any further change once the election is finished', () => {
-    const finished = valueOf(finishElection(anElection().open().withPositions(aPosition()).build()));
+    const finished = valueOf(
+      finishElection(anElection().open().withPositions(aPosition()).build()),
+    );
 
-    const result = credentialVoters(finished, { count: 1 }, sequenceCodeGenerator(['AAAA2222']), fixedContext());
+    const result = credentialVoters(
+      finished,
+      { count: 1 },
+      sequenceCodeGenerator(['AAAA2222']),
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({ ok: false, error: { code: 'ELECTION_FINISHED' } });
   });

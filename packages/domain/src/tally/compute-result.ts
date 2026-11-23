@@ -38,7 +38,10 @@ interface VoteCount {
 }
 
 /** Parte do resultado que depende do desfecho. */
-type Decision = Pick<RoundResult, 'outcome' | 'electedCandidateId' | 'runoffCandidateIds' | 'tiebreakApplied'>;
+type Decision = Pick<
+  RoundResult,
+  'outcome' | 'electedCandidateId' | 'runoffCandidateIds' | 'tiebreakApplied'
+>;
 
 // Com até este número de candidatos na cédula não há 2º turno (architecture.md §5.4).
 const MAX_CANDIDATES_WITHOUT_RUNOFF = 2;
@@ -55,8 +58,13 @@ const MAX_CANDIDATES_WITHOUT_RUNOFF = 2;
  * @throws {Error} Se a rodada ainda estiver aberta ou se a cédula citar um candidato
  *   inexistente (ambos indicam bug de quem chamou).
  */
-export function computeResult(round: Round, position: Position, candidates: readonly Candidate[]): RoundResult {
-  if (round.status === 'OPEN') throw new Error(`Round ${round.id} is still open and cannot be counted`);
+export function computeResult(
+  round: Round,
+  position: Position,
+  candidates: readonly Candidate[],
+): RoundResult {
+  if (round.status === 'OPEN')
+    throw new Error(`Round ${round.id} is still open and cannot be counted`);
 
   const count = countVotes(round);
   return {
@@ -91,11 +99,18 @@ function countVotes(round: Round): VoteCount {
  * @param candidates - Candidatos da eleição.
  * @returns O desfecho e, conforme o caso, o eleito ou os finalistas.
  */
-function decide(round: Round, count: VoteCount, position: Position, candidates: readonly Candidate[]): Decision {
+function decide(
+  round: Round,
+  count: VoteCount,
+  position: Position,
+  candidates: readonly Candidate[],
+): Decision {
   const [leader] = count.counts;
-  if (!leader || count.validVotes === 0) return { outcome: 'NO_VALID_VOTES', tiebreakApplied: false };
+  if (!leader || count.validVotes === 0)
+    return { outcome: 'NO_VALID_VOTES', tiebreakApplied: false };
 
-  const isMostVotedWins = round.kind === 'RUNOFF' || round.candidateIds.length <= MAX_CANDIDATES_WITHOUT_RUNOFF;
+  const isMostVotedWins =
+    round.kind === 'RUNOFF' || round.candidateIds.length <= MAX_CANDIDATES_WITHOUT_RUNOFF;
   if (isMostVotedWins) return electMostVoted(count.counts, position, candidates);
 
   // README: maioria é mais de 50% dos votos válidos.
@@ -104,7 +119,11 @@ function decide(round: Round, count: VoteCount, position: Position, candidates: 
   }
   const ballot = resolveCandidates(round.candidateIds, candidates);
   const cut = cutForRunoff(count.counts, position.tiebreak, ballot);
-  return { outcome: 'RUNOFF_REQUIRED', runoffCandidateIds: cut.finalists, tiebreakApplied: cut.tiebreakApplied };
+  return {
+    outcome: 'RUNOFF_REQUIRED',
+    runoffCandidateIds: cut.finalists,
+    tiebreakApplied: cut.tiebreakApplied,
+  };
 }
 
 /**
@@ -115,7 +134,11 @@ function decide(round: Round, count: VoteCount, position: Position, candidates: 
  * @param candidates - Candidatos da eleição.
  * @returns Desfecho `ELECTED`.
  */
-function electMostVoted(counts: readonly CandidateCount[], position: Position, candidates: readonly Candidate[]): Decision {
+function electMostVoted(
+  counts: readonly CandidateCount[],
+  position: Position,
+  candidates: readonly Candidate[],
+): Decision {
   const topVotes = counts[0]?.votes ?? 0;
   const tied = counts.filter((count) => count.votes === topVotes).map((count) => count.candidateId);
   const [winner] = rankByTiebreak(resolveCandidates(tied, candidates), position.tiebreak);

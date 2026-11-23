@@ -58,6 +58,7 @@ function scorePosition(election: Election, positionId: string, queueIndex: numbe
     contested: eligible.length >= MIN_CANDIDATES_FOR_CONTEST,
     conflicts: eligible.filter((candidate) => runsElsewhere(candidate.applications)).length,
     eligible: eligible.length,
-    firstChoices: eligible.filter((candidate) => candidate.firstChoicePositionId === positionId).length,
+    firstChoices: eligible.filter((candidate) => candidate.firstChoicePositionId === positionId)
+      .length,
   };
 }

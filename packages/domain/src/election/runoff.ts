@@ -17,7 +17,11 @@ import { checkCanStartRound, startRound, type OpenRoundInput } from './rounds';
  *   `ROUND_IN_PROGRESS`, `POSITION_NOT_FOUND`, `POSITION_NOT_AWAITING_RUNOFF`,
  *   `INVALID_VOTING_DURATION` ou `NO_CREDENTIALED_VOTERS`.
  */
-export function openRunoff(election: Election, input: OpenRoundInput, ctx: DomainContext): Result<Election> {
+export function openRunoff(
+  election: Election,
+  input: OpenRoundInput,
+  ctx: DomainContext,
+): Result<Election> {
   const blocked = checkCanStartRound(election);
   if (blocked) return blocked;
 
@@ -42,9 +46,14 @@ export function openRunoff(election: Election, input: OpenRoundInput, ctx: Domai
  */
 function runoffFinalists(election: Election, position: Position): readonly string[] {
   const firstRound = election.rounds.findLast(
-    (round) => round.positionId === position.id && round.kind === 'FIRST' && round.status === 'CLOSED',
+    (round) =>
+      round.positionId === position.id && round.kind === 'FIRST' && round.status === 'CLOSED',
   );
-  const finalists = firstRound && computeResult(firstRound, position, election.candidates).runoffCandidateIds;
-  if (!finalists) throw new Error(`Position ${position.id} awaits a runoff without a first round that requires it`);
+  const finalists =
+    firstRound && computeResult(firstRound, position, election.candidates).runoffCandidateIds;
+  if (!finalists)
+    throw new Error(
+      `Position ${position.id} awaits a runoff without a first round that requires it`,
+    );
   return finalists;
 }

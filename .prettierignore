@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+reports
+.stryker-tmp
+playwright-report
+test-results
+package-lock.json
+
+# Markdown fica fora do Prettier: os docs têm donos diferentes e tabelas escritas à mão
+*.md

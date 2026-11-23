@@ -46,7 +46,8 @@ export function credentialVoters(
   const newVoters: Voter[] = [];
   for (let index = 0; index < input.count; index += 1) {
     const code = codeGenerator.generate();
-    if (usedCodes.has(code)) return fail('DUPLICATE_VOTER_CODE', 'The code generator repeated a code');
+    if (usedCodes.has(code))
+      return fail('DUPLICATE_VOTER_CODE', 'The code generator repeated a code');
     usedCodes.add(code);
     newVoters.push(buildVoter(ctx.newId(), code, input.labels?.[index]));
   }
@@ -69,7 +70,8 @@ export function revokeVoter(election: Election, voterId: string): Result<Electio
 
   const voter = election.voters.find((candidate) => candidate.id === voterId);
   if (!voter) return fail('VOTER_NOT_FOUND', `Voter ${voterId} does not exist`);
-  if (voter.status === 'REVOKED') return fail('VOTER_REVOKED', 'This voter code was already revoked');
+  if (voter.status === 'REVOKED')
+    return fail('VOTER_REVOKED', 'This voter code was already revoked');
 
   return ok({
     ...election,
@@ -84,9 +86,13 @@ export function revokeVoter(election: Election, voterId: string): Result<Electio
  * @returns `INVALID_VOTER_COUNT` ou `INVALID_VOTER_LABELS`; ou `undefined`.
  */
 function validateRequest(input: CredentialVotersInput): Result<never> | undefined {
-  const isValidCount = Number.isInteger(input.count) && input.count >= 1 && input.count <= MAX_VOTERS_PER_BATCH;
+  const isValidCount =
+    Number.isInteger(input.count) && input.count >= 1 && input.count <= MAX_VOTERS_PER_BATCH;
   if (!isValidCount) {
-    return fail('INVALID_VOTER_COUNT', `Voter count must be a whole number from 1 to ${MAX_VOTERS_PER_BATCH}`);
+    return fail(
+      'INVALID_VOTER_COUNT',
+      `Voter count must be a whole number from 1 to ${MAX_VOTERS_PER_BATCH}`,
+    );
   }
   if ((input.labels?.length ?? 0) > input.count) {
     return fail('INVALID_VOTER_LABELS', 'There are more labels than voters');

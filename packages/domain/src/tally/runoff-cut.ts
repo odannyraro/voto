@@ -37,7 +37,10 @@ export function cutForRunoff(
     const group = counts.filter((count) => count.votes === votes).map((count) => count.candidateId);
     if (group.length > open) {
       tiebreakApplied = true;
-      const ranked = rankByTiebreak(candidates.filter((c) => group.includes(c.id)), tiebreak);
+      const ranked = rankByTiebreak(
+        candidates.filter((c) => group.includes(c.id)),
+        tiebreak,
+      );
       finalists.push(...ranked.slice(0, open).map((candidate) => candidate.id));
     } else {
       finalists.push(...group);
@@ -45,7 +48,8 @@ export function cutForRunoff(
   }
 
   const [first, second] = finalists;
-  if (first === undefined || second === undefined) throw new Error('A runoff needs at least two candidates');
+  if (first === undefined || second === undefined)
+    throw new Error('A runoff needs at least two candidates');
   return { finalists: [first, second], tiebreakApplied };
 }
 

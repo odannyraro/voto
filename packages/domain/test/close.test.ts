@@ -15,13 +15,19 @@ const DEADLINE = secondsAfter(FIXED_NOW, 60);
 function electionVoting(round: Partial<Round> = {}) {
   return anElection()
     .open()
-    .withPositions(aPosition({ id: 'president', status: 'VOTING' }), aPosition({ id: 'treasurer', title: 'Treasurer' }))
+    .withPositions(
+      aPosition({ id: 'president', status: 'VOTING' }),
+      aPosition({ id: 'treasurer', title: 'Treasurer' }),
+    )
     .withCandidates(
       aCandidate({ id: 'ana', age: 30 }),
       aCandidate({ id: 'bia', name: 'Bia', age: 25 }),
       aCandidate({ id: 'caio', name: 'Caio', age: 20 }),
     )
-    .withVoters(aVoter({ id: 'voter-1', code: 'AAAA2222' }), aVoter({ id: 'voter-2', code: 'BBBB3333' }))
+    .withVoters(
+      aVoter({ id: 'voter-1', code: 'AAAA2222' }),
+      aVoter({ id: 'voter-2', code: 'BBBB3333' }),
+    )
     .withRounds(
       aRound({
         id: 'round-1',
@@ -45,7 +51,10 @@ describe('closeRound', () => {
       ok: true,
       value: {
         rounds: [{ status: 'CLOSED' }],
-        positions: [{ id: 'president', status: 'DECIDED', electedCandidateId: 'ana' }, { id: 'treasurer' }],
+        positions: [
+          { id: 'president', status: 'DECIDED', electedCandidateId: 'ana' },
+          { id: 'treasurer' },
+        ],
       },
     });
   });
@@ -68,7 +77,10 @@ describe('closeRound', () => {
 
     expect(result).toMatchObject({
       ok: true,
-      value: { positions: [{ id: 'president', status: 'PENDING' }, { id: 'treasurer' }], queue: ['president', 'treasurer'] },
+      value: {
+        positions: [{ id: 'president', status: 'PENDING' }, { id: 'treasurer' }],
+        queue: ['president', 'treasurer'],
+      },
     });
   });
 
@@ -128,7 +140,11 @@ describe('castVote closing the round', () => {
   it('closes the round automatically when the last eligible voter votes', () => {
     const election = electionVoting({ tally: { ana: 1 }, votedVoterIds: ['voter-1'] });
 
-    const result = castVote(election, { roundId: 'round-1', voterId: 'voter-2', choice: 'ana' }, fixedContext());
+    const result = castVote(
+      election,
+      { roundId: 'round-1', voterId: 'voter-2', choice: 'ana' },
+      fixedContext(),
+    );
 
     expect(result).toMatchObject({
       ok: true,

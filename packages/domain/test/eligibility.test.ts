@@ -23,7 +23,10 @@ describe('eligibleCandidates', () => {
   it('leaves out a candidate already elected to another position', () => {
     const election = anElection()
       .open()
-      .withPositions(aPosition({ ...president, status: 'DECIDED', electedCandidateId: 'ana' }), treasurer)
+      .withPositions(
+        aPosition({ ...president, status: 'DECIDED', electedCandidateId: 'ana' }),
+        treasurer,
+      )
       .withCandidates(
         aCandidate({ id: 'ana', applications: ['president', 'treasurer'] }),
         aCandidate({ id: 'bia', applications: ['treasurer'] }),
@@ -40,7 +43,10 @@ describe('attachableCandidates', () => {
   it('lists unelected candidates who are not running for the position yet', () => {
     const election = anElection()
       .open()
-      .withPositions(aPosition({ ...president, status: 'DECIDED', electedCandidateId: 'ana' }), treasurer)
+      .withPositions(
+        aPosition({ ...president, status: 'DECIDED', electedCandidateId: 'ana' }),
+        treasurer,
+      )
       .withCandidates(
         aCandidate({ id: 'ana', applications: ['president'] }),
         aCandidate({ id: 'bia', applications: ['president'] }),
@@ -66,7 +72,15 @@ describe('attachExistingCandidate', () => {
 
     expect(result).toMatchObject({
       ok: true,
-      value: { candidates: [{ id: 'ana', applications: ['president', 'treasurer'], firstChoicePositionId: 'president' }] },
+      value: {
+        candidates: [
+          {
+            id: 'ana',
+            applications: ['president', 'treasurer'],
+            firstChoicePositionId: 'president',
+          },
+        ],
+      },
     });
   });
 
@@ -79,13 +93,19 @@ describe('attachExistingCandidate', () => {
 
     const result = attachExistingCandidate(election, 'president', 'ana');
 
-    expect(result).toMatchObject({ ok: true, value: { candidates: [{ applications: ['president'] }] } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { candidates: [{ applications: ['president'] }] },
+    });
   });
 
   it('rejects a candidate who was already elected', () => {
     const election = anElection()
       .open()
-      .withPositions(aPosition({ ...president, status: 'DECIDED', electedCandidateId: 'ana' }), treasurer)
+      .withPositions(
+        aPosition({ ...president, status: 'DECIDED', electedCandidateId: 'ana' }),
+        treasurer,
+      )
       .withCandidates(aCandidate({ id: 'ana', applications: ['president'] }))
       .build();
 
@@ -103,7 +123,10 @@ describe('attachExistingCandidate', () => {
   });
 
   it('rejects an unknown position', () => {
-    const election = anElection().open().withCandidates(aCandidate({ id: 'ana' })).build();
+    const election = anElection()
+      .open()
+      .withCandidates(aCandidate({ id: 'ana' }))
+      .build();
 
     const result = attachExistingCandidate(election, 'ghost', 'ana');
 

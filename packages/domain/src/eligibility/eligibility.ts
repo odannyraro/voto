@@ -13,7 +13,8 @@ import { fail, ok, type Result } from '../result';
  */
 export function eligibleCandidates(election: Election, positionId: string): Candidate[] {
   return election.candidates.filter(
-    (candidate) => candidate.applications.includes(positionId) && !isElected(election, candidate.id),
+    (candidate) =>
+      candidate.applications.includes(positionId) && !isElected(election, candidate.id),
   );
 }
 
@@ -27,7 +28,8 @@ export function eligibleCandidates(election: Election, positionId: string): Cand
  */
 export function attachableCandidates(election: Election, positionId: string): Candidate[] {
   return election.candidates.filter(
-    (candidate) => !candidate.applications.includes(positionId) && !isElected(election, candidate.id),
+    (candidate) =>
+      !candidate.applications.includes(positionId) && !isElected(election, candidate.id),
   );
 }
 
@@ -41,7 +43,11 @@ export function attachableCandidates(election: Election, positionId: string): Ca
  * @returns A eleição alterada, ou `ELECTION_FINISHED`, `POSITION_NOT_FOUND`,
  *   `POSITION_NOT_PENDING`, `CANDIDATE_NOT_FOUND` ou `CANDIDATE_ALREADY_ELECTED`.
  */
-export function attachExistingCandidate(election: Election, positionId: string, candidateId: string): Result<Election> {
+export function attachExistingCandidate(
+  election: Election,
+  positionId: string,
+  candidateId: string,
+): Result<Election> {
   const finished = requireNotFinished(election);
   if (finished) return finished;
 
@@ -54,9 +60,17 @@ export function attachExistingCandidate(election: Election, positionId: string, 
   const candidate = findCandidate(election, candidateId);
   if (!candidate) return fail('CANDIDATE_NOT_FOUND', `Candidate ${candidateId} does not exist`);
   if (isElected(election, candidateId)) {
-    return fail('CANDIDATE_ALREADY_ELECTED', 'An elected candidate cannot run for another position');
+    return fail(
+      'CANDIDATE_ALREADY_ELECTED',
+      'An elected candidate cannot run for another position',
+    );
   }
   if (candidate.applications.includes(positionId)) return ok(election);
 
-  return ok(replaceCandidate(election, { ...candidate, applications: [...candidate.applications, positionId] }));
+  return ok(
+    replaceCandidate(election, {
+      ...candidate,
+      applications: [...candidate.applications, positionId],
+    }),
+  );
 }

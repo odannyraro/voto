@@ -48,7 +48,24 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 
 > Mantido pelo agente. Uma linha por módulo importante: caminho → para que serve.
 
-_(vazio até a primeira tarefa)_
+- `package.json`, `tsconfig.base.json`, `eslint.config.js`, `.prettierrc.json` → raiz do monorepo (scripts `lint`, `format`, `format:check`, `typecheck`; regra de direção de imports no ESLint).
+- `vitest.shared.ts` → `coverageConfig(exclude?)`: cobertura v8, lcov e limite de 80%, usada por todo `vitest.config.ts`.
+- `packages/shared/src/index.ts` → API pública do `shared` (`APP_NAME` + reexporta o resto).
+- `packages/shared/src/dto.ts` → tipos do agregado (`Election`, `Round`...), `BLANK` e DTOs da API (`AdminElectionDTO`, `VoterStateDTO`, `RoundResultDTO`, `RoundView`, `NextPositionDTO`, `ElectionSummaryDTO`, `ErrorDTO`).
+- `packages/shared/src/error-codes.ts` → `ERROR_CODES` (domínio + servidor) e `ErrorCode`.
+- `packages/shared/src/api-schemas.ts` → schemas Zod dos corpos de requisição (§6.1/§6.2) e tipos inferidos.
+- `packages/shared/src/socket-events.ts` → `SOCKET_EVENTS` e tipos `ServerToClientEvents` / `ClientToServerEvents`.
+- `packages/domain/src/model.ts` → só reexporta os tipos do agregado de `@voto/shared`.
+- `apps/web/src/App.tsx` → `App`: tabela de `Routes` (hoje só `/` com o título); o roteador vem de fora.
+- `apps/web/src/main.tsx` → composição (`BrowserRouter` + `createRoot`); fora da cobertura.
+- `apps/web/vite.config.ts` → plugin React, proxy `/api` e `/socket.io` e config do Vitest (jsdom, setup, cobertura).
+- `apps/web/test/setup.ts` → setup do Testing Library (`jest-dom` + `cleanup`).
+- `apps/server/src/index.ts` → servidor (por ora só `SERVICE_NAME`).
+- `apps/server/src/http/error-status.ts` → `statusForErrorCode(code)`: código de erro → status HTTP (§6.3).
+- `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
+- `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
+- `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
+- `packages/domain/tsconfig.stryker.json` → config do TS usada pelo StrykerJS.
 
 ---
 
@@ -58,7 +75,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Ponto de partida:** a `main` com o merge da branch `feat/domain` (que já contém os docs e o `packages/domain`).
 
-### [ ] S0.1 — Monorepo, TypeScript e qualidade de código
+### [x] S0.1 — Monorepo, TypeScript e qualidade de código
 **Ref.:** architecture §2, §3 (regra de direção de imports), §4, §14.
 **Fazer:**
 - Inicializar o git se ainda não existir. Criar `.gitignore` (`node_modules`, `dist`, `coverage`, `playwright-report`, `test-results`, `.env*`), `.gitattributes` com `* text=auto eol=lf` (evita quebras do Prettier no Windows), `.editorconfig` e `.nvmrc` com `24`.
@@ -81,9 +98,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 **Testes (escrever antes):** é uma tarefa de configuração. A verificação é rodar, na raiz, `npm install`, `npm run lint`, `npm run typecheck` e `npm test -w packages/domain` (os 205 testes do domínio continuam passando). Confirme também que um import proibido (teste manual temporário, ex.: `shared` importando `@voto/domain`) é acusado pelo lint, e desfaça o import depois.
 **Pronto quando:** os comandos acima passam; a estrutura bate com a §4; o domínio roda dentro do monorepo sem configuração duplicada.
 **Commit sugerido:** `chore: cria monorepo com workspaces, TypeScript, ESLint e Prettier`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: monorepo com workspaces `domain`, `shared` e `server`; TS, ESLint (flat) e Prettier na raiz; domínio integrado sem config duplicada.
+- Arquivos: `package.json`, `tsconfig.base.json`, `eslint.config.js`, `.prettierrc.json`, `.prettierignore`, `.gitignore`, `.gitattributes`, `.editorconfig`, `.nvmrc`, `.npmrc`, `README.md` novo, `docs/requisitos.md`, `packages/{shared,domain}/*`, `apps/server/*`.
+- Como usar: `npm run lint`, `npm run format[:check]`, `npm run typecheck`; `tsc` é o TS 7 e `tsc6` o TS 6 (só para o ESLint). Mutação: `npm run test:mutation -w packages/domain` (score 89,27%).
+- Testes: sem testes novos (configuração). Os 205 do domínio passam; lint, format:check e typecheck verdes; import proibido (`shared`→`@voto/domain`, `domain`→`@voto/server`) acusado e depois desfeito.
+- Decisões: (1) `typescript-eslint` **não** suporta TS 7 e falha ao carregar, mesmo sem regras com tipos; usei o alias oficial (ver "Decisões e desvios"). (2) Prettier ignora `*.md`, porque formatar os docs reescreveria CLAUDE.md e tabelas de outros integrantes. (3) Regra `no-unused-vars` aceita prefixo `_` (o domínio usa em 2 desestruturações). (4) Regra do `web` está no ESLint, mas não foi exercitada, pois `apps/web` só nasce na S0.5. (5) Alterações no domínio: só `package.json`, `tsconfig.json`, `tsconfig.stryker.json`, `.gitignore` removido e formatação automática do código.
 
-### [ ] S0.2 — Vitest e cobertura em cada workspace
+### [x] S0.2 — Vitest e cobertura em cada workspace
 **Ref.:** architecture §10.1, §14.
 **Fazer:**
 - O `packages/domain/vitest.config.ts` já existe e é o modelo: provider `v8`, reporters `text` e `lcov`, saída em `<workspace>/coverage/`, `include: ['src/**']` e thresholds de 80% (linhas, branches, funções, statements). Criar o mesmo para `shared` e `server`. No servidor, excluir `src/main.ts` da cobertura. Se quiser evitar repetição, extraia a parte comum para um `vitest.shared.ts` na raiz e faça os três usarem (inclusive o domínio, só a configuração).
@@ -93,9 +115,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 **Testes (escrever antes):** os testes fumaça de cada workspace.
 **Pronto quando:** `npm test` e `npm run test:coverage` passam na raiz e geram `coverage/lcov.info` em cada workspace.
 **Commit sugerido:** `test: configura Vitest com cobertura mínima de 80% em todos os workspaces`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `shared` e `server` rodam Vitest com cobertura v8 (limite de 80% nos 4 indicadores); a parte comum fica em `vitest.shared.ts` na raiz e é usada pelos 3 workspaces. `npm test` e `npm run test:coverage` rodam nos 3 e geram `coverage/lcov.info`.
+- Arquivos: `vitest.shared.ts`, `{packages/domain,packages/shared,apps/server}/vitest.config.ts`, `packages/domain/vitest.stryker.config.ts`, `package.json` (raiz e workspaces), `tsconfig.json` dos 3 workspaces.
+- Como usar: `coverageConfig(exclude?)` de `vitest.shared.ts` em todo `vitest.config.ts` novo (o `web`, na S0.5, usa o mesmo). No servidor, `src/main.ts` já está excluído.
+- Testes: `packages/shared/test/app-name.test.ts` (1) e `apps/server/test/service-name.test.ts` (1). Domínio segue com 205.
+- Decisões: (1) o `server` ganhou `SERVICE_NAME = 'voto-server'` em `src/index.ts` só para ter o que testar; sai ou é reaproveitado na B4. (2) O StrykerJS roda numa cópia em `.stryker-tmp/`, onde `../../vitest.shared` não existe, então ele usa `vitest.stryker.config.ts` (sem cobertura), apontado em `stryker.config.json`; mutação conferida em `src/ordering/queue.ts` (96%). (3) Alteração no domínio: só configuração (`vitest.config.ts`, `tsconfig.json`, `stryker.config.json`, novo `vitest.stryker.config.ts`). Avisar A. (4) O teste do `shared` já nasceu verde (`APP_NAME` existia); conferi que falha se o valor mudar.
 
-### [ ] S0.3a — Contratos: DTOs, códigos de erro e eventos de socket
+### [x] S0.3a — Contratos: DTOs, códigos de erro e eventos de socket
 **Ref.:** architecture §5.1, §6.3, §7; `packages/domain/src/model.ts`, `src/errors.ts`, `src/views/views.ts`, `src/ordering/queue.ts`.
 **Fazer:**
 - `packages/shared/src/dto.ts`:
@@ -113,9 +140,15 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 **Testes (escrever antes):** os nomes dos eventos são únicos e seguem o padrão `<papel>:<ação>`; os códigos de erro são únicos e estão em `UPPER_SNAKE_CASE`. Os tipos são validados pelo `typecheck`.
 **Pronto quando:** `typecheck` e testes passam **em todos os workspaces**, inclusive os 205 testes do domínio, agora usando os tipos do `shared`.
 **Commit sugerido:** `feat(shared): define DTOs, códigos de erro e eventos de tempo real`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `@voto/shared` agora tem os tipos do agregado (movidos do domínio), os DTOs da §6.3, `ERROR_CODES` e os eventos de socket. O domínio reexporta os tipos de `@voto/shared` e roda com eles.
+- Arquivos: `packages/shared/src/{dto,error-codes,socket-events,index}.ts`, `packages/domain/src/model.ts` (só reexporta), `packages/domain/package.json` (dependência `@voto/shared`), `package-lock.json`.
+- Como usar: `import { type AdminElectionDTO, ERROR_CODES, type ErrorCode, SOCKET_EVENTS, BLANK, ... } from '@voto/shared'`. Os tipos do domínio (`BallotView`, `RoundResultView`, `NextPositionInfo`, `VoterView`) são atribuíveis a `RoundView`, `RoundResultDTO`, `NextPositionDTO` e `VoterStateDTO` (menos `serverNow`); conferi com um arquivo temporário de typecheck, já removido. O B7b só acrescenta `serverNow`, `canUndo` e o progresso.
+- Testes: `packages/shared/test/error-codes.test.ts` (3 casos, 1 deles `it.each` sobre todos os códigos) e `socket-events.test.ts` (2 casos, 1 deles `it.each`); no total, 57 execuções novas, 58 no `shared`. Domínio segue com 205; `lint`, `format:check`, `typecheck` e `test:coverage` verdes; Stryker ainda roda (`queue.ts` 96%).
+- Decisões: (1) `BLANK` também foi para o `shared` (o schema de voto da S0.3b precisa dele). (2) `model.ts` do domínio usa reexportação **nomeada**, não `export *`, para o `index.ts` do domínio não expor `ERROR_CODES`, `SOCKET_EVENTS` e afins. (3) `ElectionSummaryDTO` não existia na §6.3; defini `{ id, name, status, positionCount, voterCount }` (ver "Decisões e desvios"). (4) `ErrorDTO.error.code` é `ErrorCode`, não `string`. (5) `ERROR_CODES` é um array `as const` (igual a `DOMAIN_ERROR_CODES`), para a S0.4 usar `.includes`. (6) Alteração no domínio: só `model.ts` (agora reexportação) e `package.json`. Avisar A.
 
-### [ ] S0.3b — Contratos: schemas Zod dos corpos de requisição
+
+### [x] S0.3b — Contratos: schemas Zod dos corpos de requisição
 **Ref.:** architecture §6.1, §6.2.
 **Fazer:**
 - `packages/shared/src/api-schemas.ts`: um schema Zod para cada corpo de requisição das tabelas §6.1 e §6.2 (login, criar/editar eleição, cargo, fila, candidato, gerar eleitores, abrir rodada, 2º turno, cancelar cargo, sessão de eleitor, voto). Exportar também os tipos inferidos (`LoginBody` etc.).
@@ -124,9 +157,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 **Testes (escrever antes):** para cada schema, ao menos um caso válido e os casos inválidos mais relevantes. Use `it.each` com tabela nomeada só quando forem variações do mesmo comportamento.
 **Pronto quando:** todos os schemas da §6 existem e estão testados; cobertura do `shared` ≥ 80%.
 **Commit sugerido:** `feat(shared): adiciona schemas Zod dos corpos da API`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `@voto/shared` exporta um schema Zod por corpo de requisição das §6.1 e §6.2, com os tipos inferidos (`LoginBody`, `CreateCandidateBody`...). `zod` virou dependência do `shared` (já estava na stack, §2).
+- Arquivos: `packages/shared/src/api-schemas.ts` (reexportado no `index.ts`), `packages/shared/package.json`, `package-lock.json`.
+- Como usar: `loginBodySchema`, `createElectionBodySchema`, `updateElectionBodySchema`, `createPositionBodySchema`, `updatePositionBodySchema`, `queueBodySchema`, `createCandidateBodySchema`, `updateCandidateBodySchema`, `credentialVotersBodySchema`, `openRoundBodySchema`, `openRunoffBodySchema`, `cancelPositionBodySchema`, `voterSessionBodySchema`, `castVoteBodySchema`. Na B4, `parse(schema, data)` usa `schema.parse`; o `ZodError` vira 400 `VALIDATION_ERROR`.
+- Testes: `packages/shared/test/api-schemas.test.ts` (80 execuções novas, sobre os 14 schemas, com limites exatos). `shared` passa de 58 para 138 execuções, com cobertura de 100%. Domínio segue com 205.
+- Decisões: (1) `PATCH` usa `.partial()` do schema de criação. Em `updateCandidateBodySchema`, a regra da primeira opção só vale se `applications` e `firstChoicePositionId` chegam juntos; do contrário o domínio compara com o valor guardado. (2) A senha do login não é "trimada" (espaços podem fazer parte dela); os demais textos são. (3) `durationSeconds`, `defaultVotingSeconds`, idade e `count` repetem os limites do domínio como constantes locais, porque o `shared` não pode importá-lo. (4) `code` do eleitor só confere tamanho 8 e maiúsculas (como o TO-DO pede); código com caractere fora do alfabeto cai em 404 `INVALID_CODE` no serviço. (5) `labels` > `count` não é checado aqui: o domínio devolve `INVALID_VOTER_LABELS`. (6) `choice` não valida contra a cédula (isso é regra do domínio).
 
-### [ ] S0.4 — Servidor enxergando o domínio real
+### [x] S0.4 — Servidor enxergando o domínio real
 **Ref.:** architecture §3, §6.3. (A versão antiga desta tarefa criava stubs do domínio. Não é mais necessário: A já implementou a API pública.)
 **Fazer:**
 - `apps/server` passa a depender de `@voto/domain` e `@voto/shared` (dependências de workspace) e a importar o domínio **diretamente**, sem injeção.
@@ -139,9 +177,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** testes verdes; `npm test` na raiz roda domínio, shared e server.
 **Commit sugerido:** `feat(server): integra o domínio real e mapeia códigos de erro para HTTP`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `@voto/server` depende de `@voto/domain` e `@voto/shared` e importa o domínio direto. `statusForErrorCode` traduz qualquer `ErrorCode` em status HTTP.
+- Arquivos: `apps/server/src/http/error-status.ts`, `apps/server/package.json` (dependências de workspace), `package-lock.json`.
+- Como usar: `statusForErrorCode(code: ErrorCode): number` (B4 chama no error handler). `*_NOT_FOUND` (sufixo, então códigos novos do domínio já valem) e `INVALID_CODE` → 404; `VALIDATION_ERROR` → 400; `INVALID_CREDENTIALS`/`INVALID_TOKEN` → 401; `FORBIDDEN`/`VOTER_REVOKED` → 403; `ROUND_EXPIRED` → 410; `RATE_LIMITED` → 429; `INTERNAL_ERROR` → 500; o resto → 409 (inclui `VERSION_CONFLICT`).
+- Testes: `test/http/error-status.test.ts` (21 execuções, `it.each` por faixa), `test/error-codes-contract.test.ts` (1: todo código do domínio está em `ERROR_CODES`; conferi que falha ao remover um código do `shared`), `test/domain-integration.test.ts` (1: `createElection` real devolve `ok: true`). Server: 24 testes, 100% de cobertura; domínio 205; shared 138.
+- Decisões: (1) `VOTER_REVOKED` → 403 (e não 409), porque a §6.2 pede `403 VOTER_REVOKED` na sessão do eleitor; a tabela da §6.3 do TO-DO não o listava. (2) Os testes de contrato e de fumaça já nascem verdes (domínio e shared prontos); só o `statusForErrorCode` passou por RED real (21 falhas de asserção).
 
-### [ ] S0.5 — Esqueleto do frontend
+### [x] S0.5 — Esqueleto do frontend
 **Ref.:** architecture §9, §14. **Atenção:** depois desta tarefa, `apps/web` passa a ser de C.
 **Fazer:**
 - `apps/web` (`@voto/web`) com Vite + React + TypeScript + React Router. Rota `/` com um título "Voto", vindo de `APP_NAME` do `@voto/shared`, para provar que o import entre workspaces funciona.
@@ -152,9 +195,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 **Testes (escrever antes):** `App` renderiza o título "Voto" (busca por `getByRole('heading')`).
 **Pronto quando:** `npm test`, `npm run typecheck` e `npm run build -w apps/web` passam.
 **Commit sugerido:** `feat(web): cria esqueleto do frontend com React, Vite e Testing Library`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `@voto/web` existe com Vite 8, React 19 e React Router 8; a rota `/` mostra o `<h1>` com `APP_NAME` de `@voto/shared`. Vitest com jsdom e Testing Library; `build`, `typecheck` e cobertura passam.
+- Arquivos: `apps/web/{package.json,tsconfig.json,vite.config.ts,index.html}`, `src/{App.tsx,main.tsx}`, `test/{setup.ts,App.test.tsx}`, `package-lock.json`.
+- Como usar: `App` só declara as `Routes`; quem monta fornece o roteador (`BrowserRouter` no `main.tsx`, `MemoryRouter` nos testes, que escolhem a rota inicial). Um único `vite.config.ts` guarda o proxy (`/api` e `/socket.io` com `ws: true` → `localhost:3000`) e o bloco `test` (jsdom, `test/setup.ts`, `coverageConfig(['src/main.tsx'])`). `test/setup.ts` importa `jest-dom/vitest` e roda `cleanup` no `afterEach`. Novas rotas entram em `App.tsx`.
+- Testes: `test/App.test.tsx` (2: título na home; rota desconhecida sem o título). Web: 2 testes, 100% de cobertura. Domínio 205, shared 138, server 24. `lint`, `format:check`, `typecheck` e `build -w apps/web` verdes. Conferi que `apps/web` importando `@voto/domain` é acusado pelo ESLint (arquivo temporário já removido).
+- Decisões: (1) pacote `react-router` (v8 já unifica o antigo `react-router-dom`). (2) `vite.config.ts` importa `../../vitest.shared.ts` **com extensão** e o tsconfig do web liga `allowImportingTsExtensions` (seguro, pois `noEmit`), para evitar o aviso do `configLoader: 'native'` do Vite; `server` e `shared` ainda importam sem extensão e emitem esse aviso (inofensivo). (3) `vite-env.d.ts` não foi criado: nenhum import de CSS/asset ainda. (4) Sem MSW por ora (não há chamada de rede); entra com as tarefas de C. (5) A partir daqui `apps/web` é de C.
 
-### [ ] S0.6 — CI no GitHub Actions + Codecov
+### [x] S0.6 — CI no GitHub Actions + Codecov
 **Ref.:** architecture §12.
 **Fazer:**
 - `.github/workflows/ci.yml`, disparado em `push` e `pull_request`, com:
@@ -172,7 +220,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 **Testes (escrever antes):** não se aplica (configuração). Valide a sintaxe do YAML, por exemplo com `npx --yes yaml-lint` ou revisão cuidadosa. Garanta que os comandos funcionam localmente.
 **Pronto quando:** o workflow existe e os comandos que ele roda passam localmente. Depois que o usuário fizer o push, a execução precisa ficar verde nos 3 SOs. Se falhar, a correção vira parte desta tarefa.
 **Commit sugerido:** `ci: executa lint, typecheck e testes com cobertura em Linux, macOS e Windows`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `.github/workflows/ci.yml` roda em todo `push` e `pull_request`, na matriz Ubuntu/macOS/Windows (`fail-fast: false`), com `concurrency` por branch. Passos: `npm ci`, `lint`, `format:check`, `typecheck` e `test:coverage`. No Ubuntu, 4 uploads ao Codecov (flags `shared`, `domain`, `server`, `web`).
+- Arquivos: `.github/workflows/ci.yml`, `docs/setup-repositorio.md` (passos manuais do usuário: ativar o repo no Codecov, criar o secret `CODECOV_TOKEN`, proteger a `main`).
+- Como usar: nada a chamar. A B20 acrescenta `npm run build` depois dos testes; o e2e (§12) entra quando C criar o workspace.
+- Testes: não se aplica (configuração). YAML lido com o pacote `yaml` (11 passos, 4 deles só no Ubuntu); Prettier aprova os arquivos novos; `lint`, `format:check`, `typecheck` e `test:coverage` passam na raiz (domínio 205, shared 138, server 24, web 2) e geram o `lcov.info` dos 4 workspaces.
+- Decisões: (1) `fail_ci_if_error: false` nos uploads, para o CI não ficar vermelho por falha do Codecov (PR de fork não tem o secret); o custo é uma falha de upload passar despercebida, então confira o log na primeira execução. (2) Sem `codecov.yml`: a tarefa não pede e as flags são criadas pelo próprio upload; a meta de 80% do §12 fica para quando for preciso. (3) Ações em tags de major (`checkout@v4`, `setup-node@v4`, `codecov-action@v5`). (4) A execução nos 3 SOs só pode ser confirmada depois do push do usuário; se falhar, a correção volta para esta tarefa.
 
 ---
 
@@ -664,3 +717,5 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - ~~2026-11-22 — planejamento — o domínio é injetado no servidor (`AppDeps.domain: DomainApi`) para permitir stubs antes do marco M1.~~ **Revogada em 2026-11-23**: o domínio ficou pronto antes do Sprint 0, então o servidor o importa direto e testa com ele real (real > fake > stub > mock).
 - 2026-11-23 — replanejamento — o Sprint 0 integra o `packages/domain` já existente (TS 7, Vitest 5): S0.1 e S0.2 absorvem as configs, S0.3a move `model.ts` para `@voto/shared`, e a S0.4 virou "servidor enxergando o domínio real". As assinaturas reais do domínio (`todo-domain.md`, "Decisões e desvios") valem mais que a §5.2.
 - 2026-11-23 — replanejamento — o servidor incrementa `election.version` ao salvar (o domínio mantém o campo, mas não o altera).
+- 2026-11-23 — S0.1 — `typescript-eslint` 8.73 aborta com TS 7 (peer `<6.1`), mesmo na config sem regras de tipos. Solução do post oficial do TS 7: na raiz, `"typescript": "npm:@typescript/typescript6@^6.0.2"` (API usada pelo ESLint) e `"@typescript/native": "npm:typescript@^7.0.2"` (fornece o `tsc` 7). Sem `legacy-peer-deps`. Remover o alias quando o typescript-eslint suportar TS 7.1 (issue #10940).
+- 2026-11-23 — S0.3a — `ElectionSummaryDTO` (citado na §6.1, mas sem forma na §6.3) é `{ id, name, status, positionCount, voterCount }`; basta para a lista de eleições do admin. `ErrorDTO.error.code` é `ErrorCode` (a §6.3 dizia `string`), para o front checar códigos com o compilador. `RoundResultDTO` não tem `positionId` (como o `RoundResultView` do domínio).

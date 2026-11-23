@@ -41,7 +41,11 @@ describe('computeResult', () => {
 
     const result = computeResult(round, position, candidates);
 
-    expect(result).toMatchObject({ outcome: 'ELECTED', electedCandidateId: 'ana', tiebreakApplied: false });
+    expect(result).toMatchObject({
+      outcome: 'ELECTED',
+      electedCandidateId: 'ana',
+      tiebreakApplied: false,
+    });
   });
 
   it('requires a runoff when the leader has exactly half of the valid votes', () => {
@@ -49,7 +53,10 @@ describe('computeResult', () => {
 
     const result = computeResult(round, position, candidates);
 
-    expect(result).toMatchObject({ outcome: 'RUNOFF_REQUIRED', runoffCandidateIds: ['ana', 'bia'] });
+    expect(result).toMatchObject({
+      outcome: 'RUNOFF_REQUIRED',
+      runoffCandidateIds: ['ana', 'bia'],
+    });
   });
 
   it('ignores blank votes when checking the majority', () => {
@@ -73,7 +80,11 @@ describe('computeResult', () => {
 
     const result = computeResult(round, position, candidates);
 
-    expect(result).toMatchObject({ outcome: 'ELECTED', electedCandidateId: 'ana', tiebreakApplied: true });
+    expect(result).toMatchObject({
+      outcome: 'ELECTED',
+      electedCandidateId: 'ana',
+      tiebreakApplied: true,
+    });
   });
 
   it('elects a single candidate with at least one valid vote', () => {

@@ -30,7 +30,11 @@ describe('history', () => {
 
   it('forgets the oldest states beyond the limit', () => {
     const limit = 2;
-    const history = pushSnapshot(pushSnapshot(pushSnapshot(createHistory('s0'), 's1', limit), 's2', limit), 's3', limit);
+    const history = pushSnapshot(
+      pushSnapshot(pushSnapshot(createHistory('s0'), 's1', limit), 's2', limit),
+      's3',
+      limit,
+    );
 
     expect(history).toEqual({ current: 's3', past: ['s1', 's2'] });
   });

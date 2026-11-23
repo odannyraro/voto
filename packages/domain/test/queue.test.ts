@@ -22,7 +22,10 @@ describe('nextPositionStatus', () => {
   it('warns about a position without eligible candidates and lists who can be attached', () => {
     const election = anElection()
       .open()
-      .withPositions(aPosition({ ...president, status: 'DECIDED', electedCandidateId: 'ana' }), treasurer)
+      .withPositions(
+        aPosition({ ...president, status: 'DECIDED', electedCandidateId: 'ana' }),
+        treasurer,
+      )
       .withCandidates(
         aCandidate({ id: 'ana', name: 'Ana', applications: ['president', 'treasurer'] }),
         aCandidate({ id: 'bia', name: 'Bia', applications: ['president'] }),
@@ -40,7 +43,10 @@ describe('nextPositionStatus', () => {
   });
 
   it('reports that nothing is left when the queue is empty', () => {
-    const election = anElection().open().withPositions(aPosition({ ...president, status: 'DECIDED' })).build();
+    const election = anElection()
+      .open()
+      .withPositions(aPosition({ ...president, status: 'DECIDED' }))
+      .build();
 
     const next = nextPositionStatus(election);
 
@@ -83,7 +89,10 @@ describe('applyOrder', () => {
   it.each([
     { label: 'leaves a position out', order: ['treasurer'] },
     { label: 'repeats a position', order: ['treasurer', 'treasurer'] },
-    { label: 'includes a position that is not in the queue', order: ['treasurer', 'president', 'ghost'] },
+    {
+      label: 'includes a position that is not in the queue',
+      order: ['treasurer', 'president', 'ghost'],
+    },
   ])('rejects an order that $label', ({ order }) => {
     const election = anElection().withPositions(president, treasurer).build();
 
@@ -93,7 +102,10 @@ describe('applyOrder', () => {
   });
 
   it('rejects reordering a finished election', () => {
-    const election = anElection().withStatus('FINISHED').withPositions(president, treasurer).build();
+    const election = anElection()
+      .withStatus('FINISHED')
+      .withPositions(president, treasurer)
+      .build();
 
     const result = applyOrder(election, ['treasurer', 'president']);
 

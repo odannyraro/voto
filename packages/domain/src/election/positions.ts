@@ -28,7 +28,11 @@ export interface UpdatePositionInput {
  * @returns A eleição com o cargo novo, ou `ELECTION_NOT_DRAFT`, `INVALID_POSITION_TITLE`,
  *   `DUPLICATE_POSITION_TITLE` ou `INVALID_TIEBREAK_RULE`.
  */
-export function addPosition(election: Election, input: AddPositionInput, ctx: DomainContext): Result<Election> {
+export function addPosition(
+  election: Election,
+  input: AddPositionInput,
+  ctx: DomainContext,
+): Result<Election> {
   const notDraft = requireDraft(election);
   if (notDraft) return notDraft;
 
@@ -36,7 +40,12 @@ export function addPosition(election: Election, input: AddPositionInput, ctx: Do
   const invalid = validatePosition(election, title, input.tiebreak, undefined);
   if (invalid) return invalid;
 
-  const position: Position = { id: ctx.newId(), title, tiebreak: input.tiebreak, status: 'PENDING' };
+  const position: Position = {
+    id: ctx.newId(),
+    title,
+    tiebreak: input.tiebreak,
+    status: 'PENDING',
+  };
   return ok({
     ...election,
     positions: [...election.positions, position],
@@ -54,7 +63,11 @@ export function addPosition(election: Election, input: AddPositionInput, ctx: Do
  *   `POSITION_NOT_PENDING`, `INVALID_POSITION_TITLE`, `DUPLICATE_POSITION_TITLE` ou
  *   `INVALID_TIEBREAK_RULE`.
  */
-export function updatePosition(election: Election, positionId: string, input: UpdatePositionInput): Result<Election> {
+export function updatePosition(
+  election: Election,
+  positionId: string,
+  input: UpdatePositionInput,
+): Result<Election> {
   const finished = requireNotFinished(election);
   if (finished) return finished;
 
@@ -120,7 +133,8 @@ function validatePosition(
   const isDuplicate = election.positions.some(
     (position) => position.id !== ownId && position.title.toLowerCase() === normalized,
   );
-  if (isDuplicate) return fail('DUPLICATE_POSITION_TITLE', `There is already a position named ${title}`);
+  if (isDuplicate)
+    return fail('DUPLICATE_POSITION_TITLE', `There is already a position named ${title}`);
 
   if (!TIEBREAK_RULES.includes(tiebreak)) {
     return fail('INVALID_TIEBREAK_RULE', `Unknown tiebreak rule ${tiebreak}`);
