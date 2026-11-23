@@ -62,6 +62,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/web/test/setup.ts` → setup do Testing Library (`jest-dom` + `cleanup`).
 - `apps/server/src/index.ts` → servidor (por ora só `SERVICE_NAME`).
 - `apps/server/src/http/error-status.ts` → `statusForErrorCode(code)`: código de erro → status HTTP (§6.3).
+- `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
+- `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
 - `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
 - `packages/domain/tsconfig.stryker.json` → config do TS usada pelo StrykerJS.
 
@@ -200,7 +202,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `test/App.test.tsx` (2: título na home; rota desconhecida sem o título). Web: 2 testes, 100% de cobertura. Domínio 205, shared 138, server 24. `lint`, `format:check`, `typecheck` e `build -w apps/web` verdes. Conferi que `apps/web` importando `@voto/domain` é acusado pelo ESLint (arquivo temporário já removido).
 - Decisões: (1) pacote `react-router` (v8 já unifica o antigo `react-router-dom`). (2) `vite.config.ts` importa `../../vitest.shared.ts` **com extensão** e o tsconfig do web liga `allowImportingTsExtensions` (seguro, pois `noEmit`), para evitar o aviso do `configLoader: 'native'` do Vite; `server` e `shared` ainda importam sem extensão e emitem esse aviso (inofensivo). (3) `vite-env.d.ts` não foi criado: nenhum import de CSS/asset ainda. (4) Sem MSW por ora (não há chamada de rede); entra com as tarefas de C. (5) A partir daqui `apps/web` é de C.
 
-### [ ] S0.6 — CI no GitHub Actions + Codecov
+### [x] S0.6 — CI no GitHub Actions + Codecov
 **Ref.:** architecture §12.
 **Fazer:**
 - `.github/workflows/ci.yml`, disparado em `push` e `pull_request`, com:
@@ -218,7 +220,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 **Testes (escrever antes):** não se aplica (configuração). Valide a sintaxe do YAML, por exemplo com `npx --yes yaml-lint` ou revisão cuidadosa. Garanta que os comandos funcionam localmente.
 **Pronto quando:** o workflow existe e os comandos que ele roda passam localmente. Depois que o usuário fizer o push, a execução precisa ficar verde nos 3 SOs. Se falhar, a correção vira parte desta tarefa.
 **Commit sugerido:** `ci: executa lint, typecheck e testes com cobertura em Linux, macOS e Windows`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `.github/workflows/ci.yml` roda em todo `push` e `pull_request`, na matriz Ubuntu/macOS/Windows (`fail-fast: false`), com `concurrency` por branch. Passos: `npm ci`, `lint`, `format:check`, `typecheck` e `test:coverage`. No Ubuntu, 4 uploads ao Codecov (flags `shared`, `domain`, `server`, `web`).
+- Arquivos: `.github/workflows/ci.yml`, `docs/setup-repositorio.md` (passos manuais do usuário: ativar o repo no Codecov, criar o secret `CODECOV_TOKEN`, proteger a `main`).
+- Como usar: nada a chamar. A B20 acrescenta `npm run build` depois dos testes; o e2e (§12) entra quando C criar o workspace.
+- Testes: não se aplica (configuração). YAML lido com o pacote `yaml` (11 passos, 4 deles só no Ubuntu); Prettier aprova os arquivos novos; `lint`, `format:check`, `typecheck` e `test:coverage` passam na raiz (domínio 205, shared 138, server 24, web 2) e geram o `lcov.info` dos 4 workspaces.
+- Decisões: (1) `fail_ci_if_error: false` nos uploads, para o CI não ficar vermelho por falha do Codecov (PR de fork não tem o secret); o custo é uma falha de upload passar despercebida, então confira o log na primeira execução. (2) Sem `codecov.yml`: a tarefa não pede e as flags são criadas pelo próprio upload; a meta de 80% do §12 fica para quando for preciso. (3) Ações em tags de major (`checkout@v4`, `setup-node@v4`, `codecov-action@v5`). (4) A execução nos 3 SOs só pode ser confirmada depois do push do usuário; se falhar, a correção volta para esta tarefa.
 
 ---
 
