@@ -36,6 +36,17 @@ describe('deferPosition', () => {
 
     expect(result).toMatchObject({ ok: false, error: { code: 'POSITION_NOT_FOUND' } });
   });
+
+  it('rejects deferring after the election is finished', () => {
+    const election = anElection()
+      .withStatus('FINISHED')
+      .withPositions(president, treasurer)
+      .build();
+
+    const result = deferPosition(election, 'president');
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'ELECTION_FINISHED' } });
+  });
 });
 
 describe('cancelPosition', () => {
@@ -85,5 +96,21 @@ describe('cancelPosition', () => {
     const result = cancelPosition(election, 'president', 'President');
 
     expect(result).toMatchObject({ ok: false, error: { code: 'POSITION_NOT_PENDING' } });
+  });
+
+  it('rejects cancelling an unknown position', () => {
+    const election = anElection().open().withPositions(president).build();
+
+    const result = cancelPosition(election, 'ghost', 'Ghost');
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'POSITION_NOT_FOUND' } });
+  });
+
+  it('rejects cancelling after the election is finished', () => {
+    const election = anElection().withStatus('FINISHED').withPositions(president).build();
+
+    const result = cancelPosition(election, 'president', 'President');
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'ELECTION_FINISHED' } });
   });
 });

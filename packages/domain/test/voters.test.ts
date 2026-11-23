@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { credentialVoters, revokeVoter } from '../src/index';
 import { anElection, aVoter } from './builders/election-builder';
-import { fixedContext, sequenceCodeGenerator } from './builders/fixed-context';
+import {
+  countingCodeGenerator,
+  fixedContext,
+  sequenceCodeGenerator,
+} from './builders/fixed-context';
+import { valueOf } from './builders/result-helpers';
 
 const MAX_VOTERS_PER_BATCH = 500;
 
@@ -60,6 +65,19 @@ describe('credentialVoters', () => {
       ok: true,
       value: { election: { voters: [{ code: 'OLDC0DE2' }, { code: 'NEWC0DE3' }] } },
     });
+  });
+
+  it('accepts a batch of exactly the maximum size', () => {
+    const election = anElection().build();
+
+    const result = credentialVoters(
+      election,
+      { count: MAX_VOTERS_PER_BATCH },
+      countingCodeGenerator(),
+      fixedContext(),
+    );
+
+    expect(valueOf(result).codes).toHaveLength(MAX_VOTERS_PER_BATCH);
   });
 
   it.each([0, MAX_VOTERS_PER_BATCH + 1, 1.5])('rejects a batch of %s voters', (count) => {
@@ -137,6 +155,48 @@ describe('revokeVoter', () => {
       ok: true,
       value: { voters: [{ id: 'voter-1', status: 'REVOKED' }] },
     });
+  });
+
+  it('leaves the other voters credentialed', () => {
+    const election = anElection()
+      .withVoters(aVoter({ id: 'voter-1' }), aVoter({ id: 'voter-2' }))
+      .build();
+
+    const result = revokeVoter(election, 'voter-2');
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        voters: [
+          { id: 'voter-1', status: 'CREDENTIALED' },
+          { id: 'voter-2', status: 'REVOKED' },
+        ],
+      },
+    });
+  });
+
+  it('revokes a voter even when another voter was revoked before', () => {
+    const election = anElection()
+      .withVoters(aVoter({ id: 'voter-1', status: 'REVOKED' }), aVoter({ id: 'voter-2' }))
+      .build();
+
+    const result = revokeVoter(election, 'voter-2');
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { voters: [{ id: 'voter-1' }, { id: 'voter-2', status: 'REVOKED' }] },
+    });
+  });
+
+  it('rejects revoking voters after the election is finished', () => {
+    const election = anElection()
+      .withStatus('FINISHED')
+      .withVoters(aVoter({ id: 'voter-1' }))
+      .build();
+
+    const result = revokeVoter(election, 'voter-1');
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'ELECTION_FINISHED' } });
   });
 
   it('rejects an unknown voter', () => {

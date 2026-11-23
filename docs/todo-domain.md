@@ -38,7 +38,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 > Mantido pelo agente. Uma linha por módulo: caminho (relativo a `packages/domain`) → para que serve.
 
 - `src/index.ts` → única API pública do pacote; os testes importam daqui (A1)
-- `src/model.ts` → tipos do agregado da §5.1 (provisório até a S0.3a; depois reexporta de `@voto/shared`) (A1)
+- `src/model.ts` → reexporta de `@voto/shared` os tipos do agregado da §5.1 (eles moraram aqui até a S0.3a) (A1)
 - `src/errors.ts` → `DOMAIN_ERROR_CODES` e `DomainError` (A1)
 - `src/result.ts` → `Result<T>`, `ok`, `fail` (A1)
 - `src/context.ts` → `DomainContext` (relógio e ids) e `CodeGenerator` (A1)
@@ -350,6 +350,18 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: +6 (busca da última rodada válida, deduplicação da fila e eleição encerrada na anulação; 2º turno repetido).
 - Decisões: `tsconfigFile` aponta para um arquivo inexistente porque o pré-processador de tsconfig do Stryker 10 é incompatível com o TypeScript 7 (o Vitest não precisa dele). Os sobreviventes restantes são, na maioria, trocas do texto das mensagens de erro.
 
+### [x] A23b — Mutação depois da integração ao monorepo
+**Ref.:** `divisao-tarefas.md` §2 ("Semana 3–4 — A: mutação"); aula 15.
+**Fazer:** rodar o Stryker de novo com o domínio já no monorepo (tipos em `@voto/shared`, Prettier aplicado), matar os sobreviventes relevantes e atualizar o README do pacote.
+**Testes (escrever antes):** um teste por sobrevivente relevante; cada um precisa matar o mutante na nova execução.
+**Commit sugerido:** `test(domain): cobre limites e eleição encerrada apontados pelo teste de mutação`
+**Notas do agente:**
+- Feito: score de 89,27% → **91,88%** (1042 mortos + 11 por timeout, 84 sobreviventes, 9 sem cobertura; antes eram 112 e 11). README do pacote atualizado (tipos vindos do `@voto/shared`, comandos com `-w` a partir da raiz, números novos).
+- Arquivos: `test/{voters,vote,history,queue,candidates,positions,position-actions,eligibility,compute-result}.test.ts`, `test/builders/fixed-context.ts` (novo `countingCodeGenerator()`), `README.md` do pacote.
+- Como usar: `npm run test:mutation -w packages/domain` (cerca de 2 min).
+- Testes: +18 (205 → 223) e 2 asserções reforçadas em `compute-result` (`tiebreakApplied: false`). Lacunas fechadas: lote de exatamente 500 eleitores; 0 mês restante aceito; `trim` ao editar nome de candidato e título de cargo; edição de um candidato não altera os outros; revogação só do eleitor escolhido (e mesmo com outro já revogado); voto de eleitor revogado com os demais ativos; `canUndo` verdadeiro; desfazer com 3 estados; fila com cargo trocado por desconhecido; `cancelPosition` com cargo inexistente; `ELECTION_FINISHED` em `updateCandidate`, `removeCandidate`, `revokeVoter`, `deferPosition`, `cancelPosition` e `attachExistingCandidate`.
+- Decisões: os testes nascem verdes (o comportamento já existia); a prova de que testam algo é o mutante morto na nova execução. Sobreviventes deixados de lado: 71 trocas de texto de mensagem; guardas de agregado inconsistente (`throw` em `runoff-cut`, `compute-result`, `runoff`); *optional chaining* defensivo; `default` inalcançável do `switch` em `close.ts`; desempate final por posição na fila em `suggestOrder` (a ordenação do V8 dá o mesmo resultado com o mutante).
+
 ### [x] A24 — Revisão de *test smells* e README do pacote
 **Ref.:** architecture §10.3; CLAUDE.md (smells).
 **Fazer:** revisar nomes, AAA, magic numbers, lógica condicional; escrever `packages/domain/README.md`.
@@ -376,7 +388,12 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 **Fazer:** `codecov.yml` (flags `shared`/`domain`/`server`/`web`, meta de 80%, comentário em PR), badges de CI e Codecov no README, upload do relatório do Playwright como artefato no `ci.yml`.
 **Testes (escrever antes):** não se aplica (configuração).
 **Commit sugerido:** `ci: configura Codecov com flags por pacote e badges no README`
-**Notas do agente:** _pendente_
+**Notas do agente:** *(parcial: falta só o artefato do Playwright)*
+- Feito: `codecov.yml` na raiz com as 4 flags (`shared`, `domain`, `server`, `web`) e `carryforward`, status de projeto e de patch com meta de 80% (folga de 1 ponto no projeto), comentário no PR (cabeçalho, diff, flags, arquivos) e `notify.after_n_builds: 4` (um upload por flag). Badges de CI e de Codecov no topo do `README.md`.
+- Arquivos: `codecov.yml`, `README.md`.
+- Como usar: nada a chamar. O Codecov lê o arquivo no próximo upload do CI.
+- Testes: não se aplica (configuração). `codecov.yml` aprovado pelo validador do Codecov (`curl --data-binary @codecov.yml https://codecov.io/validate` → `Valid!`); as URLs dos dois badges respondem com SVG; `lint`, `format:check`, `typecheck` e `test:coverage` verdes (domínio 205, shared 138, server 24, web 2).
+- Decisões: (1) o `ci.yml` **não** foi alterado: os uploads da S0.6 já usam as flags certas. (2) O artefato do relatório do Playwright fica para quando C criar o workspace `e2e` e o passo de e2e no CI; aí esta tarefa fecha, combinando a edição do `ci.yml` com B. (3) `ignore` repete as exclusões de cobertura da §10.1 (`main.ts`, `main.tsx`), além de testes e configs.
 
 ---
 

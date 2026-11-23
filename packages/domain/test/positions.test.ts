@@ -101,6 +101,16 @@ describe('updatePosition', () => {
     });
   });
 
+  it('trims spaces around the new title', () => {
+    const election = anElection()
+      .withPositions(aPosition({ id: 'president', title: 'President' }))
+      .build();
+
+    const result = updatePosition(election, 'president', { title: '  Vice President  ' });
+
+    expect(result).toMatchObject({ ok: true, value: { positions: [{ title: 'Vice President' }] } });
+  });
+
   it('rejects renaming to the title of another position', () => {
     const election = anElection()
       .withPositions(

@@ -72,7 +72,11 @@ describe('computeResult', () => {
 
     const result = computeResult(round, position, candidates);
 
-    expect(result).toMatchObject({ outcome: 'ELECTED', electedCandidateId: 'bia' });
+    expect(result).toMatchObject({
+      outcome: 'ELECTED',
+      electedCandidateId: 'bia',
+      tiebreakApplied: false,
+    });
   });
 
   it('breaks a tie between two candidates with the position rule instead of a runoff', () => {
@@ -100,7 +104,11 @@ describe('computeResult', () => {
 
     const result = computeResult(round, position, candidates);
 
-    expect(result).toMatchObject({ outcome: 'NO_VALID_VOTES', validVotes: 0 });
+    expect(result).toMatchObject({
+      outcome: 'NO_VALID_VOTES',
+      validVotes: 0,
+      tiebreakApplied: false,
+    });
   });
 
   it('refuses to count a round that is still open', () => {

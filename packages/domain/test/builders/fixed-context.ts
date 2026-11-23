@@ -52,3 +52,19 @@ export function sequenceCodeGenerator(codes: readonly string[]): CodeGenerator {
     },
   };
 }
+
+/**
+ * Gerador de códigos que nunca repete (`C0000001`, `C0000002`...), para testes que pedem
+ * lotes grandes e não se importam com o valor de cada código.
+ *
+ * @returns Um `CodeGenerator` com códigos distintos de 8 caracteres.
+ */
+export function countingCodeGenerator(): CodeGenerator {
+  let next = 0;
+  return {
+    generate: () => {
+      next += 1;
+      return `C${String(next).padStart(7, '0')}`;
+    },
+  };
+}
