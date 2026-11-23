@@ -49,8 +49,10 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 > Mantido pelo agente. Uma linha por módulo importante: caminho → para que serve.
 
 - `package.json`, `tsconfig.base.json`, `eslint.config.js`, `.prettierrc.json` → raiz do monorepo (scripts `lint`, `format`, `format:check`, `typecheck`; regra de direção de imports no ESLint).
+- `vitest.shared.ts` → `coverageConfig(exclude?)`: cobertura v8, lcov e limite de 80%, usada por todo `vitest.config.ts`.
 - `packages/shared/src/index.ts` → contratos compartilhados (por ora só `APP_NAME`).
-- `apps/server/src/index.ts` → servidor (vazio por ora).
+- `apps/server/src/index.ts` → servidor (por ora só `SERVICE_NAME`).
+- `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
 - `packages/domain/tsconfig.stryker.json` → config do TS usada pelo StrykerJS.
 
 ---
@@ -91,7 +93,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: sem testes novos (configuração). Os 205 do domínio passam; lint, format:check e typecheck verdes; import proibido (`shared`→`@voto/domain`, `domain`→`@voto/server`) acusado e depois desfeito.
 - Decisões: (1) `typescript-eslint` **não** suporta TS 7 e falha ao carregar, mesmo sem regras com tipos; usei o alias oficial (ver "Decisões e desvios"). (2) Prettier ignora `*.md`, porque formatar os docs reescreveria CLAUDE.md e tabelas de outros integrantes. (3) Regra `no-unused-vars` aceita prefixo `_` (o domínio usa em 2 desestruturações). (4) Regra do `web` está no ESLint, mas não foi exercitada, pois `apps/web` só nasce na S0.5. (5) Alterações no domínio: só `package.json`, `tsconfig.json`, `tsconfig.stryker.json`, `.gitignore` removido e formatação automática do código.
 
-### [ ] S0.2 — Vitest e cobertura em cada workspace
+### [x] S0.2 — Vitest e cobertura em cada workspace
 **Ref.:** architecture §10.1, §14.
 **Fazer:**
 - O `packages/domain/vitest.config.ts` já existe e é o modelo: provider `v8`, reporters `text` e `lcov`, saída em `<workspace>/coverage/`, `include: ['src/**']` e thresholds de 80% (linhas, branches, funções, statements). Criar o mesmo para `shared` e `server`. No servidor, excluir `src/main.ts` da cobertura. Se quiser evitar repetição, extraia a parte comum para um `vitest.shared.ts` na raiz e faça os três usarem (inclusive o domínio, só a configuração).
@@ -101,7 +103,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 **Testes (escrever antes):** os testes fumaça de cada workspace.
 **Pronto quando:** `npm test` e `npm run test:coverage` passam na raiz e geram `coverage/lcov.info` em cada workspace.
 **Commit sugerido:** `test: configura Vitest com cobertura mínima de 80% em todos os workspaces`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `shared` e `server` rodam Vitest com cobertura v8 (limite de 80% nos 4 indicadores); a parte comum fica em `vitest.shared.ts` na raiz e é usada pelos 3 workspaces. `npm test` e `npm run test:coverage` rodam nos 3 e geram `coverage/lcov.info`.
+- Arquivos: `vitest.shared.ts`, `{packages/domain,packages/shared,apps/server}/vitest.config.ts`, `packages/domain/vitest.stryker.config.ts`, `package.json` (raiz e workspaces), `tsconfig.json` dos 3 workspaces.
+- Como usar: `coverageConfig(exclude?)` de `vitest.shared.ts` em todo `vitest.config.ts` novo (o `web`, na S0.5, usa o mesmo). No servidor, `src/main.ts` já está excluído.
+- Testes: `packages/shared/test/app-name.test.ts` (1) e `apps/server/test/service-name.test.ts` (1). Domínio segue com 205.
+- Decisões: (1) o `server` ganhou `SERVICE_NAME = 'voto-server'` em `src/index.ts` só para ter o que testar; sai ou é reaproveitado na B4. (2) O StrykerJS roda numa cópia em `.stryker-tmp/`, onde `../../vitest.shared` não existe, então ele usa `vitest.stryker.config.ts` (sem cobertura), apontado em `stryker.config.json`; mutação conferida em `src/ordering/queue.ts` (96%). (3) Alteração no domínio: só configuração (`vitest.config.ts`, `tsconfig.json`, `stryker.config.json`, novo `vitest.stryker.config.ts`). Avisar A. (4) O teste do `shared` já nasceu verde (`APP_NAME` existia); conferi que falha se o valor mudar.
 
 ### [ ] S0.3a — Contratos: DTOs, códigos de erro e eventos de socket
 **Ref.:** architecture §5.1, §6.3, §7; `packages/domain/src/model.ts`, `src/errors.ts`, `src/views/views.ts`, `src/ordering/queue.ts`.

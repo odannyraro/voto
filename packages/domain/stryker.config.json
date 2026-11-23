@@ -13,5 +13,8 @@
     "break": 75
   },
   "tempDirName": ".stryker-tmp",
-  "tsconfigFile": "tsconfig.stryker.json"
+  "tsconfigFile": "tsconfig.stryker.json",
+  "vitest": {
+    "configFile": "vitest.stryker.config.ts"
+  }
 }
