@@ -94,7 +94,12 @@ export class InMemoryElectionRepository implements ElectionRepository {
     return Promise.resolve(this.codeOwners.has(code));
   }
 
-  /** Guarda uma cópia do registro e refaz as entradas do índice dessa eleição. */
+  /**
+   * Guarda uma cópia do registro e refaz as entradas do índice de códigos dessa eleição,
+   * para que eleitores removidos (ex.: credenciamento desfeito) liberem seus códigos.
+   *
+   * @param record - Registro a guardar; o chamador já conferiu id e versão.
+   */
   private store(record: ElectionRecord): void {
     const { id, voters } = record.current;
     this.records.set(id, structuredClone(record));

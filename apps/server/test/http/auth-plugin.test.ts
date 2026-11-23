@@ -16,7 +16,12 @@ afterEach(async () => {
   app = undefined;
 });
 
-/** Fastify mínimo com uma rota por papel e uma rota que esqueceu o preHandler. */
+/**
+ * Monta um Fastify mínimo com uma rota por papel e uma rota que esqueceu o preHandler.
+ *
+ * @returns O app (também guardado em `app`, para o `afterEach` fechar) e o serviço de auth
+ *   que emite os tokens aceitos por ele.
+ */
 function appWithGuardedRoutes() {
   const { auth } = makeTestApp();
   app = Fastify();

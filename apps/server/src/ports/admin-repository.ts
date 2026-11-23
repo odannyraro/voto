@@ -28,7 +28,7 @@ export interface AdminRepository {
    * Guarda um admin novo.
    *
    * @param admin - Admin cujo `username` e `id` ainda não existem.
-   * @throws {Error} Se já existir um admin com o mesmo `username`.
+   * @throws {Error} Se já existir um admin com o mesmo `id` ou o mesmo `username`.
    */
   create(admin: Admin): Promise<void>;
 }

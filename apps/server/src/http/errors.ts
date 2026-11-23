@@ -4,6 +4,8 @@ import { statusForErrorCode } from './error-status';
 /** Erro esperado da borda (HTTP) ou dos adaptadores, já com o status e o código da API. */
 export class HttpError extends Error {
   /**
+   * Cria o erro com tudo o que o tratador global precisa para montar o `ErrorDTO`.
+   *
    * @param status - Status HTTP da resposta.
    * @param code - Código de erro da API (`ErrorDTO.error.code`).
    * @param message - Explicação legível, em inglês.

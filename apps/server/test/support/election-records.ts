@@ -5,7 +5,13 @@ import { StubCodeGenerator } from '../doubles/stub-code-generator';
 
 const SOME_MOMENT = new Date('2026-01-01T12:00:00.000Z');
 
-/** Entrega o valor de um `Result` de domínio ou falha o teste na montagem do cenário. */
+/**
+ * Entrega o valor de um `Result` de domínio ou falha o teste na montagem do cenário.
+ *
+ * @param result - Resultado de um comando do domínio que deveria dar certo.
+ * @returns O valor de sucesso.
+ * @throws {Error} Se o resultado for um erro (o cenário do teste está montado errado).
+ */
 export function unwrap<T>(result: Result<T>): T {
   if (!result.ok) throw new Error(`Test setup failed: ${result.error.code}`);
   return result.value;
@@ -35,7 +41,13 @@ export function anElectionRecord(options: ElectionRecordOptions): ElectionRecord
   return createHistory({ ...withVoters(draft, voterCodes), version });
 }
 
-/** Credencia um eleitor por código, com id `<eleição>:<código>`, usando o domínio real. */
+/**
+ * Credencia um eleitor por código, com id `<eleição>:<código>`, usando o domínio real.
+ *
+ * @param election - Eleição em rascunho que recebe os eleitores.
+ * @param codes - Códigos a credenciar, um eleitor por código.
+ * @returns A eleição com os eleitores; a mesma eleição se `codes` for vazio.
+ */
 function withVoters(election: Election, codes: readonly string[]): Election {
   if (codes.length === 0) return election;
   const ids = codes.map((code) => `${election.id}:${code}`);

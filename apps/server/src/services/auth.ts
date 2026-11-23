@@ -155,6 +155,14 @@ export class AuthService {
     await this.deps.adminRepository.create({ id: this.deps.newId(), username, passwordHash });
   }
 
+  /**
+   * Assina um JWT com emissão e validade contadas a partir do `Clock` injetado.
+   *
+   * @param claims - Claims próprias do token (papel e, no eleitor, a eleição).
+   * @param subject - Id do dono do token (`sub`): admin ou eleitor.
+   * @param ttlSeconds - Por quantos segundos o token vale.
+   * @returns O JWT assinado.
+   */
   private sign(
     claims: Record<string, string>,
     subject: string,
@@ -169,6 +177,13 @@ export class AuthService {
       .sign(this.secretKey);
   }
 
+  /**
+   * Verifica assinatura e validade do token e confere o formato das claims.
+   *
+   * @param token - JWT recebido.
+   * @returns As claims cruas já validadas (`sub` ainda não renomeado).
+   * @throws {HttpError} 401 `INVALID_TOKEN` em qualquer falha, sem revelar qual.
+   */
   private async decode(token: string): Promise<z.infer<typeof claimsSchema>> {
     try {
       const { payload } = await jwtVerify(token, this.secretKey, {
@@ -181,6 +196,12 @@ export class AuthService {
     }
   }
 
+  /**
+   * Devolve o hash de isca usado pelo `login` quando o usuário não existe. É calculado uma
+   * única vez (na primeira necessidade) e reaproveitado.
+   *
+   * @returns O hash bcrypt da senha de isca.
+   */
   private getDecoyHash(): Promise<string> {
     this.decoyHash ??= this.hashPassword(TIMING_DECOY_PASSWORD);
     return this.decoyHash;

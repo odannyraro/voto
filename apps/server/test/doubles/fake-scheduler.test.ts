@@ -5,7 +5,13 @@ const NOON = new Date('2026-01-01T12:00:00.000Z');
 const ONE_MS_AFTER_NOON = new Date('2026-01-01T12:00:00.001Z');
 const LATER = new Date('2026-01-01T13:00:00.000Z');
 
-/** Tarefa que anota seu nome numa lista, para o teste ver o que rodou. */
+/**
+ * Cria uma tarefa que anota seu nome numa lista, para o teste ver o que rodou.
+ *
+ * @param ran - Lista onde as tarefas executadas se anotam.
+ * @param name - Nome que esta tarefa anota.
+ * @returns A tarefa, pronta para `schedule`.
+ */
 function recordInto(ran: string[], name: string): () => void {
   return () => {
     ran.push(name);

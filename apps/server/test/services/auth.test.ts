@@ -9,6 +9,12 @@ const ADMIN_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 const ONE_SECOND_MS = 1000;
 const START = new Date('2026-01-01T12:00:00.000Z');
 
+/**
+ * Cria um `AuthService` com repositório em memória, relógio falso e bcrypt rápido.
+ *
+ * @param overrides - Segredo do JWT, quando o teste precisa de dois serviços diferentes.
+ * @returns O serviço, o repositório de admins e o relógio, para o teste inspecionar ou avançar.
+ */
 function makeAuth(overrides: { jwtSecret?: string } = {}) {
   const adminRepository = new InMemoryAdminRepository();
   const clock = new FakeClock(START);
@@ -23,6 +29,12 @@ function makeAuth(overrides: { jwtSecret?: string } = {}) {
   return { auth, adminRepository, clock };
 }
 
+/**
+ * Captura o motivo da rejeição de uma promessa, para comparar duas rejeições entre si.
+ *
+ * @param promise - Promessa que deve ser rejeitada.
+ * @returns O erro da rejeição, ou `undefined` se a promessa foi resolvida.
+ */
 async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {
   return promise.then(
     () => undefined,

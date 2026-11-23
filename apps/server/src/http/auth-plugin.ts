@@ -42,6 +42,14 @@ function bearerTokenOf(request: FastifyRequest): string {
 export function registerAuth(app: FastifyInstance, auth: AuthService): AuthHooks {
   app.decorateRequest('auth', undefined);
 
+  /**
+   * Cria o *preHandler* que exige um token válido do papel pedido e guarda as claims em
+   * `request.auth`.
+   *
+   * @param role - Papel exigido pela rota.
+   * @returns O *preHandler*; lança 401 `INVALID_TOKEN` (token ausente ou inválido) ou 403
+   *   `FORBIDDEN` (token de outro papel).
+   */
   const requireRole =
     (role: TokenClaims['role']): preHandlerAsyncHookHandler =>
     async (request) => {

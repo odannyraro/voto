@@ -15,7 +15,13 @@ interface ErrorResponse {
   readonly body: ErrorDTO;
 }
 
-/** Erros que o próprio Fastify lança (JSON malformado, tipo de conteúdo não suportado...). */
+/**
+ * Reconhece os erros de cliente que o próprio Fastify lança antes da rota (JSON malformado,
+ * tipo de conteúdo não suportado...), para respondê-los como erro de validação e não como 500.
+ *
+ * @param error - O que foi lançado.
+ * @returns `true` se for um `Error` com `statusCode` numérico na faixa 4xx.
+ */
 function isFastifyClientError(error: unknown): error is Error & { statusCode: number } {
   if (!(error instanceof Error) || !('statusCode' in error)) return false;
   const { statusCode } = error;
@@ -26,7 +32,13 @@ function isFastifyClientError(error: unknown): error is Error & { statusCode: nu
   );
 }
 
-/** Resume os problemas de um `ZodError` numa frase, um `campo: motivo` por problema. */
+/**
+ * Resume os problemas de um `ZodError` numa frase, para o cliente saber o que corrigir.
+ *
+ * @param error - Erro de validação do Zod.
+ * @returns Um `campo: motivo` por problema, separados por `; `. Problemas no corpo inteiro
+ *   (sem campo) aparecem só com o motivo.
+ */
 function describeZodIssues(error: ZodError): string {
   return error.issues
     .map((issue) =>

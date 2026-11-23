@@ -16,7 +16,11 @@ afterEach(async () => {
 
 const ADMIN_ID = 'admin-ana';
 
-/** App com o admin 'ana' (senha 's3cret') já cadastrado. */
+/**
+ * Monta o app de teste com o admin 'ana' (senha 's3cret') já cadastrado.
+ *
+ * @returns O app de teste e o id da Ana.
+ */
 async function appWithAdminAna() {
   const test = makeTestApp();
   app = test.app;

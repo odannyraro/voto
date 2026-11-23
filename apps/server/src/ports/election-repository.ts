@@ -31,6 +31,7 @@ export interface ElectionRepository {
    * Guarda uma eleição nova.
    *
    * @param record - Registro cujo `current.id` ainda não existe.
+   * @throws {Error} Se já existir uma eleição com o mesmo id.
    */
   create(record: ElectionRecord): Promise<void>;
 
@@ -39,7 +40,8 @@ export interface ElectionRepository {
    *
    * @param record - Novo registro, com `current.version` já incrementada pelo serviço.
    * @param expectedVersion - Versão que o chamador leu; precisa ser a guardada.
-   * @throws {HttpError} `VERSION_CONFLICT` se a versão guardada for outra.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` se a eleição não existir; 409
+   *   `VERSION_CONFLICT` se a versão guardada for outra.
    */
   save(record: ElectionRecord, expectedVersion: number): Promise<void>;
 
