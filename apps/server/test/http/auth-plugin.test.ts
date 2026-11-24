@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getAdminId, registerAuth } from '../../src/http/auth-plugin';
+import { getAdminId, getVoterIds, registerAuth } from '../../src/http/auth-plugin';
 import { registerErrorHandling } from '../../src/http/error-handler';
 import { makeTestApp } from '../support/make-test-app';
 
@@ -17,7 +17,8 @@ afterEach(async () => {
 });
 
 /**
- * Monta um Fastify mínimo com uma rota por papel e uma rota que esqueceu o preHandler.
+ * Monta um Fastify mínimo com uma rota por papel, uma rota que esqueceu o preHandler e uma rota
+ * de eleitor protegida pelo papel errado.
  *
  * @returns O app (também guardado em `app`, para o `afterEach` fechar) e o serviço de auth
  *   que emite os tokens aceitos por ele.
@@ -32,6 +33,10 @@ function appWithGuardedRoutes() {
   }));
   app.get('/voter-only', { preHandler: requireVoter }, (request) => ({ auth: request.auth }));
   app.get('/unguarded', (request) => ({ adminId: getAdminId(request) }));
+  // Rota de eleitor protegida pelo papel errado: o token passa, mas não é de eleitor.
+  app.get('/voter-route-with-admin-guard', { preHandler: requireAdmin }, (request) =>
+    getVoterIds(request),
+  );
   return { app, auth };
 }
 
@@ -106,6 +111,21 @@ describe('getAdminId', () => {
     const { app } = appWithGuardedRoutes();
 
     const response = await app.inject({ method: 'GET', url: '/unguarded' });
+
+    expect(response.statusCode).toBe(INTERNAL_SERVER_ERROR);
+  });
+});
+
+describe('getVoterIds', () => {
+  it('fails with 500 when the route is not protected by requireVoter', async () => {
+    const { app, auth } = appWithGuardedRoutes();
+    const token = await auth.issueAdminToken('admin-7');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/voter-route-with-admin-guard',
+      headers: { authorization: `Bearer ${token}` },
+    });
 
     expect(response.statusCode).toBe(INTERNAL_SERVER_ERROR);
   });
