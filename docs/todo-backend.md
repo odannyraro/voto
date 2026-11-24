@@ -81,6 +81,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/position-routes.ts` → `registerPositionRoutes`: `POST/PATCH/DELETE .../positions[/:pid]`, `PUT .../queue`, `GET .../queue/suggestion`.
 - `apps/server/src/http/candidate-routes.ts` → `registerCandidateRoutes`: `POST .../candidates`, `PATCH/DELETE .../candidates/:cid`, `POST .../positions/:pid/candidates/:cid`.
 - `apps/server/src/http/voter-routes.ts` → `registerVoterRoutes`: `POST .../voters` (gera códigos) e `DELETE .../voters/:vid` (revoga).
+- `apps/server/src/http/round-routes.ts` → `registerRoundRoutes`: `POST .../open`, `GET .../next`, `POST .../rounds`, `POST .../rounds/:rid/close`.
 - `apps/server/src/adapters/crypto-code-generator.ts` → `createCryptoCodeGenerator()`: gerador do domínio com `crypto.randomInt`.
 - `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
 - `apps/server/test/support/admin-test-app.ts` → `appWithTwoAdmins(overrides?)`: app de teste com os cabeçalhos `asAna`/`asBia` (ids `ANA`/`BIA`), fechado sozinho ao fim do teste (`onTestFinished`).
@@ -566,7 +567,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: gerador 2 (200 amostras no formato; sem repetição), serviço 9 (códigos e rótulos, colisão com outra eleição, repetição na mesma leva, notificações, 403, rótulos demais sem salvar, revogar, `VOTER_NOT_FOUND`), rotas 8 (201, lote de 500, `count` 0 e 501 → 400, 401 nas duas rotas, `REVOKED`, 404). Servidor: 271 testes, 100% linhas / 99,09% branches.
 - Decisões: (1) o serviço gera os N códigos **antes** de chamar o domínio (a conferência no repositório é assíncrona e o domínio é síncrono) e entrega a ele um gerador fixo (`fixedCodes`). (2) Código repetido ou já usado é descartado e sorteado de novo, sem limite de tentativas (31^8 combinações). (3) Duas credenciais simultâneas em eleições diferentes podem gerar o mesmo código entre a conferência e o `save`; no Pg a chave primária de `voter_codes` (B17) barra, e a rota responde 500. Aceito pelo risco ínfimo. (4) Revogar um eleitor já revogado devolve 403 `VOTER_REVOKED` (mapa da S0.4). (5) Sem schema novo: `credentialVotersBodySchema` já existia.
 
-### [ ] B12a — Rotas do ciclo de votação (parte 1)
+### [x] B12a — Rotas do ciclo de votação (parte 1)
 **Ref.:** architecture §5.3, §6.1.
 **Fazer:**
 - Funções do domínio: `openElection(e)`, `nextPositionStatus(e)`, `openRound(e, { positionId, durationSeconds? }, ctx)`, `closeRound(e, roundId)`. Note que `openRound` também falha com `RUNOFF_PENDING` e `NO_CREDENTIALED_VOTERS` (`todo-domain.md`, A12).
@@ -582,7 +583,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - `next` não salva.
 
 **Commit sugerido:** `feat(server): adiciona rotas para abrir eleição e conduzir rodadas`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST /api/elections/:id/open`, `GET .../next`, `POST .../rounds` (201) e `POST .../rounds/:rid/close`, todas com `requireAdmin`. Abrir e fechar rodada já agendam/cancelam `round:<id>` pelo fluxo da B7a.
+- Arquivos: `apps/server/src/http/round-routes.ts` (`registerRoundRoutes`), `src/services/election-service.ts` (`openElection`, `nextPosition`, `closeRound`), `src/app.ts`, `test/http/round-routes.test.ts`.
+- Como usar: `service.openElection(adminId, id)` e `service.closeRound(adminId, id, roundId)` → `ElectionRecord`; `service.nextPosition(adminId, id)` → `NextPositionDTO` (só leitura). A B12b acrescenta as demais rotas do ciclo, seguindo o molde de `round-routes.ts` (pode ser outro arquivo de rotas). `openRound` do serviço já existia (B7a).
+- Testes: `round-routes.test.ts`, 26 execuções (abrir 3, `next` 3, abrir rodada 8, fechar 4, autenticação 8 com `it.each`: 401 e 403 nas 4 rotas). Servidor: 305 testes, 100% linhas / 99,09% branches. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes. Mutações manuais conferidas: `nextPosition` gravando (via `getElection`) e agendamento sem `voteGraceMs` derrubam um teste cada.
+- Decisões: (1) `nextPosition` aplica `closeRoundIfDue` **em memória** antes de calcular o próximo passo, para um prazo vencido que o timer ainda não fechou não aparecer como `ROUND_IN_PROGRESS`; nada é gravado. (2) `POST /open` e `/close` respondem 200; `POST /rounds` responde 201 (§6.1). (3) Sem schema novo: `openRoundBodySchema` já existia. (4) Erros de domínio seguem o mapa da S0.4: `ROUND_NOT_FOUND`/`POSITION_NOT_FOUND` 404; `ELECTION_NOT_DRAFT`, `NO_POSITIONS`, `ROUND_IN_PROGRESS`, `NO_CREDENTIALED_VOTERS` e `ROUND_NOT_OPEN` 409.
 
 ### [ ] B12b — Rotas do ciclo de votação (parte 2)
 **Ref.:** architecture §5.4 (candidatos insuficientes, resiliência), §6.1.

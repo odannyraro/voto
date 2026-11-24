@@ -3,11 +3,14 @@ import {
   addPosition,
   applyOrder,
   attachExistingCandidate,
+  closeRound,
   closeRoundIfDue,
   createElection,
   createHistory,
   credentialVoters,
+  nextPositionStatus,
   ok,
+  openElection,
   openRound,
   removeCandidate,
   removePosition,
@@ -28,7 +31,7 @@ import {
   type UpdateElectionInput,
   type UpdatePositionInput,
 } from '@voto/domain';
-import type { Election, ElectionSummaryDTO } from '@voto/shared';
+import type { Election, ElectionSummaryDTO, NextPositionDTO } from '@voto/shared';
 import { httpErrorFor } from '../http/errors';
 import type {
   Clock,
@@ -313,6 +316,35 @@ export class ElectionService {
   }
 
   /**
+   * Abre a eleição para votação: a partir daqui os eleitores entram com o código.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @returns O registro salvo, com a eleição em `OPEN`.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ELECTION_NOT_DRAFT` ou `NO_POSITIONS`.
+   */
+  async openElection(adminId: string, electionId: string): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => openElection(election));
+  }
+
+  /**
+   * Diz o que o admin deve fazer a seguir (abrir o cargo do topo da fila, resolver candidatos
+   * insuficientes, abrir o 2º turno...). Só leitura: não salva, não agenda nem notifica.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @returns O próximo passo, já considerando um prazo vencido que ainda não foi gravado.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   */
+  async nextPosition(adminId: string, electionId: string): Promise<NextPositionDTO> {
+    const record = await this.loadOwned(adminId, electionId);
+    // Fecha em memória o que o prazo já venceu, para a resposta bater com o que a próxima
+    // escrita gravaria; a leitura em si não grava nada.
+    return nextPositionStatus(closeRoundIfDue(record.current, this.newContext()));
+  }
+
+  /**
    * Abre o 1º turno de um cargo e agenda o fechamento automático no prazo.
    *
    * @param adminId - Admin autenticado; precisa ser o dono da eleição.
@@ -328,6 +360,20 @@ export class ElectionService {
     input: OpenRoundInput,
   ): Promise<ElectionRecord> {
     return this.execute(adminId, electionId, (election, ctx) => openRound(election, input, ctx));
+  }
+
+  /**
+   * Fecha a rodada aberta antes do prazo, a pedido do admin, e cancela o fechamento agendado.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param roundId - Rodada a fechar.
+   * @returns O registro salvo, com a rodada `CLOSED` e o cargo no estado decorrente do resultado.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ROUND_NOT_FOUND` ou `ROUND_NOT_OPEN`.
+   */
+  async closeRound(adminId: string, electionId: string, roundId: string): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => closeRound(election, roundId));
   }
 
   /**

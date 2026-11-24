@@ -6,6 +6,7 @@ import { registerCandidateRoutes } from './http/candidate-routes';
 import { registerElectionRoutes } from './http/election-routes';
 import { registerErrorHandling } from './http/error-handler';
 import { registerPositionRoutes } from './http/position-routes';
+import { registerRoundRoutes } from './http/round-routes';
 import { registerVoterRoutes } from './http/voter-routes';
 import type {
   AdminRepository,
@@ -37,7 +38,7 @@ export interface AppDeps {
  *
  * @param deps - Configuração e portas da aplicação.
  * @returns A instância Fastify com health check, tratamento de erros, login do admin e as
- *   rotas de eleição, cargos, fila, candidatos e eleitores.
+ *   rotas de eleição, cargos, fila, candidatos, eleitores e rodadas.
  */
 export function buildApp(deps: AppDeps): FastifyInstance {
   // Silencia o log nos testes; em dev e produção o Fastify loga requisições e erros.
@@ -71,6 +72,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerPositionRoutes(app, adminRouteDeps);
   registerCandidateRoutes(app, adminRouteDeps);
   registerVoterRoutes(app, adminRouteDeps);
+  registerRoundRoutes(app, adminRouteDeps);
 
   return app;
 }
