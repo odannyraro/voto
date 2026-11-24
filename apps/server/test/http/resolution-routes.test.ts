@@ -6,6 +6,7 @@ import type { ElectionRecord } from '../../src/ports';
 import {
   ANA,
   appWithTwoAdmins,
+  openRoundViaApi,
   type AuthHeaders,
   type TwoAdminsTestApp,
 } from '../support/admin-test-app';
@@ -34,23 +35,6 @@ async function givenOpenElection(test: TwoAdminsTestApp): Promise<void> {
   await test.deps.electionRepository.create(
     openElectionWithVoters({ id: 'e1', adminId: ANA, positionIds: ['mayor', 'treasurer'] }),
   );
-}
-
-/**
- * Abre a rodada de um cargo pela API, como o admin faria, e devolve o id da rodada.
- *
- * @param test - App de teste com a eleição `e1` aberta.
- * @param positionId - Cargo a votar.
- * @returns O id da rodada aberta.
- */
-async function openRoundVia(test: TwoAdminsTestApp, positionId: string): Promise<string> {
-  const response = await test.app.inject({
-    method: 'POST',
-    url: '/api/elections/e1/rounds',
-    headers: test.asAna,
-    payload: { positionId },
-  });
-  return response.json<AdminElectionDTO>().currentRound?.roundId ?? '';
 }
 
 /**
@@ -209,7 +193,7 @@ describe('POST /api/elections/:id/rounds/:rid/release', () => {
   it('shows the voter the result of the closed round', async () => {
     const test = await appWithTwoAdmins();
     await givenOpenElection(test);
-    const roundId = await openRoundVia(test, 'mayor');
+    const roundId = await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
     await closeRoundVia(test, roundId);
 
     const response = await post(test, test.asAna, `/api/elections/e1/rounds/${roundId}/release`);
@@ -224,7 +208,7 @@ describe('POST /api/elections/:id/rounds/:rid/release', () => {
   it('marks the round results as released in the admin panel', async () => {
     const test = await appWithTwoAdmins();
     await givenOpenElection(test);
-    const roundId = await openRoundVia(test, 'mayor');
+    const roundId = await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
     await closeRoundVia(test, roundId);
 
     const response = await post(test, test.asAna, `/api/elections/e1/rounds/${roundId}/release`);
@@ -238,7 +222,7 @@ describe('POST /api/elections/:id/rounds/:rid/release', () => {
   it('rejects a round that is still open with 409 ROUND_NOT_CLOSED', async () => {
     const test = await appWithTwoAdmins();
     await givenOpenElection(test);
-    const roundId = await openRoundVia(test, 'mayor');
+    const roundId = await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
 
     const response = await post(test, test.asAna, `/api/elections/e1/rounds/${roundId}/release`);
 
@@ -271,7 +255,7 @@ describe('POST /api/elections/:id/positions/:pid/defer', () => {
   it('rejects a position that is being voted with 409 POSITION_NOT_PENDING', async () => {
     const test = await appWithTwoAdmins();
     await givenOpenElection(test);
-    await openRoundVia(test, 'mayor');
+    await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
 
     const response = await post(test, test.asAna, '/api/elections/e1/positions/mayor/defer');
 
@@ -346,7 +330,7 @@ describe('POST /api/elections/:id/rounds/:rid/annul', () => {
   it('annuls the open round and puts the position back in the queue', async () => {
     const test = await appWithTwoAdmins();
     await givenOpenElection(test);
-    const roundId = await openRoundVia(test, 'mayor');
+    const roundId = await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
 
     const response = await post(test, test.asAna, `/api/elections/e1/rounds/${roundId}/annul`);
 
@@ -361,7 +345,7 @@ describe('POST /api/elections/:id/rounds/:rid/annul', () => {
   it('cancels the scheduled automatic closing', async () => {
     const test = await appWithTwoAdmins();
     await givenOpenElection(test);
-    const roundId = await openRoundVia(test, 'mayor');
+    const roundId = await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
 
     await post(test, test.asAna, `/api/elections/e1/rounds/${roundId}/annul`);
 
@@ -393,7 +377,7 @@ describe('POST /api/elections/:id/finish', () => {
   it('rejects finishing while a round is open with 409 ROUND_IN_PROGRESS', async () => {
     const test = await appWithTwoAdmins();
     await givenOpenElection(test);
-    await openRoundVia(test, 'mayor');
+    await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
 
     const response = await post(test, test.asAna, '/api/elections/e1/finish');
 
@@ -467,7 +451,7 @@ describe('POST /api/elections/:id/undo', () => {
   it('reschedules the automatic closing when the undo reopens a round', async () => {
     const test = await appWithTwoAdmins();
     await givenOpenElection(test);
-    const roundId = await openRoundVia(test, 'mayor');
+    const roundId = await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
     await closeRoundVia(test, roundId);
 
     await post(test, test.asAna, '/api/elections/e1/undo');

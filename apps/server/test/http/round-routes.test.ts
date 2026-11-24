@@ -4,7 +4,7 @@ import type { ElectionRecord } from '../../src/ports';
 import {
   ANA,
   appWithTwoAdmins,
-  type AuthHeaders,
+  openRoundViaApi,
   type TwoAdminsTestApp,
 } from '../support/admin-test-app';
 import {
@@ -41,29 +41,6 @@ async function givenOpenElection(test: TwoAdminsTestApp): Promise<void> {
   await test.deps.electionRepository.create(
     openElectionWithVoters({ id: 'e1', adminId: ANA, positionIds: ['mayor', 'treasurer'] }),
   );
-}
-
-/**
- * Abre a rodada de um cargo pela API, como o admin faria, e devolve o id da rodada.
- *
- * @param test - App de teste com a eleição `e1` aberta.
- * @param headers - Autorização do dono da eleição.
- * @param positionId - Cargo a votar.
- * @returns O id da rodada aberta.
- */
-async function openRoundVia(
-  test: TwoAdminsTestApp,
-  headers: AuthHeaders,
-  positionId: string,
-): Promise<string> {
-  const response = await test.app.inject({
-    method: 'POST',
-    url: '/api/elections/e1/rounds',
-    headers,
-    payload: { positionId },
-  });
-  const { currentRound } = response.json<AdminElectionDTO>();
-  return currentRound?.roundId ?? '';
 }
 
 /**
@@ -238,7 +215,7 @@ describe('POST /api/elections/:id/rounds', () => {
   it('rejects a second round while another is open with 409 ROUND_IN_PROGRESS', async () => {
     const test = await appWithTwoAdmins();
     await givenOpenElection(test);
-    await openRoundVia(test, test.asAna, 'mayor');
+    await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
 
     const response = await test.app.inject({
       method: 'POST',
@@ -303,7 +280,7 @@ describe('POST /api/elections/:id/rounds/:rid/close', () => {
   it('closes the open round before its deadline', async () => {
     const test = await appWithTwoAdmins();
     await givenOpenElection(test);
-    const roundId = await openRoundVia(test, test.asAna, 'mayor');
+    const roundId = await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
 
     const response = await test.app.inject({
       method: 'POST',
@@ -321,7 +298,7 @@ describe('POST /api/elections/:id/rounds/:rid/close', () => {
   it('cancels the scheduled automatic closing', async () => {
     const test = await appWithTwoAdmins();
     await givenOpenElection(test);
-    const roundId = await openRoundVia(test, test.asAna, 'mayor');
+    const roundId = await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
 
     await test.app.inject({
       method: 'POST',
@@ -349,7 +326,7 @@ describe('POST /api/elections/:id/rounds/:rid/close', () => {
   it('rejects a round that is already closed with 409 ROUND_NOT_OPEN', async () => {
     const test = await appWithTwoAdmins();
     await givenOpenElection(test);
-    const roundId = await openRoundVia(test, test.asAna, 'mayor');
+    const roundId = await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
     const url = `/api/elections/e1/rounds/${roundId}/close`;
     await test.app.inject({ method: 'POST', url, headers: test.asAna });
 

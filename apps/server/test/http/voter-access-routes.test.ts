@@ -3,7 +3,7 @@ import type { VoterStateDTO } from '@voto/shared';
 import { describe, expect, it } from 'vitest';
 import { InMemoryElectionRepository } from '../../src/adapters/in-memory-election-repository';
 import type { ElectionRecord, VoterCodeOwner } from '../../src/ports';
-import { ANA, appWithTwoAdmins, type TwoAdminsTestApp } from '../support/admin-test-app';
+import { ANA, appWithTwoAdmins, voterSessionHeaders } from '../support/admin-test-app';
 import { openElectionWithVoters, withOpenRound } from '../support/election-fixtures';
 import { unwrap } from '../support/election-records';
 
@@ -47,21 +47,6 @@ function electionWithOpenMayorRound(): ElectionRecord {
     roundId: 'r1',
     openedAt: ELECTION_START,
   });
-}
-
-/**
- * Abre a sessão do eleitor pela API e devolve o cabeçalho de autorização dele.
- *
- * @param test - App de teste cuja eleição `e1` já está guardada.
- * @returns O cabeçalho `authorization` do eleitor.
- */
-async function sessionHeaders(test: TwoAdminsTestApp): Promise<{ authorization: string }> {
-  const response = await test.app.inject({
-    method: 'POST',
-    url: '/api/voter/session',
-    payload: { code: VOTER_CODE },
-  });
-  return { authorization: `Bearer ${response.json<{ token: string }>().token}` };
 }
 
 /** Repositório cujo índice de códigos aponta para uma eleição que não existe (dado inconsistente). */
@@ -223,7 +208,7 @@ describe('GET /api/voter/state', () => {
     const response = await test.app.inject({
       method: 'GET',
       url: '/api/voter/state',
-      headers: await sessionHeaders(test),
+      headers: await voterSessionHeaders(test, VOTER_CODE),
     });
 
     expect(response.statusCode).toBe(OK);
@@ -237,7 +222,7 @@ describe('GET /api/voter/state', () => {
   it('shows the ballot while a round is open and the deadline has not passed', async () => {
     const test = await appWithTwoAdmins();
     await test.deps.electionRepository.create(electionWithOpenMayorRound());
-    const headers = await sessionHeaders(test);
+    const headers = await voterSessionHeaders(test, VOTER_CODE);
     test.clock.advance(HALF_OF_DEADLINE_MS);
 
     const response = await test.app.inject({ method: 'GET', url: '/api/voter/state', headers });
@@ -252,7 +237,7 @@ describe('GET /api/voter/state', () => {
     const test = await appWithTwoAdmins();
     const { current } = openElectionWithOneVoter();
     await test.deps.electionRepository.create({ current, past: [] });
-    const headers = await sessionHeaders(test);
+    const headers = await voterSessionHeaders(test, VOTER_CODE);
     await test.deps.electionRepository.save(
       { current: { ...unwrap(revokeVoter(current, VOTER_ID)), version: 1 }, past: [] },
       0,
@@ -267,7 +252,7 @@ describe('GET /api/voter/state', () => {
   it('closes and saves a round whose deadline passed while nobody was looking', async () => {
     const test = await appWithTwoAdmins();
     await test.deps.electionRepository.create(electionWithOpenMayorRound());
-    const headers = await sessionHeaders(test);
+    const headers = await voterSessionHeaders(test, VOTER_CODE);
     test.clock.advance(ONE_SECOND_PAST_DEADLINE_MS);
 
     const response = await test.app.inject({ method: 'GET', url: '/api/voter/state', headers });
@@ -280,7 +265,7 @@ describe('GET /api/voter/state', () => {
   it('notifies the admin when consulting the state closes a round', async () => {
     const test = await appWithTwoAdmins();
     await test.deps.electionRepository.create(electionWithOpenMayorRound());
-    const headers = await sessionHeaders(test);
+    const headers = await voterSessionHeaders(test, VOTER_CODE);
     test.clock.advance(ONE_SECOND_PAST_DEADLINE_MS);
 
     await test.app.inject({ method: 'GET', url: '/api/voter/state', headers });
@@ -291,7 +276,7 @@ describe('GET /api/voter/state', () => {
   it('does not save or notify when no deadline has passed', async () => {
     const test = await appWithTwoAdmins();
     await test.deps.electionRepository.create(electionWithOpenMayorRound());
-    const headers = await sessionHeaders(test);
+    const headers = await voterSessionHeaders(test, VOTER_CODE);
     test.clock.advance(HALF_OF_DEADLINE_MS);
 
     await test.app.inject({ method: 'GET', url: '/api/voter/state', headers });

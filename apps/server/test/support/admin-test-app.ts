@@ -1,3 +1,4 @@
+import type { AdminElectionDTO } from '@voto/shared';
 import { onTestFinished } from 'vitest';
 import type { AppDeps } from '../../src/app';
 import { makeTestApp, type TestApp } from './make-test-app';
@@ -39,6 +40,43 @@ export async function appWithTwoAdmins(
     asAna: await bearer(test, ANA),
     asBia: await bearer(test, BIA),
   };
+}
+
+/**
+ * Passo pela API: a Ana abre a rodada de um cargo, como faria no painel (o que também agenda
+ * o fechamento automático).
+ *
+ * @param test - App de teste em que a Ana é dona da eleição, já aberta e sem rodada em curso.
+ * @param round - Eleição e cargo a votar.
+ * @returns O id da rodada aberta (vazio se a API recusou a abertura).
+ */
+export async function openRoundViaApi(
+  test: TwoAdminsTestApp,
+  round: { readonly electionId: string; readonly positionId: string },
+): Promise<string> {
+  const response = await test.app.inject({
+    method: 'POST',
+    url: `/api/elections/${round.electionId}/rounds`,
+    headers: test.asAna,
+    payload: { positionId: round.positionId },
+  });
+  return response.json<AdminElectionDTO>().currentRound?.roundId ?? '';
+}
+
+/**
+ * Passo pela API: o eleitor entra com o código e recebe o token da sessão.
+ *
+ * @param test - App de teste em que a eleição do código já está guardada.
+ * @param code - Código de acesso do eleitor.
+ * @returns O cabeçalho `authorization` do eleitor.
+ */
+export async function voterSessionHeaders(test: TestApp, code: string): Promise<AuthHeaders> {
+  const response = await test.app.inject({
+    method: 'POST',
+    url: '/api/voter/session',
+    payload: { code },
+  });
+  return { authorization: `Bearer ${response.json<{ token: string }>().token}` };
 }
 
 /**

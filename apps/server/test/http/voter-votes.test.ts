@@ -1,8 +1,15 @@
 import { revokeVoter } from '@voto/domain';
-import type { AdminElectionDTO, VoterStateDTO } from '@voto/shared';
+import type { VoterStateDTO } from '@voto/shared';
 import { describe, expect, it } from 'vitest';
 import type { ElectionRecord } from '../../src/ports';
-import { ANA, appWithTwoAdmins, type TwoAdminsTestApp } from '../support/admin-test-app';
+import {
+  ANA,
+  appWithTwoAdmins,
+  openRoundViaApi,
+  voterSessionHeaders,
+  type AuthHeaders,
+  type TwoAdminsTestApp,
+} from '../support/admin-test-app';
 import { openElectionWithVoters, withOpenRound } from '../support/election-fixtures';
 import { unwrap } from '../support/election-records';
 
@@ -40,25 +47,6 @@ function electionWithOpenRound(voterCodes = [FIRST_CODE, SECOND_CODE]): Election
 }
 
 /**
- * Abre a sessão do eleitor pela API e devolve o cabeçalho de autorização dele.
- *
- * @param test - App de teste cuja eleição já está guardada.
- * @param code - Código do eleitor.
- * @returns O cabeçalho `authorization` do eleitor.
- */
-async function voterHeaders(
-  test: TwoAdminsTestApp,
-  code: string,
-): Promise<{ authorization: string }> {
-  const response = await test.app.inject({
-    method: 'POST',
-    url: '/api/voter/session',
-    payload: { code },
-  });
-  return { authorization: `Bearer ${response.json<{ token: string }>().token}` };
-}
-
-/**
  * Registra no app de teste a eleição com rodada aberta e devolve o cabeçalho do 1º eleitor.
  *
  * @param test - App de teste.
@@ -68,25 +56,9 @@ async function voterHeaders(
 async function seededFirstVoter(
   test: TwoAdminsTestApp,
   record = electionWithOpenRound(),
-): Promise<{ authorization: string }> {
+): Promise<AuthHeaders> {
   await test.deps.electionRepository.create(record);
-  return voterHeaders(test, FIRST_CODE);
-}
-
-/**
- * Faz o admin abrir a rodada de `mayor` pela API (o que agenda o fechamento).
- *
- * @param test - App de teste cuja eleição `e1` está aberta e sem rodada.
- * @returns O id da rodada aberta.
- */
-async function openMayorRoundAsAdmin(test: TwoAdminsTestApp): Promise<string> {
-  const response = await test.app.inject({
-    method: 'POST',
-    url: '/api/elections/e1/rounds',
-    headers: test.asAna,
-    payload: { positionId: 'mayor' },
-  });
-  return response.json<AdminElectionDTO>().election.rounds[0]?.id ?? '';
+  return voterSessionHeaders(test, FIRST_CODE);
 }
 
 describe('POST /api/voter/votes', () => {
@@ -240,8 +212,8 @@ describe('POST /api/voter/votes', () => {
         voterCodes: [FIRST_CODE],
       }),
     );
-    const headers = await voterHeaders(test, FIRST_CODE);
-    const roundId = await openMayorRoundAsAdmin(test);
+    const headers = await voterSessionHeaders(test, FIRST_CODE);
+    const roundId = await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
     const scheduledBeforeVote = test.scheduler.pending().length;
 
     await test.app.inject({
@@ -265,8 +237,8 @@ describe('POST /api/voter/votes', () => {
         voterCodes: [FIRST_CODE, SECOND_CODE],
       }),
     );
-    const headers = await voterHeaders(test, FIRST_CODE);
-    const roundId = await openMayorRoundAsAdmin(test);
+    const headers = await voterSessionHeaders(test, FIRST_CODE);
+    const roundId = await openRoundViaApi(test, { electionId: 'e1', positionId: 'mayor' });
 
     const response = await test.app.inject({
       method: 'POST',
@@ -320,7 +292,7 @@ describe('POST /api/voter/votes', () => {
         voterCodes: ['OTHR2345'],
       }),
     );
-    const outsiderHeaders = await voterHeaders(test, 'OTHR2345');
+    const outsiderHeaders = await voterSessionHeaders(test, 'OTHR2345');
 
     const response = await test.app.inject({
       method: 'POST',
