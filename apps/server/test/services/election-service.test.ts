@@ -325,12 +325,19 @@ describe('ElectionService.createElection', () => {
     ]);
   });
 
-  it('rejects a blank name and saves nothing', async () => {
-    const { service, repository } = makeService();
+  it('rejects a blank name with INVALID_ELECTION_NAME', async () => {
+    const { service } = makeService();
 
     const creation = service.createElection(OWNER, { name: '   ' });
 
     await expect(creation).rejects.toMatchObject({ code: 'INVALID_ELECTION_NAME' });
+  });
+
+  it('saves nothing when the name is blank', async () => {
+    const { service, repository } = makeService();
+
+    await expect(service.createElection(OWNER, { name: '   ' })).rejects.toThrow();
+
     expect(await repository.listAll()).toEqual([]);
   });
 });
@@ -379,34 +386,80 @@ describe('ElectionService.getElection', () => {
     await expect(read).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
   });
 
-  it('returns the stored election without saving or notifying when nothing is overdue', async () => {
-    const { service, repository, notifier } = makeService();
-    const stored = anElectionRecord({ id: 'e1', adminId: OWNER, version: 7 });
-    await repository.create(stored);
+  describe('when nothing is overdue', () => {
+    it('returns the stored election', async () => {
+      const { service, repository } = makeService();
+      const stored = anElectionRecord({ id: 'e1', adminId: OWNER, version: 7 });
+      await repository.create(stored);
 
-    const record = await service.getElection(OWNER, 'e1');
+      const record = await service.getElection(OWNER, 'e1');
 
-    expect(record).toEqual(stored);
-    expect(await repository.get('e1')).toEqual(stored);
-    expect(notifier.adminStates).toEqual([]);
+      expect(record).toEqual(stored);
+    });
+
+    it('saves nothing', async () => {
+      const { service, repository } = makeService();
+      const stored = anElectionRecord({ id: 'e1', adminId: OWNER, version: 7 });
+      await repository.create(stored);
+
+      await service.getElection(OWNER, 'e1');
+
+      expect(await repository.get('e1')).toEqual(stored);
+    });
+
+    it('notifies nobody', async () => {
+      const { service, repository, notifier } = makeService();
+      await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER, version: 7 }));
+
+      await service.getElection(OWNER, 'e1');
+
+      expect(notifier.adminStates).toEqual([]);
+    });
   });
 
-  it('closes a round past its deadline, saves the result and notifies the admin', async () => {
-    const { service, repository, clock, notifier } = makeService();
-    await repository.create(
-      openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
-    );
-    await service.openRound(OWNER, 'e1', {
-      positionId: 'president',
-      durationSeconds: ONE_MINUTE_SECONDS,
+  describe('when the open round is past its deadline', () => {
+    /**
+     * Serviço com a eleição `e1` do dono, rodada de 1 min aberta (versão 1) e o relógio
+     * já 1 min e 1 s depois da abertura, ou seja, além do prazo.
+     *
+     * @returns O serviço e os doubles, como `makeService`.
+     */
+    async function serviceWithOverdueRound() {
+      const test = makeService();
+      await test.repository.create(
+        openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
+      );
+      await test.service.openRound(OWNER, 'e1', {
+        positionId: 'president',
+        durationSeconds: ONE_MINUTE_SECONDS,
+      });
+      test.clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+      return test;
+    }
+
+    it('returns the election with the round closed and a new version', async () => {
+      const { service } = await serviceWithOverdueRound();
+
+      const record = await service.getElection(OWNER, 'e1');
+
+      expect(record.current).toMatchObject({ version: 2, rounds: [{ status: 'CLOSED' }] });
     });
-    clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
 
-    const record = await service.getElection(OWNER, 'e1');
+    it('saves the closed round', async () => {
+      const { service, repository } = await serviceWithOverdueRound();
 
-    expect(record.current).toMatchObject({ version: 2, rounds: [{ status: 'CLOSED' }] });
-    expect(await repository.get('e1')).toEqual(record);
-    expect(notifier.adminStates.at(-1)?.state).toMatchObject({ election: { version: 2 } });
+      const record = await service.getElection(OWNER, 'e1');
+
+      expect(await repository.get('e1')).toEqual(record);
+    });
+
+    it('notifies the admin with the closed round', async () => {
+      const { service, notifier } = await serviceWithOverdueRound();
+
+      await service.getElection(OWNER, 'e1');
+
+      expect(notifier.adminStates.at(-1)?.state).toMatchObject({ election: { version: 2 } });
+    });
   });
 
   it('keeps a round open until its deadline has passed', async () => {
@@ -449,26 +502,42 @@ describe('ElectionService.updateElection', () => {
     expect((await repository.get('e1'))?.current.name).toBe('Board election');
   });
 
-  it('rejects a blank name and saves nothing', async () => {
+  it('rejects a blank name with INVALID_ELECTION_NAME', async () => {
     const { service, repository } = makeService();
-    const stored = anElectionRecord({ id: 'e1', adminId: OWNER });
-    await repository.create(stored);
+    await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER }));
 
     const update = service.updateElection(OWNER, 'e1', { name: '   ' });
 
     await expect(update).rejects.toMatchObject({ code: 'INVALID_ELECTION_NAME' });
+  });
+
+  it('saves nothing when the name is blank', async () => {
+    const { service, repository } = makeService();
+    const stored = anElectionRecord({ id: 'e1', adminId: OWNER });
+    await repository.create(stored);
+
+    await expect(service.updateElection(OWNER, 'e1', { name: '   ' })).rejects.toThrow();
+
     expect(await repository.get('e1')).toEqual(stored);
   });
 });
 
 describe('ElectionService.credentialVoters', () => {
-  it('credentials one voter per requested code and returns the codes', async () => {
+  it('returns the generated codes', async () => {
     const { service, repository } = makeService({ codes: ['AAAAAAAA', 'BBBBBBBB'] });
     await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER }));
 
     const { codes } = await service.credentialVoters(OWNER, 'e1', { count: 2 });
 
     expect(codes).toEqual(['AAAAAAAA', 'BBBBBBBB']);
+  });
+
+  it('credentials one voter per generated code', async () => {
+    const { service, repository } = makeService({ codes: ['AAAAAAAA', 'BBBBBBBB'] });
+    await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER }));
+
+    await service.credentialVoters(OWNER, 'e1', { count: 2 });
+
     expect((await repository.get('e1'))?.current.voters).toMatchObject([
       { code: 'AAAAAAAA', status: 'CREDENTIALED' },
       { code: 'BBBBBBBB', status: 'CREDENTIALED' },
@@ -527,14 +596,24 @@ describe('ElectionService.credentialVoters', () => {
     await expect(command).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
   });
 
-  it('rejects more labels than voters and saves nothing', async () => {
+  it('rejects more labels than voters with INVALID_VOTER_LABELS', async () => {
     const { service, repository } = makeService({ codes: ['AAAAAAAA'] });
-    const stored = anElectionRecord({ id: 'e1', adminId: OWNER });
-    await repository.create(stored);
+    await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER }));
 
     const command = service.credentialVoters(OWNER, 'e1', { count: 1, labels: ['A', 'B'] });
 
     await expect(command).rejects.toMatchObject({ code: 'INVALID_VOTER_LABELS' });
+  });
+
+  it('saves nothing when there are more labels than voters', async () => {
+    const { service, repository } = makeService({ codes: ['AAAAAAAA'] });
+    const stored = anElectionRecord({ id: 'e1', adminId: OWNER });
+    await repository.create(stored);
+
+    await expect(
+      service.credentialVoters(OWNER, 'e1', { count: 1, labels: ['A', 'B'] }),
+    ).rejects.toThrow();
+
     expect(await repository.get('e1')).toEqual(stored);
   });
 });
