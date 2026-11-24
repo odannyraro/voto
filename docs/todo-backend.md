@@ -83,8 +83,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/voter-routes.ts` → `registerVoterRoutes`: `POST .../voters` (gera códigos) e `DELETE .../voters/:vid` (revoga).
 - `apps/server/src/http/round-routes.ts` → `registerRoundRoutes`: `POST .../open`, `GET .../next`, `POST .../rounds`, `POST .../rounds/:rid/close`.
 - `apps/server/src/http/resolution-routes.ts` → `registerResolutionRoutes`: `POST .../positions/:pid/{runoff,defer,cancel}`, `.../rounds/:rid/{release,annul}`, `.../undo`, `.../finish`.
-- `apps/server/src/services/voter-service.ts` → `VoterService`: `startSession(code)` (token do eleitor) e `getState(voterId, electionId)` (aplica prazo vencido e devolve o `VoterStateDTO`).
-- `apps/server/src/http/voter-access-routes.ts` → `registerVoterAccessRoutes`: `POST /api/voter/session` (pública) e `GET /api/voter/state` (`requireVoter`).
+- `apps/server/src/services/voter-service.ts` → `VoterService`: `startSession(code)` (token do eleitor), `getState(voterId, electionId)` (aplica prazo vencido e devolve o `VoterStateDTO`) e `castVote(voterId, electionId, vote)`.
+- `apps/server/src/http/voter-access-routes.ts` → `registerVoterAccessRoutes`: `POST /api/voter/session` (pública), `GET /api/voter/state` e `POST /api/voter/votes` (`requireVoter`).
 - `apps/server/src/adapters/crypto-code-generator.ts` → `createCryptoCodeGenerator()`: gerador do domínio com `crypto.randomInt`.
 - `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
 - `apps/server/test/support/admin-test-app.ts` → `appWithTwoAdmins(overrides?)`: app de teste com os cabeçalhos `asAna`/`asBia` (ids `ANA`/`BIA`), fechado sozinho ao fim do teste (`onTestFinished`).
@@ -647,7 +647,7 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 - Testes: `voter-access-routes.test.ts`, 18 execuções (sessão 8: válido, minúsculas, inexistente, revogado, índice inconsistente, 3 formatos inválidos com `it.each`; estado 10: sem token, token de admin, eleição e eleitor sumidos, `WAITING`, `VOTING`, revogado, prazo vencido fechado e salvo, admin notificado, nada gravado sem prazo vencido). Servidor: 364 testes, ~99,8% linhas. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
 - Decisões: (1) revogado com token ainda válido → 403 `VOTER_REVOKED` também em `/voter/state`. (2) Token cuja eleição ou eleitor não existe mais → 401 `INVALID_TOKEN` (mesma lógica do `/admin/me`). (3) Índice de códigos apontando para eleição/eleitor inexistente → 404 `INVALID_CODE` (coberto com um repositório de teste que estende o em memória). (4) Arquivo e função se chamam `voter-access-routes` / `registerVoterAccessRoutes` para não colidir com `voter-routes.ts` (credenciamento do admin). (5) O exemplo `npx vitest run arquivo -w apps/server` do CLAUDE.md não funciona (`-w` é `--watch` no Vitest): rode de dentro do workspace (`cd apps/server && npx vitest run test/...`).
 
-### [ ] B13b — Registro de votos
+### [x] B13b — Registro de votos
 **Ref.:** architecture §5.4 (votação), §6.2, §8.3.
 **Fazer:**
 - `VoterService.castVote(voterId, electionId, roundId, choice)`: usa o mesmo fluxo da B7a, mas a autorização é do eleitor, não do dono. Chamada do domínio: `castVote(e, { roundId, voterId, choice }, ctx)`.
@@ -663,7 +663,12 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 - quando o domínio fecha a rodada (todos votaram), o agendamento é cancelado.
 
 **Commit sugerido:** `feat(server): registra votos com tolerância de prazo`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST /api/voter/votes` (`requireVoter`, corpo `{ roundId, choice }`, 204). O voto passa pelo mesmo salvar/reagendar/notificar dos comandos do admin: o admin recebe o progresso x/y, cada eleitor recebe o próprio estado (`VOTED` para quem votou) e, se foi o último apto, o agendamento é cancelado.
+- Arquivos: `apps/server/src/services/election-service.ts` (`castVote`; o fim do `commit` virou o privado `save`), `src/services/voter-service.ts` (`castVote`), `src/http/voter-access-routes.ts`, `test/http/voter-votes.test.ts`.
+- Como usar: `voters.castVote(voterId, electionId, { roundId, choice })` → `void`; `elections.castVote(...)` → `ElectionRecord | null` (`null` = eleição sumiu; o `VoterService` converte em 401 `INVALID_TOKEN`).
+- Testes: `voter-votes.test.ts`, 21 execuções (aceito, em branco, progresso do admin, estado de quem votou e dos demais, repetido 409, limite exato `deadline + 1s` aceito e `+1 ms` → 410, nada salvo no 410, agendamento cancelado/mantido, `INVALID_CHOICE`, `ROUND_NOT_FOUND`, eleitor de outra eleição, revogado 403, token órfão 401, `choice` ausente/em branco 400, sem token, token de admin, estado `VOTED`). Servidor: 385 testes, 99,37% statements / 98,51% branches. Mutações manuais conferidas: sem tolerância, tolerância dobrada e `closeRoundIfDue` antes do voto derrubam um ou dois testes cada.
+- Decisões: (1) o voto **não** aplica `closeRoundIfDue` antes: com ele, voto atrasado acharia a rodada fechada e daria 409 `ROUND_NOT_OPEN` em vez de 410. O domínio compara o prazo com `now - voteGraceMs`. Se o timer já fechou a rodada (depois de `deadline + grace`), o voto atrasado recebe 409 `ROUND_NOT_OPEN`. (2) Eleitor de outra eleição: o token fixa a eleição, então a rodada alheia não existe para ele e a resposta é **404 `ROUND_NOT_FOUND`** (não 403, como o TO-DO dizia); não vaza rodadas de outras eleições e nada muda na eleição alheia. `VOTER_NOT_ELIGIBLE` (credenciado depois da abertura) segue 409 pelo mapa da S0.4. (3) **Pendência para decidir:** seguindo o fluxo da B7a, cada voto empilha um snapshot. Com `HISTORY_LIMIT` = 50 e mais de 50 eleitores, os votos empurram para fora os snapshots do admin (o desfazer não alcança mais o estado anterior à rodada), e um `undo` logo após um voto desfaz só aquele voto. Se isso incomodar, a correção é não empilhar snapshot no voto (uma linha em `castVote`/`save`); não mudei por divergir do §8.2.
 
 ### [ ] B14 — Fechamento automático no prazo
 **Ref.:** architecture §8.3.

@@ -5,6 +5,7 @@ import {
   applyOrder,
   attachExistingCandidate,
   cancelPosition,
+  castVote,
   closeRound,
   closeRoundIfDue,
   createElection,
@@ -30,6 +31,7 @@ import {
   type AddCandidateInput,
   type AddPositionInput,
   type CreateElectionInput,
+  type CastVoteInput,
   type CredentialVotersInput,
   type DomainContext,
   type OpenRoundInput,
@@ -140,6 +142,36 @@ export class ElectionService {
   async settleDueRound(electionId: string): Promise<ElectionRecord | null> {
     const record = await this.deps.electionRepository.get(electionId);
     return record && this.settle(record);
+  }
+
+  /**
+   * Registra o voto de um eleitor. Segue o mesmo caminho de salvar e notificar dos comandos do
+   * admin, mas quem autoriza é o token do eleitor (não há dono a conferir) e o prazo ganha a
+   * tolerância `voteGraceMs`, que compensa a latência de rede.
+   *
+   * @param voterId - Eleitor autenticado (do token).
+   * @param electionId - Eleição do token.
+   * @param input - Rodada e escolha (id do candidato ou `BLANK`).
+   * @returns O registro salvo (já fechado, se este foi o último voto), ou `null` se a eleição
+   *   não existir mais.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
+   * @throws {DomainError} `ROUND_NOT_FOUND`, `ROUND_NOT_OPEN`, `ROUND_EXPIRED`,
+   *   `VOTER_NOT_ELIGIBLE`, `VOTER_REVOKED`, `VOTER_ALREADY_VOTED` ou `INVALID_CHOICE`.
+   */
+  async castVote(
+    voterId: string,
+    electionId: string,
+    input: Omit<CastVoteInput, 'voterId'>,
+  ): Promise<ElectionRecord | null> {
+    const record = await this.deps.electionRepository.get(electionId);
+    if (!record) return null;
+
+    const ctx = this.newContext();
+    // Sem `closeRoundIfDue` antes: com ele, um voto atrasado acharia a rodada já fechada e
+    // viraria `ROUND_NOT_OPEN` (409) em vez de `ROUND_EXPIRED` (410). O domínio compara o prazo.
+    const lenientNow = new Date(ctx.now.getTime() - this.deps.voteGraceMs);
+    const result = castVote(record.current, { ...input, voterId }, { ...ctx, now: lenientNow });
+    return this.save(record, result, ctx);
   }
 
   /**
@@ -605,7 +637,25 @@ export class ElectionService {
     const ctx = this.newContext();
 
     // Fechamento preguiçoso (§8.3): um prazo vencido vale mesmo se o timer se perdeu.
-    const result = command(closeRoundIfDue(record.current, ctx), ctx);
+    return this.save(record, command(closeRoundIfDue(record.current, ctx), ctx), ctx);
+  }
+
+  /**
+   * Grava o resultado de um comando: se o domínio recusou, lança o erro sem salvar nem notificar;
+   * se aceitou, incrementa a versão, empilha o snapshot e persiste.
+   *
+   * @param record - Registro lido do repositório, antes do comando.
+   * @param result - Resultado do comando sobre a eleição atual.
+   * @param ctx - Contexto do comando (o instante vira o `serverNow` das notificações).
+   * @returns O registro salvo, com a versão incrementada e o estado anterior no histórico.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
+   * @throws {DomainError} O erro de negócio de `result`, se houver.
+   */
+  private async save(
+    record: ElectionRecord,
+    result: Result<Election>,
+    ctx: DomainContext,
+  ): Promise<ElectionRecord> {
     if (!result.ok) throw result.error;
 
     const expectedVersion = record.current.version;

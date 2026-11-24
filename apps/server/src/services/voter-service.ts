@@ -1,4 +1,4 @@
-import type { Voter, VoterStateDTO } from '@voto/shared';
+import type { CastVoteBody, Voter, VoterStateDTO } from '@voto/shared';
 import { httpErrorFor } from '../http/errors';
 import type { Clock, ElectionRepository } from '../ports';
 import type { AuthService } from './auth';
@@ -8,7 +8,7 @@ import { toVoterStateDTO } from './presenters';
 /** Dependências do `VoterService`. */
 export interface VoterServiceDeps {
   readonly electionRepository: ElectionRepository;
-  /** Aplica o prazo vencido (salva e notifica) antes de montar o estado do eleitor. */
+  /** Aplica o prazo vencido e registra os votos (salva, reagenda e notifica). */
   readonly elections: ElectionService;
   /** Emite o token de sessão do eleitor. */
   readonly auth: AuthService;
@@ -23,7 +23,7 @@ export interface VoterSession {
   readonly electionName: string;
 }
 
-/** Casos de uso do eleitor: entrar com o código e consultar o que a tela dele mostra. */
+/** Casos de uso do eleitor: entrar com o código, consultar a tela dele e votar. */
 export class VoterService {
   /**
    * @param deps - Repositório, serviço de eleições, auth e relógio.
@@ -68,6 +68,23 @@ export class VoterService {
     assertNotRevoked(voter);
 
     return toVoterStateDTO(record.current, voterId, this.deps.clock.now());
+  }
+
+  /**
+   * Registra o voto do eleitor na rodada aberta. O voto é sigiloso: o domínio guarda quem votou
+   * separado de em quem votou. Se este era o último eleitor apto, a rodada fecha na hora.
+   *
+   * @param voterId - Eleitor autenticado (do token).
+   * @param electionId - Eleição do token.
+   * @param vote - Rodada e escolha (id do candidato ou `BLANK`).
+   * @throws {HttpError} 401 `INVALID_TOKEN` se a eleição não existe mais; 409 `VERSION_CONFLICT`.
+   * @throws {DomainError} `ROUND_NOT_FOUND` (inclusive rodada de outra eleição), `ROUND_NOT_OPEN`,
+   *   `ROUND_EXPIRED`, `VOTER_NOT_ELIGIBLE`, `VOTER_REVOKED`, `VOTER_ALREADY_VOTED` ou `INVALID_CHOICE`.
+   */
+  async castVote(voterId: string, electionId: string, vote: CastVoteBody): Promise<void> {
+    const record = await this.deps.elections.castVote(voterId, electionId, vote);
+    // Token ainda válido, mas a eleição sumiu: a sessão deixa de valer.
+    if (!record) throw httpErrorFor('INVALID_TOKEN', 'Voter session is no longer valid');
   }
 }
 
