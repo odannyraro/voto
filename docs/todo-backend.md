@@ -75,6 +75,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/test/support/election-records.ts` → `anElectionRecord(...)` e `unwrap(result)` para montar registros com o domínio real.
 - `apps/server/src/http/auth-plugin.ts` → `registerAuth(app, auth)` (`requireAdmin`, `requireVoter`, `request.auth`) e `getAdminId(request)`.
 - `apps/server/src/http/auth-routes.ts` → `registerAuthRoutes`: `POST /api/admin/login`, `GET /api/admin/me`.
+- `apps/server/src/services/election-service.ts` → `ElectionService`: fluxo único `execute` (§8.2) e comandos do admin (`addPosition`, `openRound`).
+- `apps/server/test/support/election-fixtures.ts` → `openElectionWithVoters(...)`: eleição aberta montada com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
 - `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
@@ -416,7 +418,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 > Todos os testes daqui em diante usam o **domínio real**. Doubles só nas fronteiras: `FakeClock`, `FakeScheduler`, `SpyNotifier`, `StubCodeGenerator` e repositório em memória (fake).
 
-### [ ] B7a — `ElectionService`: o fluxo padrão de comandos
+### [x] B7a — `ElectionService`: o fluxo padrão de comandos
 **Ref.:** architecture §8.2; `todo-domain.md` (A14: `closeRoundIfDue` devolve a mesma instância quando nada muda; A20: `History`).
 **Fazer:**
 - `test/support/election-fixtures.ts`: funções curtas que montam estados comuns **chamando os comandos públicos do domínio**, por exemplo `draftElectionWithPosition(...)` e `openElectionWithVoters(...)`. Os builders do domínio não são exportados, então isso substitui eles no servidor. Mantenha DAMP: os valores que importam ficam visíveis no teste.
@@ -444,7 +446,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** testes verdes; o fluxo está num único lugar.
 **Commit sugerido:** `feat(server): implementa fluxo padrão de comandos do ElectionService`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `ElectionService` com o fluxo único `execute` (privado): carrega (404), confere o dono (403), `closeRoundIfDue`, aplica o comando, lança o `DomainError`, incrementa `version`, `pushSnapshot` com `historyLimit`, salva com a versão lida, reagenda/cancela `round:<id>` em `deadline + voteGraceMs` e notifica o admin.
+- Arquivos: `apps/server/src/services/election-service.ts`, `test/services/election-service.test.ts`, `test/support/election-fixtures.ts`.
+- Como usar: `new ElectionService({ electionRepository, clock, scheduler, notifier, newId, voteGraceMs, historyLimit })` (a B8 monta no `buildApp` a partir de `AppDeps`/`config`). Comandos públicos já existentes: `addPosition(adminId, electionId, input)` e `openRound(adminId, electionId, input)`, ambos devolvem o `ElectionRecord` salvo. Novo comando = método público de 1 linha: `this.execute(adminId, id, (e, ctx) => dominio(e, input, ctx))`. Fixture: `openElectionWithVoters({ id, adminId?, positionIds, voterCodes? })` → eleição `OPEN`, cargo com título = id, um candidato `<cargo>-candidate` por cargo, eleitor padrão `VOTER1`.
+- Testes: `election-service.test.ts`, 13 (404, 403, erro do domínio propagado / nada salvo / ninguém notificado, versão incrementada, retorno, snapshot, limite do histórico, notificação, agendamento com horário exato, cancelamento, fechamento preguiçoso). Mutações manuais conferidas: sem `closeRoundIfDue` e ignorando `historyLimit`, um teste falha em cada. Servidor: 161 testes, 99,5% linhas / 100% branches.
+- Decisões: (1) `execute` é privado, então a B7a já expõe `addPosition` (B9) e `openRound` (B12a) no serviço, só para exercitar o fluxo pela API pública; essas tarefas só criam as rotas. (2) A tarefa agendada é um *placeholder* (`() => undefined` em `rescheduleClosing`): **a B14 troca por `handleDeadline`**. É a única função sem cobertura do servidor. (3) A notificação provisória já monta um `AdminElectionDTO` válido (`election`, `next` via `nextPositionStatus`, `canUndo`, `serverNow`); a B7b troca pelo apresentador e acrescenta `currentRound`, `lastResult` e os `voterState`. (4) O snapshot empilhado é o estado lido (antes do fechamento preguiçoso). (5) Se o comando falha, o fechamento preguiçoso também não é salvo (a próxima leitura refaz). (6) Comandos do admin usam `now = clock.now()` sem tolerância; a tolerância só entra no voto (B13b) e no horário do agendamento.
 
 ### [ ] B7b — Apresentadores: `AdminElectionDTO` e `VoterStateDTO`
 **Ref.:** architecture §6.3, §7.
@@ -557,7 +564,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `releaseResults(e, roundId)`, `deferPosition(e, positionId)`, `cancelPosition(e, positionId, confirmTitle)`, `annulRound(e, roundId)`, `finishElection(e)` e `undo(record)`. Confira as assinaturas exatas no `index.ts` do domínio.
 
-`undo` é especial: em vez de um comando do domínio sobre a eleição, aplica `undo` sobre o histórico do registro. Sem histórico → 409 `NOTHING_TO_UNDO`. O `undo` **não** empilha um novo snapshot.
+`undo` é especial: em vez de um comando do domínio sobre a eleição, aplica `undo` sobre o histórico do registro. Sem histórico → 409 `NOTHING_TO_UNDO`. O `undo` **não** empilha um novo snapshot. **Atenção à versão:** o estado restaurado tem uma `version` antiga. Antes de salvar, troque-a por `versão atual + 1` (e salve com a versão atual como esperada); senão a versão "volta no tempo" e um cliente com dados velhos poderia sobrescrever o estado sem `VERSION_CONFLICT`. Teste: depois de um `undo`, a versão salva é maior que a anterior.
 
 **Testes (escrever antes):**
 - `cancel` sem `confirmTitle` → 400;
