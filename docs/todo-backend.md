@@ -78,6 +78,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/services/election-service.ts` → `ElectionService`: fluxo único `execute`/`commit` (§8.2) e comandos do admin (`createElection`, `listElections`, `getElection`, `updateElection`, `addPosition`, `openRound`); notifica admin e eleitores via apresentadores.
 - `apps/server/src/http/election-routes.ts` → `registerElectionRoutes`: `GET/POST /api/elections`, `GET/PATCH /api/elections/:id`.
 - `apps/server/src/http/position-routes.ts` → `registerPositionRoutes`: `POST/PATCH/DELETE .../positions[/:pid]`, `PUT .../queue`, `GET .../queue/suggestion`.
+- `apps/server/src/http/candidate-routes.ts` → `registerCandidateRoutes`: `POST .../candidates`, `PATCH/DELETE .../candidates/:cid`, `POST .../positions/:pid/candidates/:cid`.
 - `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
 - `apps/server/test/support/election-fixtures.ts` → `openElectionWithVoters(...)`: eleição aberta montada com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
@@ -523,7 +524,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `position-routes.test.ts`, 21 execuções (criar 3, editar 2, remover 2, fila 3, sugestão 3, autenticação 8 com `it.each`). Servidor: 233 testes, 99,66% statements / 100% branches / 100% linhas. Domínio 223, shared 138, web 2. `lint`, `format:check` e `typecheck` verdes. Os testes de sugestão usam um cenário em que a ordem sugerida difere da atual (`[treasurer, mayor]` contra `[mayor, treasurer]`), então o teste falha se a rota devolver a fila armazenada.
 - Decisões: (1) `suggestQueueOrder` usa `loadOwned` direto, sem `closeRoundIfDue`: a sugestão só olha cargos pendentes e não grava. (2) Erros de domínio seguem o mapa da S0.4: `POSITION_NOT_FOUND` 404, `ELECTION_NOT_DRAFT`, `DUPLICATE_POSITION_TITLE` e `INVALID_QUEUE_ORDER` 409. (3) Nenhum schema novo: `createPositionBodySchema`, `updatePositionBodySchema` e `queueBodySchema` já existiam (S0.3b).
 
-### [ ] B10 — Rotas de candidatos
+### [x] B10 — Rotas de candidatos
 **Ref.:** architecture §6.1 (`candidates`, anexar candidato existente).
 **Fazer:** criar, editar e remover candidato; `POST /positions/:pid/candidates/:cid`.
 **Testes (escrever antes):**
@@ -533,7 +534,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - remover candidato inexistente → 404.
 
 **Commit sugerido:** `feat(server): adiciona rotas de candidatos`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST /api/elections/:id/candidates` (201), `PATCH` e `DELETE .../candidates/:cid` e `POST .../positions/:pid/candidates/:cid` (anexa candidato existente), todas com `requireAdmin` e devolvendo o `AdminElectionDTO`.
+- Arquivos: `apps/server/src/http/candidate-routes.ts`, `src/services/election-service.ts` (`addCandidate`, `updateCandidate`, `removeCandidate`, `attachCandidate`), `src/app.ts`, `test/http/candidate-routes.test.ts`.
+- Como usar: `service.addCandidate(adminId, id, input)`, `updateCandidate(adminId, id, cid, input)`, `removeCandidate(adminId, id, cid)`, `attachCandidate(adminId, id, pid, cid)`; todos devolvem `ElectionRecord`. A B16b usa o `attachCandidate` no cenário de candidatos insuficientes.
+- Testes: `candidate-routes.test.ts`, 19 execuções (criar 3, editar 3, remover 2, anexar 3, autenticação 8 com `it.each`). Servidor: 252 testes, 100% linhas / 100% branches. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
+- Decisões: (1) o cenário de candidato eleito (`CANDIDATE_ALREADY_ELECTED`) é montado no próprio teste com `openRound` + `castVote` do domínio real (um eleitor só: o voto fecha a rodada e decide o cargo). (2) Nenhum schema novo: `createCandidateBodySchema` e `updateCandidateBodySchema` já existiam (S0.3b). (3) Erros de domínio seguem o mapa da S0.4: `CANDIDATE_NOT_FOUND`/`POSITION_NOT_FOUND` 404; `CANDIDATE_ALREADY_ELECTED` 409.
 
 ### [ ] B11 — Credenciamento de eleitores e gerador de códigos
 **Ref.:** architecture §5.5 (formato do código), §6.1 (`voters`).

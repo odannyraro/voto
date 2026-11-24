@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { Config } from './config';
 import { registerAuth } from './http/auth-plugin';
 import { registerAuthRoutes } from './http/auth-routes';
+import { registerCandidateRoutes } from './http/candidate-routes';
 import { registerElectionRoutes } from './http/election-routes';
 import { registerErrorHandling } from './http/error-handler';
 import { registerPositionRoutes } from './http/position-routes';
@@ -64,6 +65,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   });
   registerElectionRoutes(app, { service: elections, clock: deps.clock, hooks });
   registerPositionRoutes(app, { service: elections, clock: deps.clock, hooks });
+  registerCandidateRoutes(app, { service: elections, clock: deps.clock, hooks });
 
   return app;
 }

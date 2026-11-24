@@ -1,21 +1,27 @@
 import {
+  addCandidate,
   addPosition,
   applyOrder,
+  attachExistingCandidate,
   closeRoundIfDue,
   createElection,
   createHistory,
   ok,
   openRound,
+  removeCandidate,
   removePosition,
   suggestOrder,
+  updateCandidate,
   updateElection,
   updatePosition,
   pushSnapshot,
+  type AddCandidateInput,
   type AddPositionInput,
   type CreateElectionInput,
   type DomainContext,
   type OpenRoundInput,
   type Result,
+  type UpdateCandidateInput,
   type UpdateElectionInput,
   type UpdatePositionInput,
 } from '@voto/domain';
@@ -210,6 +216,88 @@ export class ElectionService {
   async suggestQueueOrder(adminId: string, electionId: string): Promise<string[]> {
     const record = await this.loadOwned(adminId, electionId);
     return suggestOrder(record.current);
+  }
+
+  /**
+   * Cadastra um candidato. Também vale com a eleição aberta, para o admin resolver um cargo
+   * que ficou sem concorrentes.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param input - Dados pessoais e cargos a que o candidato concorre.
+   * @returns O registro salvo, com o candidato novo.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} Se o domínio recusar (ex.: `POSITION_NOT_FOUND`, `INVALID_FIRST_CHOICE`).
+   */
+  async addCandidate(
+    adminId: string,
+    electionId: string,
+    input: AddCandidateInput,
+  ): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election, ctx) => addCandidate(election, input, ctx));
+  }
+
+  /**
+   * Edita os dados de um candidato que ainda não foi eleito.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param candidateId - Candidato a editar.
+   * @param input - Campos a alterar; os omitidos ficam como estão.
+   * @returns O registro salvo, com o candidato alterado.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} Se o domínio recusar (ex.: `CANDIDATE_NOT_FOUND`, `CANDIDATE_ALREADY_ELECTED`).
+   */
+  async updateCandidate(
+    adminId: string,
+    electionId: string,
+    candidateId: string,
+    input: UpdateCandidateInput,
+  ): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) =>
+      updateCandidate(election, candidateId, input),
+    );
+  }
+
+  /**
+   * Remove um candidato que não foi eleito e não está na cédula da rodada aberta.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param candidateId - Candidato a remover.
+   * @returns O registro salvo, sem o candidato.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} Se o domínio recusar (ex.: `CANDIDATE_NOT_FOUND`, `CANDIDATE_ON_BALLOT`).
+   */
+  async removeCandidate(
+    adminId: string,
+    electionId: string,
+    candidateId: string,
+  ): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => removeCandidate(election, candidateId));
+  }
+
+  /**
+   * Inscreve um candidato já existente em mais um cargo ainda não votado (usado quando o
+   * cargo do topo da fila tem candidatos insuficientes).
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param positionId - Cargo que recebe o candidato.
+   * @param candidateId - Candidato a anexar.
+   * @returns O registro salvo, com o cargo em `applications` do candidato.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} Se o domínio recusar (ex.: `POSITION_NOT_FOUND`, `CANDIDATE_ALREADY_ELECTED`).
+   */
+  async attachCandidate(
+    adminId: string,
+    electionId: string,
+    positionId: string,
+    candidateId: string,
+  ): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) =>
+      attachExistingCandidate(election, positionId, candidateId),
+    );
   }
 
   /**
