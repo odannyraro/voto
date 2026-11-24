@@ -47,6 +47,7 @@ import type {
   CodeGenerator,
   ElectionRecord,
   ElectionRepository,
+  Logger,
   Notifier,
   Scheduler,
 } from '../ports';
@@ -58,6 +59,8 @@ export interface ElectionServiceDeps {
   readonly clock: Clock;
   readonly scheduler: Scheduler;
   readonly notifier: Notifier;
+  /** Onde registrar falhas que não podem derrubar o processo (ex.: o fechamento por timer). */
+  readonly logger: Logger;
   /** Fonte dos códigos de eleitor (a unicidade global é conferida pelo serviço). */
   readonly codeGenerator: CodeGenerator;
   /** Gera ids novos de entidades criadas pelos comandos. */
@@ -142,6 +145,22 @@ export class ElectionService {
   async settleDueRound(electionId: string): Promise<ElectionRecord | null> {
     const record = await this.deps.electionRepository.get(electionId);
     return record && this.settle(record);
+  }
+
+  /**
+   * Callback do agendador: fecha a rodada cujo prazo venceu, salvando e notificando só se algo
+   * mudou. Roda dentro de um timer, sem ninguém para receber o erro, então qualquer falha vai
+   * para o log em vez de derrubar o processo. A rodada que ficar aberta por causa da falha
+   * ainda é fechada na próxima leitura ou escrita (fechamento preguiçoso, §8.3).
+   *
+   * @param electionId - Eleição cujo prazo foi agendado.
+   */
+  async handleDeadline(electionId: string): Promise<void> {
+    try {
+      await this.settleDueRound(electionId);
+    } catch (err) {
+      this.deps.logger.error({ electionId, err }, 'Failed to close the round at its deadline');
+    }
   }
 
   /**
@@ -747,8 +766,7 @@ export class ElectionService {
       return;
     }
     const closesAt = new Date(Date.parse(open.deadline) + this.deps.voteGraceMs);
-    // Placeholder: a B14 troca por `handleDeadline`, que fecha a rodada vencida.
-    this.deps.scheduler.schedule(closesAt, key, () => undefined);
+    this.deps.scheduler.schedule(closesAt, key, () => this.handleDeadline(election.id));
   }
 
   /**

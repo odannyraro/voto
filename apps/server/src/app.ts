@@ -66,6 +66,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     clock: deps.clock,
     scheduler: deps.scheduler,
     notifier: deps.notifier,
+    logger: app.log,
     codeGenerator: deps.codeGenerator,
     newId: deps.newId,
     voteGraceMs: deps.config.voteGraceMs,

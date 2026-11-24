@@ -62,8 +62,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/web/test/setup.ts` → setup do Testing Library (`jest-dom` + `cleanup`).
 - `apps/server/src/config.ts` → `loadConfig(env)`: valida o ambiente com Zod e devolve `Config` (único lugar que lê variáveis de ambiente).
 - `apps/server/src/http/error-status.ts` → `statusForErrorCode(code)`: código de erro → status HTTP (§6.3).
-- `apps/server/src/ports/` → portas da aplicação (só tipos): repositórios, `Clock`, `Scheduler`, `CodeGenerator`, `Notifier`; `index.ts` reexporta tudo.
-- `apps/server/test/doubles/` → `FakeClock`, `FakeScheduler`, `SpyNotifier`, `StubCodeGenerator` (cada um com teste próprio).
+- `apps/server/src/ports/` → portas da aplicação (só tipos): repositórios, `Clock`, `Scheduler`, `CodeGenerator`, `Notifier`, `Logger`; `index.ts` reexporta tudo.
+- `apps/server/test/doubles/` → `FakeClock`, `FakeScheduler`, `SpyNotifier`, `SpyLogger`, `StubCodeGenerator` (cada um com teste próprio).
 - `apps/server/src/adapters/` → `InMemoryElectionRepository` e `InMemoryAdminRepository` (cópias com `structuredClone`, índice de códigos de eleitor).
 - `apps/server/src/http/errors.ts` → `HttpError(status, code, message)`.
 - `apps/server/src/app.ts` → `AppDeps` e `buildApp(deps)` (Fastify sem `listen`; health e tratadores de erro).
@@ -85,6 +85,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/resolution-routes.ts` → `registerResolutionRoutes`: `POST .../positions/:pid/{runoff,defer,cancel}`, `.../rounds/:rid/{release,annul}`, `.../undo`, `.../finish`.
 - `apps/server/src/services/voter-service.ts` → `VoterService`: `startSession(code)` (token do eleitor), `getState(voterId, electionId)` (aplica prazo vencido e devolve o `VoterStateDTO`) e `castVote(voterId, electionId, vote)`.
 - `apps/server/src/http/voter-access-routes.ts` → `registerVoterAccessRoutes`: `POST /api/voter/session` (pública), `GET /api/voter/state` e `POST /api/voter/votes` (`requireVoter`).
+- `apps/server/src/adapters/timeout-scheduler.ts` → `TimeoutScheduler`: `Scheduler` com `setTimeout` (uma tarefa por chave, prazos longos em etapas, `cancelAll()`).
 - `apps/server/src/adapters/crypto-code-generator.ts` → `createCryptoCodeGenerator()`: gerador do domínio com `crypto.randomInt`.
 - `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
 - `apps/server/test/support/admin-test-app.ts` → `appWithTwoAdmins(overrides?)`: app de teste com os cabeçalhos `asAna`/`asBia` (ids `ANA`/`BIA`), fechado sozinho ao fim do teste (`onTestFinished`).
@@ -670,7 +671,7 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 - Testes: `voter-votes.test.ts`, 21 execuções (aceito, em branco, progresso do admin, estado de quem votou e dos demais, repetido 409, limite exato `deadline + 1s` aceito e `+1 ms` → 410, nada salvo no 410, agendamento cancelado/mantido, `INVALID_CHOICE`, `ROUND_NOT_FOUND`, eleitor de outra eleição, revogado 403, token órfão 401, `choice` ausente/em branco 400, sem token, token de admin, estado `VOTED`). Servidor: 385 testes, 99,37% statements / 98,51% branches. Mutações manuais conferidas: sem tolerância, tolerância dobrada e `closeRoundIfDue` antes do voto derrubam um ou dois testes cada.
 - Decisões: (1) o voto **não** aplica `closeRoundIfDue` antes: com ele, voto atrasado acharia a rodada fechada e daria 409 `ROUND_NOT_OPEN` em vez de 410. O domínio compara o prazo com `now - voteGraceMs`. Se o timer já fechou a rodada (depois de `deadline + grace`), o voto atrasado recebe 409 `ROUND_NOT_OPEN`. (2) Eleitor de outra eleição: o token fixa a eleição, então a rodada alheia não existe para ele e a resposta é **404 `ROUND_NOT_FOUND`** (não 403, como o TO-DO dizia); não vaza rodadas de outras eleições e nada muda na eleição alheia. `VOTER_NOT_ELIGIBLE` (credenciado depois da abertura) segue 409 pelo mapa da S0.4. (3) **Pendência para decidir:** seguindo o fluxo da B7a, cada voto empilha um snapshot. Com `HISTORY_LIMIT` = 50 e mais de 50 eleitores, os votos empurram para fora os snapshots do admin (o desfazer não alcança mais o estado anterior à rodada), e um `undo` logo após um voto desfaz só aquele voto. Se isso incomodar, a correção é não empilhar snapshot no voto (uma linha em `castVote`/`save`); não mudei por divergir do §8.2.
 
-### [ ] B14 — Fechamento automático no prazo
+### [x] B14 — Fechamento automático no prazo
 **Ref.:** architecture §8.3.
 **Fazer:**
 - `adapters/timeout-scheduler.ts`: implementa `Scheduler` com `setTimeout`. Limita o atraso a 2³¹−1 ms, aceita atraso negativo (dispara logo), reagendar a mesma chave substitui a tarefa anterior e expõe `cancelAll()` para o desligamento.
@@ -681,7 +682,12 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 - `handleDeadline` com `FakeClock` + domínio real: fecha e notifica quando o prazo venceu; não salva quando nada mudou (`closeRoundIfDue` devolve a mesma instância, compare com `===`).
 
 **Commit sugerido:** `feat(server): fecha rodadas automaticamente ao fim do prazo`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `TimeoutScheduler` (porta `Scheduler` com `setTimeout`) e `ElectionService.handleDeadline`, que o agendamento de `round:<id>` agora chama no lugar do placeholder. Abrir a rodada já agenda o fechamento real; o fechamento por timer salva, reagenda (cancela) e notifica como qualquer comando.
+- Arquivos: `apps/server/src/adapters/timeout-scheduler.ts`, `src/ports/logger.ts` (porta `Logger`, nova), `src/services/election-service.ts` (`handleDeadline`, dep `logger`), `src/app.ts` (passa `app.log` como `logger`), `test/adapters/timeout-scheduler.test.ts`, `test/doubles/spy-logger.ts` (+ teste), `test/services/election-service.test.ts`.
+- Como usar: `new TimeoutScheduler()` em `AppDeps.scheduler` na B18, com `cancelAll()` no encerramento (`SIGTERM`/`SIGINT`). `ElectionServiceDeps.logger` é obrigatório (`Logger.error(context, message)`; o logger do Fastify serve). A B18 chama `service.handleDeadline(id)` direto, ou só `schedule`, ao reagendar as rodadas abertas depois de um reinício.
+- Testes: `timeout-scheduler.test.ts` 15 (disparo no instante e 1 ms antes, passado dispara logo, uma vez só, substituir chave, chaves independentes, reagendar a própria chave, atraso > 2³¹−1 ms em etapas, cancelar inclusive em etapas, `cancelAll`), `handleDeadline` 9 em `election-service.test.ts` (fecha, notifica admin e eleitores, cancela o agendamento, nada salvo/notificado sem prazo vencido, eleição inexistente, tarefa agendada pela abertura fecha a rodada, falha vai ao log sem rejeitar), `spy-logger.test.ts` 2. Servidor: 411 testes, 99,6% statements / 98,5% branches / 100% linhas.
+- Decisões: (1) `handleDeadline` reaproveita `settleDueRound` (mesmo caminho do `getElection`), então não há lógica de fechamento duplicada. (2) Falha vira `logger.error({ electionId, err })`; a rodada não fecha pelo timer, mas fecha na próxima leitura/escrita (§8.3). Se a falha for `VERSION_CONFLICT`, a escrita vencedora já reagendou a chave. (3) Nova porta `Logger` (a B14 pedia log, e o serviço não conhecia logger); o Fastify a satisfaz. (4) `TimeoutScheduler` lê `Date.now()` (é a fronteira com o tempo real; as regras usam `Clock`) e cumpre prazos acima de 2³¹−1 ms rearmando em etapas. A tarefa agendada não pode lançar (documentado na classe). (5) Mutações manuais: sem `cancel` ao reagendar e sem rearmar são detectadas; remover o `timers.delete` no disparo (vazamento de memória) e o `Math.min` (laço de timers de 1 ms) sobrevivem porque não mudam o comportamento observável.
 
 ### [ ] B15 — Tempo real com Socket.IO
 **Ref.:** architecture §7.
