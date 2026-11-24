@@ -1,11 +1,15 @@
 import {
   addPosition,
+  applyOrder,
   closeRoundIfDue,
   createElection,
   createHistory,
   ok,
   openRound,
+  removePosition,
+  suggestOrder,
   updateElection,
+  updatePosition,
   pushSnapshot,
   type AddPositionInput,
   type CreateElectionInput,
@@ -13,6 +17,7 @@ import {
   type OpenRoundInput,
   type Result,
   type UpdateElectionInput,
+  type UpdatePositionInput,
 } from '@voto/domain';
 import type { Election, ElectionSummaryDTO } from '@voto/shared';
 import { httpErrorFor } from '../http/errors';
@@ -133,6 +138,78 @@ export class ElectionService {
     input: AddPositionInput,
   ): Promise<ElectionRecord> {
     return this.execute(adminId, electionId, (election, ctx) => addPosition(election, input, ctx));
+  }
+
+  /**
+   * Edita título ou regra de desempate de um cargo que ainda não foi votado.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param positionId - Cargo a editar.
+   * @param input - Campos a alterar; os omitidos ficam como estão.
+   * @returns O registro salvo, com o cargo alterado.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} Se o domínio recusar (ex.: `POSITION_NOT_FOUND`, `POSITION_NOT_PENDING`).
+   */
+  async updatePosition(
+    adminId: string,
+    electionId: string,
+    positionId: string,
+    input: UpdatePositionInput,
+  ): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) =>
+      updatePosition(election, positionId, input),
+    );
+  }
+
+  /**
+   * Remove um cargo da eleição e da fila (só em rascunho e sem candidatos).
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param positionId - Cargo a remover.
+   * @returns O registro salvo, sem o cargo.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} Se o domínio recusar (ex.: `ELECTION_NOT_DRAFT`, `POSITION_HAS_CANDIDATES`).
+   */
+  async removePosition(
+    adminId: string,
+    electionId: string,
+    positionId: string,
+  ): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => removePosition(election, positionId));
+  }
+
+  /**
+   * Aplica a ordem de votação escolhida pelo admin para os cargos da fila.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param positionIds - Os mesmos cargos da fila atual, na nova ordem.
+   * @returns O registro salvo, com a fila nova.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ELECTION_FINISHED` ou `INVALID_QUEUE_ORDER`.
+   */
+  async applyQueueOrder(
+    adminId: string,
+    electionId: string,
+    positionIds: readonly string[],
+  ): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => applyOrder(election, positionIds));
+  }
+
+  /**
+   * Sugere uma ordem de votação. Só leitura: não salva, não agenda nem notifica; a sugestão
+   * só vira fila quando o admin a confirma com `applyQueueOrder`.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @returns Os ids dos cargos da fila na ordem sugerida.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   */
+  async suggestQueueOrder(adminId: string, electionId: string): Promise<string[]> {
+    const record = await this.loadOwned(adminId, electionId);
+    return suggestOrder(record.current);
   }
 
   /**

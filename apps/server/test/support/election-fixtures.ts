@@ -15,6 +15,37 @@ export interface OpenElectionOptions {
   readonly voterCodes?: readonly string[];
 }
 
+/** Opções de `draftElectionWithPositions`. */
+export interface DraftElectionOptions {
+  readonly id: string;
+  readonly adminId?: string;
+  /** Ids dos cargos, na ordem da fila; o título de cada cargo é o próprio id. */
+  readonly positionIds: readonly string[];
+}
+
+/**
+ * Monta, com o domínio real, uma eleição em rascunho só com cargos (sem candidatos nem eleitores).
+ *
+ * @param options - Id, dono e cargos desejados.
+ * @returns Um registro sem histórico, com a eleição em `DRAFT` e versão 0.
+ */
+export function draftElectionWithPositions(options: DraftElectionOptions): ElectionRecord {
+  const { id, adminId, positionIds } = options;
+  const draft = anElectionRecord({ id, adminId }).current;
+  const withPositions = positionIds.reduce(
+    (election, positionId) =>
+      unwrap(
+        addPosition(
+          election,
+          { title: positionId, tiebreak: 'YOUNGEST' },
+          contextWithId(positionId),
+        ),
+      ),
+    draft,
+  );
+  return { current: withPositions, past: [] };
+}
+
 /**
  * Monta, com o domínio real, uma eleição já aberta e pronta para abrir rodadas: cada
  * cargo tem um candidato (id `<cargo>-candidate`) e há eleitores credenciados.

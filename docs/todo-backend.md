@@ -77,6 +77,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/auth-routes.ts` → `registerAuthRoutes`: `POST /api/admin/login`, `GET /api/admin/me`.
 - `apps/server/src/services/election-service.ts` → `ElectionService`: fluxo único `execute`/`commit` (§8.2) e comandos do admin (`createElection`, `listElections`, `getElection`, `updateElection`, `addPosition`, `openRound`); notifica admin e eleitores via apresentadores.
 - `apps/server/src/http/election-routes.ts` → `registerElectionRoutes`: `GET/POST /api/elections`, `GET/PATCH /api/elections/:id`.
+- `apps/server/src/http/position-routes.ts` → `registerPositionRoutes`: `POST/PATCH/DELETE .../positions[/:pid]`, `PUT .../queue`, `GET .../queue/suggestion`.
 - `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
 - `apps/server/test/support/election-fixtures.ts` → `openElectionWithVoters(...)`: eleição aberta montada com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
@@ -505,7 +506,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `election-routes.test.ts` 16 (criar 3, listar 1, ler 3, editar 4, autenticação 5 com `it.each`) e +14 em `election-service.test.ts` (criar 4, listar 2, ler 5, editar 3). Servidor: 212 testes, 99,6% statements / 100% branches / 100% linhas. Domínio 223, shared 138, web 2. `lint`, `format:check` e `typecheck` verdes.
 - Decisões: (1) `getElection` só grava se o prazo venceu (`closeRoundIfDue` devolve outra instância); nesse caso reaproveita `commit` com um comando identidade, então ganha versão nova, snapshot, reagendamento e notificação. Sem prazo vencido, não grava nem notifica. (2) `createElection` não passa por `execute`: nada a carregar; salva com versão 0 e notifica o admin. (3) `POST /elections` responde 201 com o `AdminElectionDTO`; `GET /elections` devolve `ElectionSummaryDTO[]` direto (array, como na §6.1). (4) `serverNow` da resposta vem de `clock.now()` lido na rota, separado do `now` do comando (iguais no `FakeClock`).
 
-### [ ] B9 — Rotas de cargos e fila
+### [x] B9 — Rotas de cargos e fila
 **Ref.:** architecture §6.1 (`positions`, `queue`, `queue/suggestion`).
 **Fazer:** métodos no serviço e `http/position-routes.ts`: criar, editar e remover cargo; `PUT /queue` (aplica a ordem); `GET /queue/suggestion` (só leitura, chama `suggestOrder`, não salva).
 **Testes (escrever antes):**
@@ -515,7 +516,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - `suggestion` não salva nem notifica.
 
 **Commit sugerido:** `feat(server): adiciona rotas de cargos e ordem de votação`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST/PATCH/DELETE /api/elections/:id/positions[/:pid]`, `PUT /api/elections/:id/queue` e `GET /api/elections/:id/queue/suggestion`, todas com `requireAdmin`. A sugestão é só leitura (não salva, não agenda, não notifica).
+- Arquivos: `apps/server/src/http/position-routes.ts`, `src/services/election-service.ts` (`updatePosition`, `removePosition`, `applyQueueOrder`, `suggestQueueOrder`), `src/app.ts`, `src/http/election-routes.ts` (exporta `ElectionParams`), `test/http/position-routes.test.ts`, `test/support/election-fixtures.ts` (`draftElectionWithPositions`).
+- Como usar: `service.updatePosition(adminId, id, pid, input)`, `removePosition(adminId, id, pid)`, `applyQueueOrder(adminId, id, positionIds)` (os três devolvem `ElectionRecord`) e `suggestQueueOrder(adminId, id)` → `string[]`. `addPosition` já existia (B7a). Fixture: `draftElectionWithPositions({ id, adminId?, positionIds })` → rascunho só com cargos (título = id), que a B10 pode reaproveitar.
+- Testes: `position-routes.test.ts`, 21 execuções (criar 3, editar 2, remover 2, fila 3, sugestão 3, autenticação 8 com `it.each`). Servidor: 233 testes, 99,66% statements / 100% branches / 100% linhas. Domínio 223, shared 138, web 2. `lint`, `format:check` e `typecheck` verdes. Os testes de sugestão usam um cenário em que a ordem sugerida difere da atual (`[treasurer, mayor]` contra `[mayor, treasurer]`), então o teste falha se a rota devolver a fila armazenada.
+- Decisões: (1) `suggestQueueOrder` usa `loadOwned` direto, sem `closeRoundIfDue`: a sugestão só olha cargos pendentes e não grava. (2) Erros de domínio seguem o mapa da S0.4: `POSITION_NOT_FOUND` 404, `ELECTION_NOT_DRAFT`, `DUPLICATE_POSITION_TITLE` e `INVALID_QUEUE_ORDER` 409. (3) Nenhum schema novo: `createPositionBodySchema`, `updatePositionBodySchema` e `queueBodySchema` já existiam (S0.3b).
 
 ### [ ] B10 — Rotas de candidatos
 **Ref.:** architecture §6.1 (`candidates`, anexar candidato existente).

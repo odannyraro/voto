@@ -15,7 +15,7 @@ interface ElectionRoutesDeps {
 }
 
 /** Parâmetros de rota `/elections/:id`. */
-interface ElectionParams {
+export interface ElectionParams {
   readonly id: string;
 }
 
