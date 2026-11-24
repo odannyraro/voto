@@ -75,8 +75,9 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/test/support/election-records.ts` → `anElectionRecord(...)` e `unwrap(result)` para montar registros com o domínio real.
 - `apps/server/src/http/auth-plugin.ts` → `registerAuth(app, auth)` (`requireAdmin`, `requireVoter`, `request.auth`) e `getAdminId(request)`.
 - `apps/server/src/http/auth-routes.ts` → `registerAuthRoutes`: `POST /api/admin/login`, `GET /api/admin/me`.
-- `apps/server/src/services/election-service.ts` → `ElectionService`: fluxo único `execute` (§8.2) e comandos do admin (`addPosition`, `openRound`); notifica admin e eleitores via apresentadores.
-- `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)` e `toVoterStateDTO(election, voterId, now)`.
+- `apps/server/src/services/election-service.ts` → `ElectionService`: fluxo único `execute`/`commit` (§8.2) e comandos do admin (`createElection`, `listElections`, `getElection`, `updateElection`, `addPosition`, `openRound`); notifica admin e eleitores via apresentadores.
+- `apps/server/src/http/election-routes.ts` → `registerElectionRoutes`: `GET/POST /api/elections`, `GET/PATCH /api/elections/:id`.
+- `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
 - `apps/server/test/support/election-fixtures.ts` → `openElectionWithVoters(...)`: eleição aberta montada com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
@@ -482,7 +483,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `presenters.test.ts` 17 (relógio, `canUndo`, `next`, progresso x/y, cédula, sem tally parcial, `lastResult` com rodada fechada não liberada, fallback de ids, estado por eleitor, sigilo antes da liberação, `RESULTS` após liberar) e +4 em `election-service.test.ts` (DTO do admin, estado por eleitor, revogado ignorado, nada notificado em erro). Servidor: 182 testes, 99,56% statements / 100% branches / 100% linhas.
 - Decisões: (1) `toVoterStateDTO` recebe a `Election` (não o registro): o voto não usa histórico. (2) `currentRound` é montado no apresentador porque o domínio só exporta a cédula do eleitor (`voterView`), não a do admin. (3) Campos opcionais (`currentRound`, `lastResult`) são omitidos, não `undefined`. (4) Notificação por eleitor usa `voter.id` (globalmente único, ver "Decisões e desvios").
 
-### [ ] B8 — Rotas de eleição
+### [x] B8 — Rotas de eleição
 **Ref.:** architecture §6.1 (`/elections`, `/elections/:id`).
 **Fazer:**
 - `ElectionService`: `createElection` (sem carregar nada antes), `listElections(adminId)`, `getElection` (aplica `closeRoundIfDue` e, se mudar algo, salva e notifica) e `updateElection`.
@@ -497,7 +498,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - rotas sem token → 401.
 
 **Commit sugerido:** `feat(server): adiciona rotas de criação, listagem e edição de eleições`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `GET/POST /api/elections` e `GET/PATCH /api/elections/:id`, todas com `requireAdmin`. O `buildApp` agora monta o `ElectionService` a partir das deps/config.
+- Arquivos: `apps/server/src/http/election-routes.ts`, `src/services/election-service.ts` (`createElection`, `listElections`, `getElection`, `updateElection`; `execute` virou `loadOwned` + `commit`), `src/services/presenters.ts` (`toElectionSummaryDTO`), `src/app.ts`, `test/http/election-routes.test.ts`, `test/services/election-service.test.ts`.
+- Como usar: `service.createElection(adminId, { name, defaultVotingSeconds? })`, `listElections(adminId)` (→ `ElectionSummaryDTO[]`), `getElection(adminId, id)`, `updateElection(adminId, id, input)`; os três últimos devolvem `ElectionRecord`. Rotas novas seguem o molde de `election-routes.ts`: `parse(schema, body)`, `service.<comando>(getAdminId(request), ...)` e `toAdminElectionDTO(record, clock.now())`. Comando novo no serviço = `this.execute(adminId, id, (e, ctx) => dominio(e, input, ctx))`.
+- Testes: `election-routes.test.ts` 16 (criar 3, listar 1, ler 3, editar 4, autenticação 5 com `it.each`) e +14 em `election-service.test.ts` (criar 4, listar 2, ler 5, editar 3). Servidor: 212 testes, 99,6% statements / 100% branches / 100% linhas. Domínio 223, shared 138, web 2. `lint`, `format:check` e `typecheck` verdes.
+- Decisões: (1) `getElection` só grava se o prazo venceu (`closeRoundIfDue` devolve outra instância); nesse caso reaproveita `commit` com um comando identidade, então ganha versão nova, snapshot, reagendamento e notificação. Sem prazo vencido, não grava nem notifica. (2) `createElection` não passa por `execute`: nada a carregar; salva com versão 0 e notifica o admin. (3) `POST /elections` responde 201 com o `AdminElectionDTO`; `GET /elections` devolve `ElectionSummaryDTO[]` direto (array, como na §6.1). (4) `serverNow` da resposta vem de `clock.now()` lido na rota, separado do `now` do comando (iguais no `FakeClock`).
 
 ### [ ] B9 — Rotas de cargos e fila
 **Ref.:** architecture §6.1 (`positions`, `queue`, `queue/suggestion`).

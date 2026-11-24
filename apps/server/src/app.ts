@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { Config } from './config';
 import { registerAuth } from './http/auth-plugin';
 import { registerAuthRoutes } from './http/auth-routes';
+import { registerElectionRoutes } from './http/election-routes';
 import { registerErrorHandling } from './http/error-handler';
 import type {
   AdminRepository,
@@ -12,6 +13,7 @@ import type {
   Scheduler,
 } from './ports';
 import { AuthService } from './services/auth';
+import { ElectionService } from './services/election-service';
 
 /** Tudo o que o app precisa de fora: configuração e portas (architecture.md §8.1). */
 export interface AppDeps {
@@ -31,7 +33,7 @@ export interface AppDeps {
  * O domínio não entra nas deps: é puro e determinístico, então é importado direto.
  *
  * @param deps - Configuração e portas da aplicação.
- * @returns A instância Fastify com health check, tratamento de erros e rotas de login do admin.
+ * @returns A instância Fastify com health check, tratamento de erros, login do admin e rotas de eleição.
  */
 export function buildApp(deps: AppDeps): FastifyInstance {
   // Silencia o log nos testes; em dev e produção o Fastify loga requisições e erros.
@@ -49,6 +51,17 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.get('/api/health', () => ({ status: 'ok' }));
   registerAuthRoutes(app, { auth, adminRepository: deps.adminRepository, hooks });
+
+  const elections = new ElectionService({
+    electionRepository: deps.electionRepository,
+    clock: deps.clock,
+    scheduler: deps.scheduler,
+    notifier: deps.notifier,
+    newId: deps.newId,
+    voteGraceMs: deps.config.voteGraceMs,
+    historyLimit: deps.config.historyLimit,
+  });
+  registerElectionRoutes(app, { service: elections, clock: deps.clock, hooks });
 
   return app;
 }

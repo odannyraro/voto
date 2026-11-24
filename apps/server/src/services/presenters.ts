@@ -1,6 +1,28 @@
 import { canUndo, lastResultView, nextPositionStatus, voterView } from '@voto/domain';
-import type { AdminElectionDTO, Election, Round, VoterStateDTO } from '@voto/shared';
+import type {
+  AdminElectionDTO,
+  Election,
+  ElectionSummaryDTO,
+  Round,
+  VoterStateDTO,
+} from '@voto/shared';
 import type { ElectionRecord } from '../ports';
+
+/**
+ * Resume uma eleição para a lista do admin: identificação, situação e tamanhos.
+ *
+ * @param election - Eleição atual.
+ * @returns O DTO da linha da lista.
+ */
+export function toElectionSummaryDTO(election: Election): ElectionSummaryDTO {
+  return {
+    id: election.id,
+    name: election.name,
+    status: election.status,
+    positionCount: election.positions.length,
+    voterCount: election.voters.length,
+  };
+}
 
 /**
  * Monta o estado completo do painel do admin: a eleição, a rodada em andamento com o

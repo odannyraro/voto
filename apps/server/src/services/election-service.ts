@@ -1,17 +1,23 @@
 import {
   addPosition,
   closeRoundIfDue,
+  createElection,
+  createHistory,
+  ok,
   openRound,
+  updateElection,
   pushSnapshot,
   type AddPositionInput,
+  type CreateElectionInput,
   type DomainContext,
   type OpenRoundInput,
   type Result,
+  type UpdateElectionInput,
 } from '@voto/domain';
-import type { Election } from '@voto/shared';
+import type { Election, ElectionSummaryDTO } from '@voto/shared';
 import { httpErrorFor } from '../http/errors';
 import type { Clock, ElectionRecord, ElectionRepository, Notifier, Scheduler } from '../ports';
-import { toAdminElectionDTO, toVoterStateDTO } from './presenters';
+import { toAdminElectionDTO, toElectionSummaryDTO, toVoterStateDTO } from './presenters';
 
 /** Dependências do `ElectionService`: portas e os ajustes da configuração que ele usa. */
 export interface ElectionServiceDeps {
@@ -42,6 +48,74 @@ export class ElectionService {
    * @param deps - Portas e configuração do serviço.
    */
   constructor(private readonly deps: ElectionServiceDeps) {}
+
+  /**
+   * Cria uma eleição em rascunho para o admin. Não há nada a carregar antes, então não
+   * passa pelo fluxo `execute`.
+   *
+   * @param adminId - Admin autenticado; passa a ser o dono da eleição.
+   * @param input - Nome e prazo padrão opcional das rodadas.
+   * @returns O registro salvo (versão 0, sem histórico).
+   * @throws {DomainError} `INVALID_ELECTION_NAME` ou `INVALID_VOTING_DURATION`.
+   */
+  async createElection(
+    adminId: string,
+    input: Omit<CreateElectionInput, 'adminId'>,
+  ): Promise<ElectionRecord> {
+    const ctx = this.newContext();
+    const result = createElection({ ...input, adminId }, ctx);
+    if (!result.ok) throw result.error;
+
+    const record = createHistory(result.value);
+    await this.deps.electionRepository.create(record);
+    this.notifyAll(record, ctx.now);
+    return record;
+  }
+
+  /**
+   * Lista as eleições do admin, em formato resumido, para a tela inicial dele.
+   *
+   * @param adminId - Admin autenticado; só as eleições dele aparecem.
+   * @returns Um resumo por eleição (vazio se ele ainda não criou nenhuma).
+   */
+  async listElections(adminId: string): Promise<ElectionSummaryDTO[]> {
+    const records = await this.deps.electionRepository.listByAdmin(adminId);
+    return records.map((record) => toElectionSummaryDTO(record.current));
+  }
+
+  /**
+   * Lê a eleição para o painel. Se havia um prazo vencido que o timer não fechou (ex.:
+   * reinício do servidor), fecha a rodada, salva e notifica; senão não grava nada.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @returns O registro atual, já com o prazo vencido aplicado.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   */
+  async getElection(adminId: string, electionId: string): Promise<ElectionRecord> {
+    const record = await this.loadOwned(adminId, electionId);
+    // `closeRoundIfDue` devolve a mesma instância quando nada vence: aí não há o que gravar.
+    if (closeRoundIfDue(record.current, this.newContext()) === record.current) return record;
+    return this.commit(record, (election) => ok(election));
+  }
+
+  /**
+   * Edita o nome e o prazo padrão da eleição.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param input - Campos a alterar; os omitidos ficam como estão.
+   * @returns O registro salvo.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ELECTION_FINISHED`, `INVALID_ELECTION_NAME` ou `INVALID_VOTING_DURATION`.
+   */
+  async updateElection(
+    adminId: string,
+    electionId: string,
+    input: UpdateElectionInput,
+  ): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => updateElection(election, input));
+  }
 
   /**
    * Cria um cargo no fim da fila de votação.
@@ -80,8 +154,7 @@ export class ElectionService {
   }
 
   /**
-   * Fluxo único de todo comando do admin (§8.2). Se o domínio recusar, nada é salvo nem
-   * notificado.
+   * Fluxo único de todo comando do admin (§8.2): carrega, autoriza e aplica o comando.
    *
    * @param adminId - Admin autenticado.
    * @param electionId - Eleição alvo.
@@ -95,8 +168,21 @@ export class ElectionService {
     electionId: string,
     command: ElectionCommand,
   ): Promise<ElectionRecord> {
-    const record = await this.loadOwned(adminId, electionId);
-    const ctx: DomainContext = { now: this.deps.clock.now(), newId: this.deps.newId };
+    return this.commit(await this.loadOwned(adminId, electionId), command);
+  }
+
+  /**
+   * Aplica um comando a um registro já carregado e autorizado. Se o domínio recusar, nada é
+   * salvo nem notificado.
+   *
+   * @param record - Registro lido do repositório.
+   * @param command - Comando do domínio a aplicar sobre a eleição atual.
+   * @returns O registro salvo, com a versão incrementada e o estado anterior no histórico.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
+   * @throws {DomainError} Erro de negócio devolvido pelo comando.
+   */
+  private async commit(record: ElectionRecord, command: ElectionCommand): Promise<ElectionRecord> {
+    const ctx = this.newContext();
 
     // Fechamento preguiçoso (§8.3): um prazo vencido vale mesmo se o timer se perdeu.
     const result = command(closeRoundIfDue(record.current, ctx), ctx);
@@ -113,6 +199,15 @@ export class ElectionService {
     this.rescheduleClosing(next.current);
     this.notifyAll(next, ctx.now);
     return next;
+  }
+
+  /**
+   * Monta o contexto do domínio para um comando: relógio e gerador de ids das deps.
+   *
+   * @returns O contexto com o instante atual.
+   */
+  private newContext(): DomainContext {
+    return { now: this.deps.clock.now(), newId: this.deps.newId };
   }
 
   /**

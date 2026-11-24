@@ -13,6 +13,7 @@ const VOTE_GRACE_MS = 1000;
 const HISTORY_LIMIT = 50;
 const OWNER = 'admin-1';
 const ONE_MINUTE_SECONDS = 60;
+const ONE_MINUTE_MS = 60_000;
 const ONE_MINUTE_AND_ONE_SECOND_MS = 61_000;
 
 /**
@@ -287,5 +288,173 @@ describe('ElectionService command flow', () => {
         { positionId: 'treasurer', status: 'OPEN' },
       ]);
     });
+  });
+});
+
+describe('ElectionService.createElection', () => {
+  it('saves a new draft election owned by the admin, with version 0', async () => {
+    const { service, repository } = makeService();
+
+    const record = await service.createElection(OWNER, { name: '  Board election  ' });
+
+    expect((await repository.get(record.current.id))?.current).toMatchObject({
+      adminId: OWNER,
+      name: 'Board election',
+      status: 'DRAFT',
+      version: 0,
+    });
+  });
+
+  it('starts without undo history', async () => {
+    const { service } = makeService();
+
+    const record = await service.createElection(OWNER, { name: 'Board election' });
+
+    expect(record.past).toEqual([]);
+  });
+
+  it('notifies the admin with the new election', async () => {
+    const { service, notifier } = makeService();
+
+    const record = await service.createElection(OWNER, { name: 'Board election' });
+
+    expect(notifier.adminStates).toMatchObject([
+      { electionId: record.current.id, state: { election: { name: 'Board election' } } },
+    ]);
+  });
+
+  it('rejects a blank name and saves nothing', async () => {
+    const { service, repository } = makeService();
+
+    const creation = service.createElection(OWNER, { name: '   ' });
+
+    await expect(creation).rejects.toMatchObject({ code: 'INVALID_ELECTION_NAME' });
+    expect(await repository.listAll()).toEqual([]);
+  });
+});
+
+describe('ElectionService.listElections', () => {
+  it("summarizes only the admin's own elections", async () => {
+    const { service, repository } = makeService();
+    await repository.create(
+      anElectionRecord({ id: 'draft', adminId: OWNER, voterCodes: ['A', 'B'] }),
+    );
+    await repository.create(
+      openElectionWithVoters({ id: 'open', adminId: OWNER, positionIds: ['p1', 'p2', 'p3'] }),
+    );
+    await repository.create(anElectionRecord({ id: 'other', adminId: 'admin-2' }));
+
+    const summaries = await service.listElections(OWNER);
+
+    expect(summaries).toEqual([
+      { id: 'draft', name: 'Board election', status: 'DRAFT', positionCount: 0, voterCount: 2 },
+      { id: 'open', name: 'Board election', status: 'OPEN', positionCount: 3, voterCount: 1 },
+    ]);
+  });
+
+  it('returns an empty list for an admin without elections', async () => {
+    const { service } = makeService();
+
+    expect(await service.listElections(OWNER)).toEqual([]);
+  });
+});
+
+describe('ElectionService.getElection', () => {
+  it('rejects an election that does not exist with 404', async () => {
+    const { service } = makeService();
+
+    const read = service.getElection(OWNER, 'missing');
+
+    await expect(read).rejects.toMatchObject({ status: 404, code: 'ELECTION_NOT_FOUND' });
+  });
+
+  it("rejects another admin's election with 403", async () => {
+    const { service, repository } = makeService();
+    await repository.create(anElectionRecord({ id: 'e1', adminId: 'admin-1' }));
+
+    const read = service.getElection('admin-2', 'e1');
+
+    await expect(read).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+
+  it('returns the stored election without saving or notifying when nothing is overdue', async () => {
+    const { service, repository, notifier } = makeService();
+    const stored = anElectionRecord({ id: 'e1', adminId: OWNER, version: 7 });
+    await repository.create(stored);
+
+    const record = await service.getElection(OWNER, 'e1');
+
+    expect(record).toEqual(stored);
+    expect(await repository.get('e1')).toEqual(stored);
+    expect(notifier.adminStates).toEqual([]);
+  });
+
+  it('closes a round past its deadline, saves the result and notifies the admin', async () => {
+    const { service, repository, clock, notifier } = makeService();
+    await repository.create(
+      openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
+    );
+    await service.openRound(OWNER, 'e1', {
+      positionId: 'president',
+      durationSeconds: ONE_MINUTE_SECONDS,
+    });
+    clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+
+    const record = await service.getElection(OWNER, 'e1');
+
+    expect(record.current).toMatchObject({ version: 2, rounds: [{ status: 'CLOSED' }] });
+    expect(await repository.get('e1')).toEqual(record);
+    expect(notifier.adminStates.at(-1)?.state).toMatchObject({ election: { version: 2 } });
+  });
+
+  it('keeps a round open until its deadline has passed', async () => {
+    const { service, repository, clock } = makeService();
+    await repository.create(
+      openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
+    );
+    await service.openRound(OWNER, 'e1', {
+      positionId: 'president',
+      durationSeconds: ONE_MINUTE_SECONDS,
+    });
+    clock.advance(ONE_MINUTE_MS);
+
+    const record = await service.getElection(OWNER, 'e1');
+
+    expect(record.current).toMatchObject({ version: 1, rounds: [{ status: 'OPEN' }] });
+  });
+});
+
+describe('ElectionService.updateElection', () => {
+  it('changes the name and the default voting time, incrementing the version', async () => {
+    const { service, repository } = makeService();
+    await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER }));
+
+    await service.updateElection(OWNER, 'e1', { name: 'Annual vote', defaultVotingSeconds: 90 });
+
+    expect((await repository.get('e1'))?.current).toMatchObject({
+      name: 'Annual vote',
+      defaultVotingSeconds: 90,
+      version: 1,
+    });
+  });
+
+  it('keeps the fields that were not sent', async () => {
+    const { service, repository } = makeService();
+    await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER }));
+
+    await service.updateElection(OWNER, 'e1', { defaultVotingSeconds: 90 });
+
+    expect((await repository.get('e1'))?.current.name).toBe('Board election');
+  });
+
+  it('rejects a blank name and saves nothing', async () => {
+    const { service, repository } = makeService();
+    const stored = anElectionRecord({ id: 'e1', adminId: OWNER });
+    await repository.create(stored);
+
+    const update = service.updateElection(OWNER, 'e1', { name: '   ' });
+
+    await expect(update).rejects.toMatchObject({ code: 'INVALID_ELECTION_NAME' });
+    expect(await repository.get('e1')).toEqual(stored);
   });
 });
