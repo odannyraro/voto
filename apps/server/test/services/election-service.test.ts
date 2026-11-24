@@ -660,6 +660,7 @@ describe('ElectionService.handleDeadline', () => {
   /**
    * Serviço com a eleição `e1` do dono e uma rodada de 1 min aberta (versão 1).
    *
+   * @param options - Repassadas a `makeService` (ex.: limite do histórico ou outro repositório).
    * @returns O serviço e os doubles, como `makeService`.
    */
   async function serviceWithOpenRound(options: Parameters<typeof makeService>[0] = {}) {

@@ -1,10 +1,10 @@
-import { openRound, revokeVoter } from '@voto/domain';
+import { revokeVoter } from '@voto/domain';
 import type { VoterStateDTO } from '@voto/shared';
 import { describe, expect, it } from 'vitest';
 import { InMemoryElectionRepository } from '../../src/adapters/in-memory-election-repository';
 import type { ElectionRecord, VoterCodeOwner } from '../../src/ports';
 import { ANA, appWithTwoAdmins, type TwoAdminsTestApp } from '../support/admin-test-app';
-import { openElectionWithVoters } from '../support/election-fixtures';
+import { openElectionWithVoters, withOpenRound } from '../support/election-fixtures';
 import { unwrap } from '../support/election-records';
 
 const OK = 200;
@@ -42,11 +42,11 @@ function openElectionWithOneVoter(): ElectionRecord {
  * @returns Registro da eleição `e1` com uma rodada aberta e ninguém tendo votado.
  */
 function electionWithOpenMayorRound(): ElectionRecord {
-  const { current } = openElectionWithOneVoter();
-  const opened = unwrap(
-    openRound(current, { positionId: 'mayor' }, { now: ELECTION_START, newId: () => 'r1' }),
-  );
-  return { current: opened, past: [] };
+  return withOpenRound(openElectionWithOneVoter(), {
+    positionId: 'mayor',
+    roundId: 'r1',
+    openedAt: ELECTION_START,
+  });
 }
 
 /**

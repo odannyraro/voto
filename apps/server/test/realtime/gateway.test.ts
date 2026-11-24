@@ -1,11 +1,13 @@
-import { openRound } from '@voto/domain';
 import { SOCKET_EVENTS, type VoterStateDTO } from '@voto/shared';
 import { describe, expect, it } from 'vitest';
 import type { ElectionRecord } from '../../src/ports';
 import { toAdminElectionDTO } from '../../src/services/presenters';
 import { ANA, BIA } from '../support/admin-test-app';
-import { draftElectionWithPositions, openElectionWithVoters } from '../support/election-fixtures';
-import { unwrap } from '../support/election-records';
+import {
+  draftElectionWithPositions,
+  openElectionWithVoters,
+  withOpenRound,
+} from '../support/election-fixtures';
 import {
   collectEvents,
   connected,
@@ -31,13 +33,12 @@ const anasOpenElection = (): ElectionRecord =>
   });
 
 /** Eleição `e1` da Ana com a rodada `r1` de `mayor` aberta e ninguém tendo votado. */
-const anasElectionWithOpenRound = (): ElectionRecord => {
-  const { current } = anasOpenElection();
-  const opened = unwrap(
-    openRound(current, { positionId: 'mayor' }, { now: ROUND_OPENED_AT, newId: () => 'r1' }),
-  );
-  return { current: opened, past: [] };
-};
+const anasElectionWithOpenRound = (): ElectionRecord =>
+  withOpenRound(anasOpenElection(), {
+    positionId: 'mayor',
+    roundId: 'r1',
+    openedAt: ROUND_OPENED_AT,
+  });
 
 /**
  * Estado de eleitor fácil de reconhecer no teste.

@@ -1,9 +1,9 @@
-import { openRound, revokeVoter } from '@voto/domain';
+import { revokeVoter } from '@voto/domain';
 import type { AdminElectionDTO, VoterStateDTO } from '@voto/shared';
 import { describe, expect, it } from 'vitest';
 import type { ElectionRecord } from '../../src/ports';
 import { ANA, appWithTwoAdmins, type TwoAdminsTestApp } from '../support/admin-test-app';
-import { openElectionWithVoters } from '../support/election-fixtures';
+import { openElectionWithVoters, withOpenRound } from '../support/election-fixtures';
 import { unwrap } from '../support/election-records';
 
 const NO_CONTENT = 204;
@@ -33,16 +33,10 @@ const FIRST_REJECTED_MS = LAST_ACCEPTED_MS + 1;
  * @returns Registro com a rodada `r1` aberta e ninguém tendo votado.
  */
 function electionWithOpenRound(voterCodes = [FIRST_CODE, SECOND_CODE]): ElectionRecord {
-  const { current } = openElectionWithVoters({
-    id: 'e1',
-    adminId: ANA,
-    positionIds: ['mayor'],
-    voterCodes,
-  });
-  const opened = unwrap(
-    openRound(current, { positionId: 'mayor' }, { now: ELECTION_START, newId: () => 'r1' }),
+  return withOpenRound(
+    openElectionWithVoters({ id: 'e1', adminId: ANA, positionIds: ['mayor'], voterCodes }),
+    { positionId: 'mayor', roundId: 'r1', openedAt: ELECTION_START },
   );
-  return { current: opened, past: [] };
 }
 
 /**

@@ -1,4 +1,3 @@
-import { openRound } from '@voto/domain';
 import type { AdminElectionDTO, NextPositionDTO } from '@voto/shared';
 import { describe, expect, it } from 'vitest';
 import type { ElectionRecord } from '../../src/ports';
@@ -8,8 +7,12 @@ import {
   type AuthHeaders,
   type TwoAdminsTestApp,
 } from '../support/admin-test-app';
-import { draftElectionWithPositions, openElectionWithVoters } from '../support/election-fixtures';
-import { anElectionRecord, unwrap } from '../support/election-records';
+import {
+  draftElectionWithPositions,
+  openElectionWithVoters,
+  withOpenRound,
+} from '../support/election-fixtures';
+import { anElectionRecord } from '../support/election-records';
 
 const OK = 200;
 const CREATED = 201;
@@ -70,15 +73,10 @@ async function openRoundVia(
  * @returns Registro da eleição `e1`, da Ana.
  */
 function electionWithOpenMayorRound(): ElectionRecord {
-  const { current } = openElectionWithVoters({
-    id: 'e1',
-    adminId: ANA,
-    positionIds: ['mayor', 'treasurer'],
-  });
-  const opened = unwrap(
-    openRound(current, { positionId: 'mayor' }, { now: ELECTION_START, newId: () => 'r1' }),
+  return withOpenRound(
+    openElectionWithVoters({ id: 'e1', adminId: ANA, positionIds: ['mayor', 'treasurer'] }),
+    { positionId: 'mayor', roundId: 'r1', openedAt: ELECTION_START },
   );
-  return { current: opened, past: [] };
 }
 
 describe('POST /api/elections/:id/open', () => {
