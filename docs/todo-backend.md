@@ -82,6 +82,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/candidate-routes.ts` → `registerCandidateRoutes`: `POST .../candidates`, `PATCH/DELETE .../candidates/:cid`, `POST .../positions/:pid/candidates/:cid`.
 - `apps/server/src/http/voter-routes.ts` → `registerVoterRoutes`: `POST .../voters` (gera códigos) e `DELETE .../voters/:vid` (revoga).
 - `apps/server/src/http/round-routes.ts` → `registerRoundRoutes`: `POST .../open`, `GET .../next`, `POST .../rounds`, `POST .../rounds/:rid/close`.
+- `apps/server/src/http/resolution-routes.ts` → `registerResolutionRoutes`: `POST .../positions/:pid/{runoff,defer,cancel}`, `.../rounds/:rid/{release,annul}`, `.../undo`, `.../finish`.
 - `apps/server/src/adapters/crypto-code-generator.ts` → `createCryptoCodeGenerator()`: gerador do domínio com `crypto.randomInt`.
 - `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
 - `apps/server/test/support/admin-test-app.ts` → `appWithTwoAdmins(overrides?)`: app de teste com os cabeçalhos `asAna`/`asBia` (ids `ANA`/`BIA`), fechado sozinho ao fim do teste (`onTestFinished`).
@@ -590,7 +591,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `round-routes.test.ts`, 26 execuções (abrir 3, `next` 3, abrir rodada 8, fechar 4, autenticação 8 com `it.each`: 401 e 403 nas 4 rotas). Servidor: 305 testes, 100% linhas / 99,09% branches. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes. Mutações manuais conferidas: `nextPosition` gravando (via `getElection`) e agendamento sem `voteGraceMs` derrubam um teste cada.
 - Decisões: (1) `nextPosition` aplica `closeRoundIfDue` **em memória** antes de calcular o próximo passo, para um prazo vencido que o timer ainda não fechou não aparecer como `ROUND_IN_PROGRESS`; nada é gravado. (2) `POST /open` e `/close` respondem 200; `POST /rounds` responde 201 (§6.1). (3) Sem schema novo: `openRoundBodySchema` já existia. (4) Erros de domínio seguem o mapa da S0.4: `ROUND_NOT_FOUND`/`POSITION_NOT_FOUND` 404; `ELECTION_NOT_DRAFT`, `NO_POSITIONS`, `ROUND_IN_PROGRESS`, `NO_CREDENTIALED_VOTERS` e `ROUND_NOT_OPEN` 409.
 
-### [ ] B12b — Rotas do ciclo de votação (parte 2)
+### [x] B12b — Rotas do ciclo de votação (parte 2)
 **Ref.:** architecture §5.4 (candidatos insuficientes, resiliência), §6.1.
 **Fazer:**
 - `POST /positions/:pid/runoff`;
@@ -613,7 +614,12 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 - `release` notifica os eleitores.
 
 **Commit sugerido:** `feat(server): adiciona rotas de segundo turno, liberação, adiamento, cancelamento e desfazer`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST .../positions/:pid/runoff` (201), `.../rounds/:rid/release`, `.../positions/:pid/defer`, `.../positions/:pid/cancel`, `.../rounds/:rid/annul`, `.../undo` e `.../finish`, todas com `requireAdmin` e devolvendo o `AdminElectionDTO`.
+- Arquivos: `apps/server/src/http/resolution-routes.ts` (`registerResolutionRoutes`), `src/services/election-service.ts` (`openRunoff`, `releaseResults`, `deferPosition`, `cancelPosition`, `annulRound`, `finishElection`, `undo`; novo `persist`), `src/app.ts`, `test/http/resolution-routes.test.ts`.
+- Como usar: `service.<comando>(adminId, id, ...)` devolve `ElectionRecord`, como os demais. `persist(next, expectedVersion, ctx)` (privado) salva, reagenda e notifica; `commit` e `undo` o usam. A B13b pode reaproveitar `commit`/`persist` para o voto.
+- Testes: `resolution-routes.test.ts`, 41 execuções (runoff 5, release 4, defer 3, cancel 4, annul 3, finish 2, undo 6, autenticação 14 com `it.each`). Servidor: 346 testes, 100% linhas / 99,13% branches. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
+- Decisões: (1) `undo` não passa por `commit`: não empilha snapshot nem aplica `closeRoundIfDue`; grava o estado restaurado com `version = atual + 1` e `expectedVersion = atual` (teste: versão salva 2, depois de 0 → 1 → undo). Rodada reaberta pelo undo é reagendada pelo `persist`. (2) `POST .../runoff` aceita corpo ausente (`request.body ?? {}`), pois `durationSeconds` é opcional; `cancel` exige `confirmTitle` (400 sem ele). (3) Erros de domínio seguem o mapa da S0.4: `*_NOT_FOUND` 404; `POSITION_NOT_AWAITING_RUNOFF`, `ROUND_NOT_CLOSED`, `POSITION_NOT_PENDING`, `CONFIRMATION_MISMATCH`, `ROUND_IN_PROGRESS` e `NOTHING_TO_UNDO` 409. (4) O cenário de 2º turno é montado no próprio teste com o domínio real (3 candidatos, 5 eleitores, votos 2/2/1).
 
 ### [ ] B13a — Sessão e estado do eleitor
 **Ref.:** architecture §6.2.
