@@ -722,7 +722,7 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 
 ## Integração, persistência e produção
 
-### [ ] B16a — Cenário de integração HTTP completo (fluxo básico)
+### [x] B16a — Cenário de integração HTTP completo (fluxo básico)
 **Depende de:** nada pendente (o domínio de A já está pronto; o marco M1 foi atingido antes do Sprint 0). Referência útil: `packages/domain/test/scenarios/full-election.test.ts` (A22) mostra a sequência de comandos.
 **Fazer:**
 - `test/integration/election-flow.test.ts`, um cenário só por HTTP:
@@ -739,7 +739,12 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - Corrigir divergências reais entre o servidor e o domínio. Se a divergência estiver no domínio, avise o usuário/A.
 
 **Commit sugerido:** `test(server): cobre cenário completo de votação via HTTP`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: cenário de ponta a ponta só por HTTP (`app.inject`): login da Ana, eleição com o cargo Mayor e 2 candidatos, 3 códigos, abertura, 3 sessões, rodada, 3 votos (fecha sozinha), resultado visível ao admin e oculto ao eleitor (`WAITING`), `release` e eleitor em `RESULTS`.
+- Arquivos: `apps/server/test/integration/election-flow.test.ts` (nenhum código de produção alterado).
+- Como usar: cada passo é uma função auxiliar nomeada (`logIn`, `createMayorRace`, `credentialThreeVotersAndOpen`, `startVoterSession`, `openRound`, `castVote`, `voterState`, `adminCall`); a B16b pode copiá-las para um helper compartilhado se precisar dos mesmos passos.
+- Testes: 1 (cenário único, de propósito, como a tarefa pede). Servidor: 421 testes, 99,62% statements / 98,62% branches / 99,79% linhas. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
+- Decisões: (1) nenhuma divergência entre servidor e domínio apareceu: o teste já nasceu verde, então a prova de que ele testa algo foi uma mutação manual (`releaseResults` virando no-op no serviço) que o derrubou com `WAITING` no lugar de `RESULTS`; revertida. (2) Os códigos de eleitor vêm de um `StubCodeGenerator`, e o admin é semeado com `auth.seedAdmin` antes do login real por HTTP. (3) Os ids de candidatos vêm do DTO devolvido ao cadastrá-los, sem depender do formato de `newId`.
 
 ### [ ] B17 — Repositórios PostgreSQL
 **Ref.:** architecture §8.1, §13.
