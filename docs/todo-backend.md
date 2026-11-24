@@ -76,6 +76,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/auth-plugin.ts` → `registerAuth(app, auth)` (`requireAdmin`, `requireVoter`, `request.auth`) e `getAdminId(request)`.
 - `apps/server/src/http/auth-routes.ts` → `registerAuthRoutes`: `POST /api/admin/login`, `GET /api/admin/me`.
 - `apps/server/src/services/election-service.ts` → `ElectionService`: fluxo único `execute`/`commit` (§8.2) e comandos do admin (eleição, cargos, fila, candidatos, `credentialVoters`, `revokeVoter`, `openRound`); notifica admin e eleitores via apresentadores.
+- `apps/server/src/http/admin-route-deps.ts` → `AdminRouteDeps` (serviço, relógio e hooks das rotas de admin sobre eleições) e `ElectionParams` (`:id`), compartilhados pelas 4 rotas abaixo.
 - `apps/server/src/http/election-routes.ts` → `registerElectionRoutes`: `GET/POST /api/elections`, `GET/PATCH /api/elections/:id`.
 - `apps/server/src/http/position-routes.ts` → `registerPositionRoutes`: `POST/PATCH/DELETE .../positions[/:pid]`, `PUT .../queue`, `GET .../queue/suggestion`.
 - `apps/server/src/http/candidate-routes.ts` → `registerCandidateRoutes`: `POST .../candidates`, `PATCH/DELETE .../candidates/:cid`, `POST .../positions/:pid/candidates/:cid`.

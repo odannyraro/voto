@@ -36,7 +36,8 @@ export interface AppDeps {
  * O domínio não entra nas deps: é puro e determinístico, então é importado direto.
  *
  * @param deps - Configuração e portas da aplicação.
- * @returns A instância Fastify com health check, tratamento de erros, login do admin e rotas de eleição, cargos, fila, candidatos e eleitores.
+ * @returns A instância Fastify com health check, tratamento de erros, login do admin e as
+ *   rotas de eleição, cargos, fila, candidatos e eleitores.
  */
 export function buildApp(deps: AppDeps): FastifyInstance {
   // Silencia o log nos testes; em dev e produção o Fastify loga requisições e erros.
@@ -65,10 +66,11 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     voteGraceMs: deps.config.voteGraceMs,
     historyLimit: deps.config.historyLimit,
   });
-  registerElectionRoutes(app, { service: elections, clock: deps.clock, hooks });
-  registerPositionRoutes(app, { service: elections, clock: deps.clock, hooks });
-  registerCandidateRoutes(app, { service: elections, clock: deps.clock, hooks });
-  registerVoterRoutes(app, { service: elections, clock: deps.clock, hooks });
+  const adminRouteDeps = { service: elections, clock: deps.clock, hooks };
+  registerElectionRoutes(app, adminRouteDeps);
+  registerPositionRoutes(app, adminRouteDeps);
+  registerCandidateRoutes(app, adminRouteDeps);
+  registerVoterRoutes(app, adminRouteDeps);
 
   return app;
 }
