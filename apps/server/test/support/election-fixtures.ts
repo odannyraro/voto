@@ -5,22 +5,18 @@ import { anElectionRecord, unwrap } from './election-records';
 
 const SOME_MOMENT = new Date('2026-01-01T12:00:00.000Z');
 
-/** Opções de `openElectionWithVoters`; só o que muda de um teste para outro. */
-export interface OpenElectionOptions {
-  readonly id: string;
-  readonly adminId?: string;
-  /** Ids dos cargos, na ordem da fila; o título de cada cargo é o próprio id. */
-  readonly positionIds: readonly string[];
-  /** Códigos dos eleitores credenciados; o id de cada eleitor é `<id>:<código>`. */
-  readonly voterCodes?: readonly string[];
-}
-
-/** Opções de `draftElectionWithPositions`. */
+/** Opções de `draftElectionWithPositions`; só o que muda de um teste para outro. */
 export interface DraftElectionOptions {
   readonly id: string;
   readonly adminId?: string;
   /** Ids dos cargos, na ordem da fila; o título de cada cargo é o próprio id. */
   readonly positionIds: readonly string[];
+}
+
+/** Opções de `openElectionWithVoters`: as do rascunho mais os eleitores. */
+export interface OpenElectionOptions extends DraftElectionOptions {
+  /** Códigos dos eleitores credenciados; o id de cada eleitor é `<id>:<código>`. */
+  readonly voterCodes?: readonly string[];
 }
 
 /**
@@ -32,18 +28,7 @@ export interface DraftElectionOptions {
 export function draftElectionWithPositions(options: DraftElectionOptions): ElectionRecord {
   const { id, adminId, positionIds } = options;
   const draft = anElectionRecord({ id, adminId }).current;
-  const withPositions = positionIds.reduce(
-    (election, positionId) =>
-      unwrap(
-        addPosition(
-          election,
-          { title: positionId, tiebreak: 'YOUNGEST' },
-          contextWithId(positionId),
-        ),
-      ),
-    draft,
-  );
-  return { current: withPositions, past: [] };
+  return { current: positionIds.reduce(withPosition, draft), past: [] };
 }
 
 /**
@@ -61,6 +46,19 @@ export function openElectionWithVoters(options: OpenElectionOptions): ElectionRe
 }
 
 /**
+ * Acrescenta um cargo com título igual ao id e desempate `YOUNGEST`.
+ *
+ * @param election - Eleição em rascunho.
+ * @param positionId - Id (e título) do cargo novo.
+ * @returns A eleição com o cargo no fim da fila.
+ */
+function withPosition(election: Election, positionId: string): Election {
+  return unwrap(
+    addPosition(election, { title: positionId, tiebreak: 'YOUNGEST' }, contextWithId(positionId)),
+  );
+}
+
+/**
  * Acrescenta um cargo (título = id) e um candidato que concorre só a ele.
  *
  * @param election - Eleição em rascunho.
@@ -68,9 +66,6 @@ export function openElectionWithVoters(options: OpenElectionOptions): ElectionRe
  * @returns A eleição com o cargo e o candidato.
  */
 function withPositionAndCandidate(election: Election, positionId: string): Election {
-  const withPosition = unwrap(
-    addPosition(election, { title: positionId, tiebreak: 'YOUNGEST' }, contextWithId(positionId)),
-  );
   const candidate = {
     name: `Candidate for ${positionId}`,
     age: 30,
@@ -78,7 +73,13 @@ function withPositionAndCandidate(election: Election, positionId: string): Elect
     applications: [positionId],
     firstChoicePositionId: positionId,
   };
-  return unwrap(addCandidate(withPosition, candidate, contextWithId(`${positionId}-candidate`)));
+  return unwrap(
+    addCandidate(
+      withPosition(election, positionId),
+      candidate,
+      contextWithId(`${positionId}-candidate`),
+    ),
+  );
 }
 
 /**
