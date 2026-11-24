@@ -1,10 +1,9 @@
 import { addCandidate } from '@voto/domain';
 import type { AdminElectionDTO } from '@voto/shared';
-import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { draftElectionWithPositions, openElectionWithVoters } from '../support/election-fixtures';
 import { unwrap } from '../support/election-records';
-import { makeTestApp } from '../support/make-test-app';
+import { ANA, appWithTwoAdmins } from '../support/admin-test-app';
 
 const OK = 200;
 const CREATED = 201;
@@ -13,29 +12,6 @@ const UNAUTHORIZED = 401;
 const FORBIDDEN = 403;
 const NOT_FOUND = 404;
 const CONFLICT = 409;
-
-const ANA = 'admin-ana';
-const BIA = 'admin-bia';
-
-let app: FastifyInstance | undefined;
-
-afterEach(async () => {
-  await app?.close();
-  app = undefined;
-});
-
-/**
- * Monta o app de teste e devolve o cabeçalho de autorização de cada admin.
- *
- * @returns O app de teste e os cabeçalhos `authorization` da Ana e da Bia.
- */
-async function appWithTwoAdmins() {
-  const test = makeTestApp();
-  app = test.app;
-  const asAna = { authorization: `Bearer ${await test.auth.issueAdminToken(ANA)}` };
-  const asBia = { authorization: `Bearer ${await test.auth.issueAdminToken(BIA)}` };
-  return { ...test, asAna, asBia };
-}
 
 describe('POST /api/elections/:id/positions', () => {
   it('adds the position to the election and to the end of the queue', async () => {
@@ -221,7 +197,12 @@ describe('PUT /api/elections/:id/queue', () => {
 });
 
 describe('GET /api/elections/:id/queue/suggestion', () => {
-  /** Eleição com o cargo `treasurer` disputado por dois candidatos e `mayor` por um só. */
+  /**
+   * Rascunho da Ana com o cargo `treasurer` disputado por dois candidatos e `mayor` por um
+   * só, com a fila atual `[mayor, treasurer]`.
+   *
+   * @returns Registro da eleição `e1`, sem histórico.
+   */
   function electionWithContestedSecondPosition() {
     const record = draftElectionWithPositions({
       id: 'e1',

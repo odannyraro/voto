@@ -1,11 +1,10 @@
 import { addCandidate, castVote, openRound, type DomainContext } from '@voto/domain';
 import type { AdminElectionDTO, Election } from '@voto/shared';
-import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { ElectionRecord } from '../../src/ports';
 import { draftElectionWithPositions, openElectionWithVoters } from '../support/election-fixtures';
 import { unwrap } from '../support/election-records';
-import { makeTestApp } from '../support/make-test-app';
+import { ANA, appWithTwoAdmins } from '../support/admin-test-app';
 
 const OK = 200;
 const CREATED = 201;
@@ -15,32 +14,14 @@ const FORBIDDEN = 403;
 const NOT_FOUND = 404;
 const CONFLICT = 409;
 
-const ANA = 'admin-ana';
-const BIA = 'admin-bia';
-
 const SOME_MOMENT = new Date('2026-01-01T12:00:00.000Z');
 
-let app: FastifyInstance | undefined;
-
-afterEach(async () => {
-  await app?.close();
-  app = undefined;
-});
-
 /**
- * Monta o app de teste e devolve o cabeçalho de autorização de cada admin.
+ * Candidato de exemplo (Ana, 30 anos) que concorre só ao cargo indicado.
  *
- * @returns O app de teste e os cabeçalhos `authorization` da Ana e da Bia.
+ * @param positionId - Único cargo da candidatura, também a 1ª opção.
+ * @returns O corpo de criação do candidato.
  */
-async function appWithTwoAdmins() {
-  const test = makeTestApp();
-  app = test.app;
-  const asAna = { authorization: `Bearer ${await test.auth.issueAdminToken(ANA)}` };
-  const asBia = { authorization: `Bearer ${await test.auth.issueAdminToken(BIA)}` };
-  return { ...test, asAna, asBia };
-}
-
-/** Candidato de exemplo que concorre só ao cargo indicado. */
 function candidateFor(positionId: string) {
   return {
     name: 'Ana',
@@ -88,7 +69,13 @@ function electionWithElectedMayor(): ElectionRecord {
   return { current: voted, past: [] };
 }
 
-/** Procura um candidato pelo id no estado devolvido pela API. */
+/**
+ * Procura um candidato pelo id no estado devolvido pela API.
+ *
+ * @param election - Eleição do DTO de resposta.
+ * @param id - Id do candidato procurado.
+ * @returns O candidato, ou `undefined` se não estiver na eleição.
+ */
 function findCandidate(election: Election, id: string) {
   return election.candidates.find((candidate) => candidate.id === id);
 }

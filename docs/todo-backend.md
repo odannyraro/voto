@@ -83,6 +83,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/voter-routes.ts` → `registerVoterRoutes`: `POST .../voters` (gera códigos) e `DELETE .../voters/:vid` (revoga).
 - `apps/server/src/adapters/crypto-code-generator.ts` → `createCryptoCodeGenerator()`: gerador do domínio com `crypto.randomInt`.
 - `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
+- `apps/server/test/support/admin-test-app.ts` → `appWithTwoAdmins(overrides?)`: app de teste com os cabeçalhos `asAna`/`asBia` (ids `ANA`/`BIA`), fechado sozinho ao fim do teste (`onTestFinished`).
 - `apps/server/test/support/election-fixtures.ts` → `openElectionWithVoters(...)`: eleição aberta montada com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
