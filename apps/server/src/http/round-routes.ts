@@ -1,14 +1,9 @@
 import { openRoundBodySchema } from '@voto/shared';
 import type { FastifyInstance } from 'fastify';
 import { toAdminElectionDTO } from '../services/presenters';
-import type { AdminRouteDeps, ElectionParams } from './admin-route-deps';
+import type { AdminRouteDeps, ElectionParams, RoundParams } from './admin-route-deps';
 import { getAdminId } from './auth-plugin';
 import { parse } from './validate';
-
-/** Parâmetros de rota `/elections/:id/rounds/:rid`. */
-interface RoundParams extends ElectionParams {
-  readonly rid: string;
-}
 
 /**
  * Registra as rotas do começo do ciclo de votação (architecture.md §6.1): abrir a eleição,

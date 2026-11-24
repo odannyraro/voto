@@ -1,14 +1,9 @@
 import { createPositionBodySchema, queueBodySchema, updatePositionBodySchema } from '@voto/shared';
 import type { FastifyInstance } from 'fastify';
 import { toAdminElectionDTO } from '../services/presenters';
-import type { AdminRouteDeps, ElectionParams } from './admin-route-deps';
+import type { AdminRouteDeps, ElectionParams, PositionParams } from './admin-route-deps';
 import { getAdminId } from './auth-plugin';
 import { parse } from './validate';
-
-/** Parâmetros de rota `/elections/:id/positions/:pid`. */
-interface PositionParams extends ElectionParams {
-  readonly pid: string;
-}
 
 /**
  * Registra as rotas de cargos e da fila de votação (architecture.md §6.1): criar, editar e

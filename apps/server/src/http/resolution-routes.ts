@@ -1,19 +1,14 @@
 import { cancelPositionBodySchema, openRunoffBodySchema } from '@voto/shared';
 import type { FastifyInstance } from 'fastify';
 import { toAdminElectionDTO } from '../services/presenters';
-import type { AdminRouteDeps, ElectionParams } from './admin-route-deps';
+import type {
+  AdminRouteDeps,
+  ElectionParams,
+  PositionParams,
+  RoundParams,
+} from './admin-route-deps';
 import { getAdminId } from './auth-plugin';
 import { parse } from './validate';
-
-/** Parâmetros de rota `/elections/:id/positions/:pid`. */
-interface PositionParams extends ElectionParams {
-  readonly pid: string;
-}
-
-/** Parâmetros de rota `/elections/:id/rounds/:rid`. */
-interface RoundParams extends ElectionParams {
-  readonly rid: string;
-}
 
 /**
  * Registra as rotas que decidem o que acontece depois de uma rodada (architecture.md §6.1):
