@@ -1,18 +1,29 @@
 import {
   addCandidate,
   addPosition,
+  annulRound,
   applyOrder,
   attachExistingCandidate,
+  cancelPosition,
+  castVote,
+  closeRound,
   closeRoundIfDue,
   createElection,
   createHistory,
   credentialVoters,
+  deferPosition,
+  finishElection,
+  nextPositionStatus,
   ok,
+  openElection,
   openRound,
+  openRunoff,
+  releaseResults,
   removeCandidate,
   removePosition,
   revokeVoter,
   suggestOrder,
+  undo,
   updateCandidate,
   updateElection,
   updatePosition,
@@ -20,6 +31,7 @@ import {
   type AddCandidateInput,
   type AddPositionInput,
   type CreateElectionInput,
+  type CastVoteInput,
   type CredentialVotersInput,
   type DomainContext,
   type OpenRoundInput,
@@ -28,13 +40,14 @@ import {
   type UpdateElectionInput,
   type UpdatePositionInput,
 } from '@voto/domain';
-import type { Election, ElectionSummaryDTO } from '@voto/shared';
+import type { Election, ElectionSummaryDTO, NextPositionDTO } from '@voto/shared';
 import { httpErrorFor } from '../http/errors';
 import type {
   Clock,
   CodeGenerator,
   ElectionRecord,
   ElectionRepository,
+  Logger,
   Notifier,
   Scheduler,
 } from '../ports';
@@ -46,6 +59,8 @@ export interface ElectionServiceDeps {
   readonly clock: Clock;
   readonly scheduler: Scheduler;
   readonly notifier: Notifier;
+  /** Onde registrar falhas que não podem derrubar o processo (ex.: o fechamento por timer). */
+  readonly logger: Logger;
   /** Fonte dos códigos de eleitor (a unicidade global é conferida pelo serviço). */
   readonly codeGenerator: CodeGenerator;
   /** Gera ids novos de entidades criadas pelos comandos. */
@@ -116,10 +131,66 @@ export class ElectionService {
    * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
    */
   async getElection(adminId: string, electionId: string): Promise<ElectionRecord> {
-    const record = await this.loadOwned(adminId, electionId);
-    // `closeRoundIfDue` devolve a mesma instância quando nada vence: aí não há o que gravar.
-    if (closeRoundIfDue(record.current, this.newContext()) === record.current) return record;
-    return this.commit(record, (election) => ok(election));
+    return this.settle(await this.loadOwned(adminId, electionId));
+  }
+
+  /**
+   * Lê a eleição para quem não é o dono (o eleitor), com o mesmo fechamento de prazo vencido
+   * do `getElection`. Não confere dono: quem chama é responsável pela autorização.
+   *
+   * @param electionId - Eleição alvo.
+   * @returns O registro atual já com o prazo vencido aplicado, ou `null` se a eleição não existir.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou durante o fechamento.
+   */
+  async settleDueRound(electionId: string): Promise<ElectionRecord | null> {
+    const record = await this.deps.electionRepository.get(electionId);
+    return record && this.settle(record);
+  }
+
+  /**
+   * Callback do agendador: fecha a rodada cujo prazo venceu, salvando e notificando só se algo
+   * mudou. Roda dentro de um timer, sem ninguém para receber o erro, então qualquer falha vai
+   * para o log em vez de derrubar o processo. A rodada que ficar aberta por causa da falha
+   * ainda é fechada na próxima leitura ou escrita (fechamento preguiçoso, §8.3).
+   *
+   * @param electionId - Eleição cujo prazo foi agendado.
+   */
+  async handleDeadline(electionId: string): Promise<void> {
+    try {
+      await this.settleDueRound(electionId);
+    } catch (err) {
+      this.deps.logger.error({ electionId, err }, 'Failed to close the round at its deadline');
+    }
+  }
+
+  /**
+   * Registra o voto de um eleitor. Segue o mesmo caminho de salvar e notificar dos comandos do
+   * admin, mas quem autoriza é o token do eleitor (não há dono a conferir) e o prazo ganha a
+   * tolerância `voteGraceMs`, que compensa a latência de rede.
+   *
+   * @param voterId - Eleitor autenticado (do token).
+   * @param electionId - Eleição do token.
+   * @param input - Rodada e escolha (id do candidato ou `BLANK`).
+   * @returns O registro salvo (já fechado, se este foi o último voto), ou `null` se a eleição
+   *   não existir mais.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
+   * @throws {DomainError} `ROUND_NOT_FOUND`, `ROUND_NOT_OPEN`, `ROUND_EXPIRED`,
+   *   `VOTER_NOT_ELIGIBLE`, `VOTER_REVOKED`, `VOTER_ALREADY_VOTED` ou `INVALID_CHOICE`.
+   */
+  async castVote(
+    voterId: string,
+    electionId: string,
+    input: Omit<CastVoteInput, 'voterId'>,
+  ): Promise<ElectionRecord | null> {
+    const record = await this.deps.electionRepository.get(electionId);
+    if (!record) return null;
+
+    const ctx = this.newContext();
+    // Sem `closeRoundIfDue` antes: com ele, um voto atrasado acharia a rodada já fechada e
+    // viraria `ROUND_NOT_OPEN` (409) em vez de `ROUND_EXPIRED` (410). O domínio compara o prazo.
+    const lenientNow = new Date(ctx.now.getTime() - this.deps.voteGraceMs);
+    const result = castVote(record.current, { ...input, voterId }, { ...ctx, now: lenientNow });
+    return this.save(record, result, ctx);
   }
 
   /**
@@ -313,6 +384,35 @@ export class ElectionService {
   }
 
   /**
+   * Abre a eleição para votação: a partir daqui os eleitores entram com o código.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @returns O registro salvo, com a eleição em `OPEN`.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ELECTION_NOT_DRAFT` ou `NO_POSITIONS`.
+   */
+  async openElection(adminId: string, electionId: string): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => openElection(election));
+  }
+
+  /**
+   * Diz o que o admin deve fazer a seguir (abrir o cargo do topo da fila, resolver candidatos
+   * insuficientes, abrir o 2º turno...). Só leitura: não salva, não agenda nem notifica.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @returns O próximo passo, já considerando um prazo vencido que ainda não foi gravado.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   */
+  async nextPosition(adminId: string, electionId: string): Promise<NextPositionDTO> {
+    const record = await this.loadOwned(adminId, electionId);
+    // Fecha em memória o que o prazo já venceu, para a resposta bater com o que a próxima
+    // escrita gravaria; a leitura em si não grava nada.
+    return nextPositionStatus(closeRoundIfDue(record.current, this.newContext()));
+  }
+
+  /**
    * Abre o 1º turno de um cargo e agenda o fechamento automático no prazo.
    *
    * @param adminId - Admin autenticado; precisa ser o dono da eleição.
@@ -328,6 +428,146 @@ export class ElectionService {
     input: OpenRoundInput,
   ): Promise<ElectionRecord> {
     return this.execute(adminId, electionId, (election, ctx) => openRound(election, input, ctx));
+  }
+
+  /**
+   * Fecha a rodada aberta antes do prazo, a pedido do admin, e cancela o fechamento agendado.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param roundId - Rodada a fechar.
+   * @returns O registro salvo, com a rodada `CLOSED` e o cargo no estado decorrente do resultado.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ROUND_NOT_FOUND` ou `ROUND_NOT_OPEN`.
+   */
+  async closeRound(adminId: string, electionId: string, roundId: string): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => closeRound(election, roundId));
+  }
+
+  /**
+   * Abre o 2º turno de um cargo cujo 1º turno terminou sem maioria e agenda o fechamento
+   * automático no prazo. Os finalistas vêm da apuração do 1º turno.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param input - Cargo e prazo opcional (padrão: o prazo da eleição).
+   * @returns O registro salvo, com a rodada de 2º turno aberta.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} Se o domínio recusar (ex.: `POSITION_NOT_AWAITING_RUNOFF`, `ROUND_IN_PROGRESS`).
+   */
+  async openRunoff(
+    adminId: string,
+    electionId: string,
+    input: OpenRoundInput,
+  ): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election, ctx) => openRunoff(election, input, ctx));
+  }
+
+  /**
+   * Libera aos eleitores o resultado de uma rodada fechada; até aqui só o admin o via.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param roundId - Rodada cujo resultado será liberado.
+   * @returns O registro salvo; cada eleitor credenciado recebe o resultado na notificação.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ROUND_NOT_FOUND` ou `ROUND_NOT_CLOSED`.
+   */
+  async releaseResults(
+    adminId: string,
+    electionId: string,
+    roundId: string,
+  ): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => releaseResults(election, roundId));
+  }
+
+  /**
+   * Adia um cargo: ele vai para o fim da fila de votação.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param positionId - Cargo a adiar.
+   * @returns O registro salvo, com a fila reordenada.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ELECTION_FINISHED`, `POSITION_NOT_FOUND` ou `POSITION_NOT_PENDING`.
+   */
+  async deferPosition(
+    adminId: string,
+    electionId: string,
+    positionId: string,
+  ): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => deferPosition(election, positionId));
+  }
+
+  /**
+   * Cancela a votação de um cargo (último recurso). O título digitado é a confirmação extra.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param positionId - Cargo a cancelar.
+   * @param confirmTitle - Título do cargo, digitado pelo admin.
+   * @returns O registro salvo, com o cargo `CANCELLED` e fora da fila.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ELECTION_FINISHED`, `POSITION_NOT_FOUND`, `POSITION_NOT_PENDING` ou `CONFIRMATION_MISMATCH`.
+   */
+  async cancelPosition(
+    adminId: string,
+    electionId: string,
+    positionId: string,
+    confirmTitle: string,
+  ): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) =>
+      cancelPosition(election, positionId, confirmTitle),
+    );
+  }
+
+  /**
+   * Anula uma rodada (aberta ou fechada) e devolve o cargo ao início da fila; cancela o
+   * fechamento agendado se ela estava aberta.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param roundId - Rodada a anular; precisa ser a última válida do cargo.
+   * @returns O registro salvo, com a rodada `ANNULLED`.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ELECTION_FINISHED`, `ROUND_NOT_FOUND` ou `ROUND_NOT_LATEST`.
+   */
+  async annulRound(adminId: string, electionId: string, roundId: string): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => annulRound(election, roundId));
+  }
+
+  /**
+   * Encerra a eleição: depois disso nenhum comando altera mais nada.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @returns O registro salvo, com a eleição em `FINISHED`.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ELECTION_NOT_OPEN` ou `ROUND_IN_PROGRESS`.
+   */
+  async finishElection(adminId: string, electionId: string): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => finishElection(election));
+  }
+
+  /**
+   * Desfaz o último comando, restaurando o estado anterior do histórico. Não empilha um novo
+   * snapshot e grava o estado restaurado com a versão **seguinte** à atual: se a versão
+   * voltasse no tempo, um cliente com dados velhos escreveria sem `VERSION_CONFLICT`.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @returns O registro salvo, com o estado restaurado e um estado a menos no histórico.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND`, 403 `FORBIDDEN` ou 409 `VERSION_CONFLICT`.
+   * @throws {DomainError} `NOTHING_TO_UNDO` se o histórico estiver vazio.
+   */
+  async undo(adminId: string, electionId: string): Promise<ElectionRecord> {
+    const record = await this.loadOwned(adminId, electionId);
+    const result = undo(record);
+    if (!result.ok) throw result.error;
+
+    const expectedVersion = record.current.version;
+    const restored = { ...result.value.current, version: expectedVersion + 1 };
+    return this.persist({ ...result.value, current: restored }, expectedVersion, this.newContext());
   }
 
   /**
@@ -389,6 +629,20 @@ export class ElectionService {
   }
 
   /**
+   * Aplica o prazo vencido ao registro: se uma rodada passou do prazo, fecha, salva e notifica;
+   * senão não grava nada.
+   *
+   * @param record - Registro lido do repositório.
+   * @returns O registro salvo, ou o mesmo registro se nenhum prazo venceu.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
+   */
+  private async settle(record: ElectionRecord): Promise<ElectionRecord> {
+    // `closeRoundIfDue` devolve a mesma instância quando nada vence: aí não há o que gravar.
+    if (closeRoundIfDue(record.current, this.newContext()) === record.current) return record;
+    return this.commit(record, (election) => ok(election));
+  }
+
+  /**
    * Aplica um comando a um registro já carregado e autorizado. Se o domínio recusar, nada é
    * salvo nem notificado.
    *
@@ -402,7 +656,25 @@ export class ElectionService {
     const ctx = this.newContext();
 
     // Fechamento preguiçoso (§8.3): um prazo vencido vale mesmo se o timer se perdeu.
-    const result = command(closeRoundIfDue(record.current, ctx), ctx);
+    return this.save(record, command(closeRoundIfDue(record.current, ctx), ctx), ctx);
+  }
+
+  /**
+   * Grava o resultado de um comando: se o domínio recusou, lança o erro sem salvar nem notificar;
+   * se aceitou, incrementa a versão, empilha o snapshot e persiste.
+   *
+   * @param record - Registro lido do repositório, antes do comando.
+   * @param result - Resultado do comando sobre a eleição atual.
+   * @param ctx - Contexto do comando (o instante vira o `serverNow` das notificações).
+   * @returns O registro salvo, com a versão incrementada e o estado anterior no histórico.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
+   * @throws {DomainError} O erro de negócio de `result`, se houver.
+   */
+  private async save(
+    record: ElectionRecord,
+    result: Result<Election>,
+    ctx: DomainContext,
+  ): Promise<ElectionRecord> {
     if (!result.ok) throw result.error;
 
     const expectedVersion = record.current.version;
@@ -411,6 +683,24 @@ export class ElectionService {
       { ...result.value, version: expectedVersion + 1 },
       this.deps.historyLimit,
     );
+    return this.persist(next, expectedVersion, ctx);
+  }
+
+  /**
+   * Grava o registro novo e deixa o resto do sistema coerente com ele: reagenda o fechamento
+   * e notifica admin e eleitores. Comum a todo comando e ao desfazer.
+   *
+   * @param next - Registro a gravar, já com a versão incrementada.
+   * @param expectedVersion - Versão lida antes do comando (concorrência otimista).
+   * @param ctx - Contexto do comando; o instante vira a hora do servidor nas notificações.
+   * @returns O mesmo registro, já salvo.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
+   */
+  private async persist(
+    next: ElectionRecord,
+    expectedVersion: number,
+    ctx: DomainContext,
+  ): Promise<ElectionRecord> {
     await this.deps.electionRepository.save(next, expectedVersion);
 
     this.rescheduleClosing(next.current);
@@ -476,8 +766,7 @@ export class ElectionService {
       return;
     }
     const closesAt = new Date(Date.parse(open.deadline) + this.deps.voteGraceMs);
-    // Placeholder: a B14 troca por `handleDeadline`, que fecha a rodada vencida.
-    this.deps.scheduler.schedule(closesAt, key, () => undefined);
+    this.deps.scheduler.schedule(closesAt, key, () => this.handleDeadline(election.id));
   }
 
   /**

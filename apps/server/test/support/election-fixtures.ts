@@ -1,4 +1,10 @@
-import { addCandidate, addPosition, openElection, type DomainContext } from '@voto/domain';
+import {
+  addCandidate,
+  addPosition,
+  openElection,
+  openRound,
+  type DomainContext,
+} from '@voto/domain';
 import type { Election } from '@voto/shared';
 import type { ElectionRecord } from '../../src/ports';
 import { anElectionRecord, unwrap } from './election-records';
@@ -43,6 +49,30 @@ export function openElectionWithVoters(options: OpenElectionOptions): ElectionRe
   const draft = anElectionRecord({ id, adminId, voterCodes }).current;
   const withPositions = positionIds.reduce(withPositionAndCandidate, draft);
   return { current: unwrap(openElection(withPositions)), past: [] };
+}
+
+/** Opções de `withOpenRound`: qual cargo vai a voto, com que id e em que instante. */
+export interface OpenRoundOptions {
+  readonly positionId: string;
+  /** Id que o domínio dá à rodada nova. */
+  readonly roundId: string;
+  /** Instante da abertura; o prazo é contado a partir dele (prazo padrão da eleição). */
+  readonly openedAt: Date;
+}
+
+/**
+ * Abre, com o comando `openRound` do domínio real, a rodada de um cargo numa eleição já aberta.
+ *
+ * @param record - Registro com a eleição em `OPEN` e sem rodada aberta (ex.: `openElectionWithVoters`).
+ * @param options - Cargo, id da rodada e instante da abertura.
+ * @returns O registro com a rodada aberta e ninguém tendo votado; o histórico não muda.
+ */
+export function withOpenRound(record: ElectionRecord, options: OpenRoundOptions): ElectionRecord {
+  const { positionId, roundId, openedAt } = options;
+  const opened = unwrap(
+    openRound(record.current, { positionId }, { now: openedAt, newId: () => roundId }),
+  );
+  return { current: opened, past: record.past };
 }
 
 /**

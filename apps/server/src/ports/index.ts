@@ -5,3 +5,4 @@ export type { CodeGenerator } from './code-generator';
 export type { ElectionRecord, ElectionRepository, VoterCodeOwner } from './election-repository';
 export type { Notifier } from './notifier';
 export type { ScheduledTask, Scheduler } from './scheduler';
+export type { Logger } from './logger';

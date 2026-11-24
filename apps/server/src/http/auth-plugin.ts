@@ -76,3 +76,17 @@ export function getAdminId(request: FastifyRequest): string {
   }
   return request.auth.adminId;
 }
+
+/**
+ * Lê o eleitor e a eleição do token numa rota protegida por `requireVoter`.
+ *
+ * @param request - Requisição já passada pelo `requireVoter`.
+ * @returns Os ids do eleitor e da eleição dele.
+ * @throws {Error} Se a rota esqueceu o `requireVoter` (bug de quem registrou a rota, vira 500).
+ */
+export function getVoterIds(request: FastifyRequest): { voterId: string; electionId: string } {
+  if (request.auth?.role !== 'voter') {
+    throw new Error('Route must be protected by requireVoter');
+  }
+  return { voterId: request.auth.voterId, electionId: request.auth.electionId };
+}

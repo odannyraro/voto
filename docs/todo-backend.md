@@ -62,8 +62,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/web/test/setup.ts` → setup do Testing Library (`jest-dom` + `cleanup`).
 - `apps/server/src/config.ts` → `loadConfig(env)`: valida o ambiente com Zod e devolve `Config` (único lugar que lê variáveis de ambiente).
 - `apps/server/src/http/error-status.ts` → `statusForErrorCode(code)`: código de erro → status HTTP (§6.3).
-- `apps/server/src/ports/` → portas da aplicação (só tipos): repositórios, `Clock`, `Scheduler`, `CodeGenerator`, `Notifier`; `index.ts` reexporta tudo.
-- `apps/server/test/doubles/` → `FakeClock`, `FakeScheduler`, `SpyNotifier`, `StubCodeGenerator` (cada um com teste próprio).
+- `apps/server/src/ports/` → portas da aplicação (só tipos): repositórios, `Clock`, `Scheduler`, `CodeGenerator`, `Notifier`, `Logger`; `index.ts` reexporta tudo.
+- `apps/server/test/doubles/` → `FakeClock`, `FakeScheduler`, `SpyNotifier`, `SpyLogger`, `StubCodeGenerator` (cada um com teste próprio).
 - `apps/server/src/adapters/` → `InMemoryElectionRepository` e `InMemoryAdminRepository` (cópias com `structuredClone`, índice de códigos de eleitor).
 - `apps/server/src/http/errors.ts` → `HttpError(status, code, message)`.
 - `apps/server/src/app.ts` → `AppDeps` e `buildApp(deps)` (Fastify sem `listen`; health e tratadores de erro).
@@ -81,9 +81,17 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/position-routes.ts` → `registerPositionRoutes`: `POST/PATCH/DELETE .../positions[/:pid]`, `PUT .../queue`, `GET .../queue/suggestion`.
 - `apps/server/src/http/candidate-routes.ts` → `registerCandidateRoutes`: `POST .../candidates`, `PATCH/DELETE .../candidates/:cid`, `POST .../positions/:pid/candidates/:cid`.
 - `apps/server/src/http/voter-routes.ts` → `registerVoterRoutes`: `POST .../voters` (gera códigos) e `DELETE .../voters/:vid` (revoga).
+- `apps/server/src/http/round-routes.ts` → `registerRoundRoutes`: `POST .../open`, `GET .../next`, `POST .../rounds`, `POST .../rounds/:rid/close`.
+- `apps/server/src/http/resolution-routes.ts` → `registerResolutionRoutes`: `POST .../positions/:pid/{runoff,defer,cancel}`, `.../rounds/:rid/{release,annul}`, `.../undo`, `.../finish`.
+- `apps/server/src/services/voter-service.ts` → `VoterService`: `startSession(code)` (token do eleitor), `getState(voterId, electionId)` (aplica prazo vencido e devolve o `VoterStateDTO`) e `castVote(voterId, electionId, vote)`.
+- `apps/server/src/http/voter-access-routes.ts` → `registerVoterAccessRoutes`: `POST /api/voter/session` (pública), `GET /api/voter/state` e `POST /api/voter/votes` (`requireVoter`).
+- `apps/server/src/adapters/timeout-scheduler.ts` → `TimeoutScheduler`: `Scheduler` com `setTimeout` (uma tarefa por chave, prazos longos em etapas, `cancelAll()`).
 - `apps/server/src/adapters/crypto-code-generator.ts` → `createCryptoCodeGenerator()`: gerador do domínio com `crypto.randomInt`.
 - `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
 - `apps/server/test/support/admin-test-app.ts` → `appWithTwoAdmins(overrides?)`: app de teste com os cabeçalhos `asAna`/`asBia` (ids `ANA`/`BIA`), fechado sozinho ao fim do teste (`onTestFinished`).
+- `apps/server/src/realtime/gateway.ts` → `createRealtimeServer()`, `attachRealtime(io, httpServer, deps)` (handshake JWT, salas do eleitor, `admin:watch`), tipos `RealtimeServer`/`RealtimeDeps`; `rooms.ts` → nomes das salas.
+- `apps/server/src/adapters/socket-notifier.ts` → `SocketNotifier(io)`: `Notifier` que emite `admin:state`/`voter:state` para as salas.
+- `apps/server/test/support/realtime-test-app.ts` → `startRealtimeApp()` (app em porta efêmera com gateway real) e helpers `connected`, `waitForEvent`, `waitForConnectError`, `collectEvents`.
 - `apps/server/test/support/election-fixtures.ts` → `openElectionWithVoters(...)`: eleição aberta montada com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
@@ -566,7 +574,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: gerador 2 (200 amostras no formato; sem repetição), serviço 9 (códigos e rótulos, colisão com outra eleição, repetição na mesma leva, notificações, 403, rótulos demais sem salvar, revogar, `VOTER_NOT_FOUND`), rotas 8 (201, lote de 500, `count` 0 e 501 → 400, 401 nas duas rotas, `REVOKED`, 404). Servidor: 271 testes, 100% linhas / 99,09% branches.
 - Decisões: (1) o serviço gera os N códigos **antes** de chamar o domínio (a conferência no repositório é assíncrona e o domínio é síncrono) e entrega a ele um gerador fixo (`fixedCodes`). (2) Código repetido ou já usado é descartado e sorteado de novo, sem limite de tentativas (31^8 combinações). (3) Duas credenciais simultâneas em eleições diferentes podem gerar o mesmo código entre a conferência e o `save`; no Pg a chave primária de `voter_codes` (B17) barra, e a rota responde 500. Aceito pelo risco ínfimo. (4) Revogar um eleitor já revogado devolve 403 `VOTER_REVOKED` (mapa da S0.4). (5) Sem schema novo: `credentialVotersBodySchema` já existia.
 
-### [ ] B12a — Rotas do ciclo de votação (parte 1)
+### [x] B12a — Rotas do ciclo de votação (parte 1)
 **Ref.:** architecture §5.3, §6.1.
 **Fazer:**
 - Funções do domínio: `openElection(e)`, `nextPositionStatus(e)`, `openRound(e, { positionId, durationSeconds? }, ctx)`, `closeRound(e, roundId)`. Note que `openRound` também falha com `RUNOFF_PENDING` e `NO_CREDENTIALED_VOTERS` (`todo-domain.md`, A12).
@@ -582,9 +590,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - `next` não salva.
 
 **Commit sugerido:** `feat(server): adiciona rotas para abrir eleição e conduzir rodadas`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST /api/elections/:id/open`, `GET .../next`, `POST .../rounds` (201) e `POST .../rounds/:rid/close`, todas com `requireAdmin`. Abrir e fechar rodada já agendam/cancelam `round:<id>` pelo fluxo da B7a.
+- Arquivos: `apps/server/src/http/round-routes.ts` (`registerRoundRoutes`), `src/services/election-service.ts` (`openElection`, `nextPosition`, `closeRound`), `src/app.ts`, `test/http/round-routes.test.ts`.
+- Como usar: `service.openElection(adminId, id)` e `service.closeRound(adminId, id, roundId)` → `ElectionRecord`; `service.nextPosition(adminId, id)` → `NextPositionDTO` (só leitura). A B12b acrescenta as demais rotas do ciclo, seguindo o molde de `round-routes.ts` (pode ser outro arquivo de rotas). `openRound` do serviço já existia (B7a).
+- Testes: `round-routes.test.ts`, 26 execuções (abrir 3, `next` 3, abrir rodada 8, fechar 4, autenticação 8 com `it.each`: 401 e 403 nas 4 rotas). Servidor: 305 testes, 100% linhas / 99,09% branches. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes. Mutações manuais conferidas: `nextPosition` gravando (via `getElection`) e agendamento sem `voteGraceMs` derrubam um teste cada.
+- Decisões: (1) `nextPosition` aplica `closeRoundIfDue` **em memória** antes de calcular o próximo passo, para um prazo vencido que o timer ainda não fechou não aparecer como `ROUND_IN_PROGRESS`; nada é gravado. (2) `POST /open` e `/close` respondem 200; `POST /rounds` responde 201 (§6.1). (3) Sem schema novo: `openRoundBodySchema` já existia. (4) Erros de domínio seguem o mapa da S0.4: `ROUND_NOT_FOUND`/`POSITION_NOT_FOUND` 404; `ELECTION_NOT_DRAFT`, `NO_POSITIONS`, `ROUND_IN_PROGRESS`, `NO_CREDENTIALED_VOTERS` e `ROUND_NOT_OPEN` 409.
 
-### [ ] B12b — Rotas do ciclo de votação (parte 2)
+### [x] B12b — Rotas do ciclo de votação (parte 2)
 **Ref.:** architecture §5.4 (candidatos insuficientes, resiliência), §6.1.
 **Fazer:**
 - `POST /positions/:pid/runoff`;
@@ -607,9 +620,14 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 - `release` notifica os eleitores.
 
 **Commit sugerido:** `feat(server): adiciona rotas de segundo turno, liberação, adiamento, cancelamento e desfazer`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST .../positions/:pid/runoff` (201), `.../rounds/:rid/release`, `.../positions/:pid/defer`, `.../positions/:pid/cancel`, `.../rounds/:rid/annul`, `.../undo` e `.../finish`, todas com `requireAdmin` e devolvendo o `AdminElectionDTO`.
+- Arquivos: `apps/server/src/http/resolution-routes.ts` (`registerResolutionRoutes`), `src/services/election-service.ts` (`openRunoff`, `releaseResults`, `deferPosition`, `cancelPosition`, `annulRound`, `finishElection`, `undo`; novo `persist`), `src/app.ts`, `test/http/resolution-routes.test.ts`.
+- Como usar: `service.<comando>(adminId, id, ...)` devolve `ElectionRecord`, como os demais. `persist(next, expectedVersion, ctx)` (privado) salva, reagenda e notifica; `commit` e `undo` o usam. A B13b pode reaproveitar `commit`/`persist` para o voto.
+- Testes: `resolution-routes.test.ts`, 41 execuções (runoff 5, release 4, defer 3, cancel 4, annul 3, finish 2, undo 6, autenticação 14 com `it.each`). Servidor: 346 testes, 100% linhas / 99,13% branches. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
+- Decisões: (1) `undo` não passa por `commit`: não empilha snapshot nem aplica `closeRoundIfDue`; grava o estado restaurado com `version = atual + 1` e `expectedVersion = atual` (teste: versão salva 2, depois de 0 → 1 → undo). Rodada reaberta pelo undo é reagendada pelo `persist`. (2) `POST .../runoff` aceita corpo ausente (`request.body ?? {}`), pois `durationSeconds` é opcional; `cancel` exige `confirmTitle` (400 sem ele). (3) Erros de domínio seguem o mapa da S0.4: `*_NOT_FOUND` 404; `POSITION_NOT_AWAITING_RUNOFF`, `ROUND_NOT_CLOSED`, `POSITION_NOT_PENDING`, `CONFIRMATION_MISMATCH`, `ROUND_IN_PROGRESS` e `NOTHING_TO_UNDO` 409. (4) O cenário de 2º turno é montado no próprio teste com o domínio real (3 candidatos, 5 eleitores, votos 2/2/1).
 
-### [ ] B13a — Sessão e estado do eleitor
+### [x] B13a — Sessão e estado do eleitor
 **Ref.:** architecture §6.2.
 **Fazer:**
 - `services/voter-service.ts`:
@@ -626,9 +644,14 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 - prazo vencido é fechado ao consultar o estado.
 
 **Commit sugerido:** `feat(server): adiciona entrada do eleitor por código e consulta de estado`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST /api/voter/session` (pública, `{ token, electionId, electionName }`) e `GET /api/voter/state` (`requireVoter`). `VoterService` com `startSession` e `getState`; o estado aplica o prazo vencido (salva, reagenda e notifica) antes de montar o `VoterStateDTO`.
+- Arquivos: `apps/server/src/services/voter-service.ts`, `src/http/voter-access-routes.ts`, `src/http/auth-plugin.ts` (`getVoterIds`), `src/services/election-service.ts` (`settleDueRound`, `settle`), `src/app.ts`, `test/http/voter-access-routes.test.ts`.
+- Como usar: `voters.startSession(code)` / `voters.getState(voterId, electionId)` (os ids vêm do token via `getVoterIds(request)`). `ElectionService.settleDueRound(electionId)` → registro com o prazo aplicado ou `null`, sem conferir dono: a B13b e a B14 podem reaproveitá-lo; `getElection` agora usa o mesmo `settle` privado. A B13b acrescenta `castVote` ao `VoterService` (mesmas deps) e a rota em `voter-access-routes.ts`.
+- Testes: `voter-access-routes.test.ts`, 18 execuções (sessão 8: válido, minúsculas, inexistente, revogado, índice inconsistente, 3 formatos inválidos com `it.each`; estado 10: sem token, token de admin, eleição e eleitor sumidos, `WAITING`, `VOTING`, revogado, prazo vencido fechado e salvo, admin notificado, nada gravado sem prazo vencido). Servidor: 364 testes, ~99,8% linhas. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
+- Decisões: (1) revogado com token ainda válido → 403 `VOTER_REVOKED` também em `/voter/state`. (2) Token cuja eleição ou eleitor não existe mais → 401 `INVALID_TOKEN` (mesma lógica do `/admin/me`). (3) Índice de códigos apontando para eleição/eleitor inexistente → 404 `INVALID_CODE` (coberto com um repositório de teste que estende o em memória). (4) Arquivo e função se chamam `voter-access-routes` / `registerVoterAccessRoutes` para não colidir com `voter-routes.ts` (credenciamento do admin). (5) O exemplo `npx vitest run arquivo -w apps/server` do CLAUDE.md não funciona (`-w` é `--watch` no Vitest): rode de dentro do workspace (`cd apps/server && npx vitest run test/...`).
 
-### [ ] B13b — Registro de votos
+### [x] B13b — Registro de votos
 **Ref.:** architecture §5.4 (votação), §6.2, §8.3.
 **Fazer:**
 - `VoterService.castVote(voterId, electionId, roundId, choice)`: usa o mesmo fluxo da B7a, mas a autorização é do eleitor, não do dono. Chamada do domínio: `castVote(e, { roundId, voterId, choice }, ctx)`.
@@ -644,9 +667,14 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 - quando o domínio fecha a rodada (todos votaram), o agendamento é cancelado.
 
 **Commit sugerido:** `feat(server): registra votos com tolerância de prazo`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST /api/voter/votes` (`requireVoter`, corpo `{ roundId, choice }`, 204). O voto passa pelo mesmo salvar/reagendar/notificar dos comandos do admin: o admin recebe o progresso x/y, cada eleitor recebe o próprio estado (`VOTED` para quem votou) e, se foi o último apto, o agendamento é cancelado.
+- Arquivos: `apps/server/src/services/election-service.ts` (`castVote`; o fim do `commit` virou o privado `save`), `src/services/voter-service.ts` (`castVote`), `src/http/voter-access-routes.ts`, `test/http/voter-votes.test.ts`.
+- Como usar: `voters.castVote(voterId, electionId, { roundId, choice })` → `void`; `elections.castVote(...)` → `ElectionRecord | null` (`null` = eleição sumiu; o `VoterService` converte em 401 `INVALID_TOKEN`).
+- Testes: `voter-votes.test.ts`, 21 execuções (aceito, em branco, progresso do admin, estado de quem votou e dos demais, repetido 409, limite exato `deadline + 1s` aceito e `+1 ms` → 410, nada salvo no 410, agendamento cancelado/mantido, `INVALID_CHOICE`, `ROUND_NOT_FOUND`, eleitor de outra eleição, revogado 403, token órfão 401, `choice` ausente/em branco 400, sem token, token de admin, estado `VOTED`). Servidor: 385 testes, 99,37% statements / 98,51% branches. Mutações manuais conferidas: sem tolerância, tolerância dobrada e `closeRoundIfDue` antes do voto derrubam um ou dois testes cada.
+- Decisões: (1) o voto **não** aplica `closeRoundIfDue` antes: com ele, voto atrasado acharia a rodada fechada e daria 409 `ROUND_NOT_OPEN` em vez de 410. O domínio compara o prazo com `now - voteGraceMs`. Se o timer já fechou a rodada (depois de `deadline + grace`), o voto atrasado recebe 409 `ROUND_NOT_OPEN`. (2) Eleitor de outra eleição: o token fixa a eleição, então a rodada alheia não existe para ele e a resposta é **404 `ROUND_NOT_FOUND`** (não 403, como o TO-DO dizia); não vaza rodadas de outras eleições e nada muda na eleição alheia. `VOTER_NOT_ELIGIBLE` (credenciado depois da abertura) segue 409 pelo mapa da S0.4. (3) **Pendência para decidir:** seguindo o fluxo da B7a, cada voto empilha um snapshot. Com `HISTORY_LIMIT` = 50 e mais de 50 eleitores, os votos empurram para fora os snapshots do admin (o desfazer não alcança mais o estado anterior à rodada), e um `undo` logo após um voto desfaz só aquele voto. Se isso incomodar, a correção é não empilhar snapshot no voto (uma linha em `castVote`/`save`); não mudei por divergir do §8.2.
 
-### [ ] B14 — Fechamento automático no prazo
+### [x] B14 — Fechamento automático no prazo
 **Ref.:** architecture §8.3.
 **Fazer:**
 - `adapters/timeout-scheduler.ts`: implementa `Scheduler` com `setTimeout`. Limita o atraso a 2³¹−1 ms, aceita atraso negativo (dispara logo), reagendar a mesma chave substitui a tarefa anterior e expõe `cancelAll()` para o desligamento.
@@ -657,9 +685,14 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 - `handleDeadline` com `FakeClock` + domínio real: fecha e notifica quando o prazo venceu; não salva quando nada mudou (`closeRoundIfDue` devolve a mesma instância, compare com `===`).
 
 **Commit sugerido:** `feat(server): fecha rodadas automaticamente ao fim do prazo`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `TimeoutScheduler` (porta `Scheduler` com `setTimeout`) e `ElectionService.handleDeadline`, que o agendamento de `round:<id>` agora chama no lugar do placeholder. Abrir a rodada já agenda o fechamento real; o fechamento por timer salva, reagenda (cancela) e notifica como qualquer comando.
+- Arquivos: `apps/server/src/adapters/timeout-scheduler.ts`, `src/ports/logger.ts` (porta `Logger`, nova), `src/services/election-service.ts` (`handleDeadline`, dep `logger`), `src/app.ts` (passa `app.log` como `logger`), `test/adapters/timeout-scheduler.test.ts`, `test/doubles/spy-logger.ts` (+ teste), `test/services/election-service.test.ts`.
+- Como usar: `new TimeoutScheduler()` em `AppDeps.scheduler` na B18, com `cancelAll()` no encerramento (`SIGTERM`/`SIGINT`). `ElectionServiceDeps.logger` é obrigatório (`Logger.error(context, message)`; o logger do Fastify serve). A B18 chama `service.handleDeadline(id)` direto, ou só `schedule`, ao reagendar as rodadas abertas depois de um reinício.
+- Testes: `timeout-scheduler.test.ts` 15 (disparo no instante e 1 ms antes, passado dispara logo, uma vez só, substituir chave, chaves independentes, reagendar a própria chave, atraso > 2³¹−1 ms em etapas, cancelar inclusive em etapas, `cancelAll`), `handleDeadline` 9 em `election-service.test.ts` (fecha, notifica admin e eleitores, cancela o agendamento, nada salvo/notificado sem prazo vencido, eleição inexistente, tarefa agendada pela abertura fecha a rodada, falha vai ao log sem rejeitar), `spy-logger.test.ts` 2. Servidor: 411 testes, 99,6% statements / 98,5% branches / 100% linhas.
+- Decisões: (1) `handleDeadline` reaproveita `settleDueRound` (mesmo caminho do `getElection`), então não há lógica de fechamento duplicada. (2) Falha vira `logger.error({ electionId, err })`; a rodada não fecha pelo timer, mas fecha na próxima leitura/escrita (§8.3). Se a falha for `VERSION_CONFLICT`, a escrita vencedora já reagendou a chave. (3) Nova porta `Logger` (a B14 pedia log, e o serviço não conhecia logger); o Fastify a satisfaz. (4) `TimeoutScheduler` lê `Date.now()` (é a fronteira com o tempo real; as regras usam `Clock`) e cumpre prazos acima de 2³¹−1 ms rearmando em etapas. A tarefa agendada não pode lançar (documentado na classe). (5) Mutações manuais: sem `cancel` ao reagendar e sem rearmar são detectadas; remover o `timers.delete` no disparo (vazamento de memória) e o `Math.min` (laço de timers de 1 ms) sobrevivem porque não mudam o comportamento observável.
 
-### [ ] B15 — Tempo real com Socket.IO
+### [x] B15 — Tempo real com Socket.IO
 **Ref.:** architecture §7.
 **Fazer:**
 - `realtime/gateway.ts`: `attachRealtime(httpServer, deps)` → instância `io`, tipada com os eventos do `shared`.
@@ -678,13 +711,18 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem `sleep`**. Feche os sockets e o servidor no `afterEach`.
 
 **Commit sugerido:** `feat(server): adiciona gateway Socket.IO autenticado e notificador`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: gateway Socket.IO no mesmo servidor HTTP do Fastify: handshake com JWT (`connect_error` `INVALID_TOKEN`), eleitor entra em `voters:<eid>` e `voter:<vid>`, admin entra em `admin:<eid>` via `admin:watch` (com checagem de dono por `getElection`) e recebe `admin:state` na hora. `SocketNotifier` emite para as salas.
+- Arquivos: `apps/server/src/realtime/{gateway,rooms}.ts`, `src/adapters/socket-notifier.ts`, `src/app.ts` (`AppDeps.realtime?`), `test/realtime/gateway.test.ts`, `test/support/realtime-test-app.ts`, `package.json` (`socket.io`; `socket.io-client` em dev).
+- Como usar (B18): `const io = createRealtimeServer(); buildApp({ ...deps, notifier: new SocketNotifier(io), realtime: io })`. O `buildApp` liga o `io` ao `app.server` e o fecha no `preClose`. Testes: `startRealtimeApp()` (porta efêmera, clientes fechados no fim do teste), `connected`, `waitForEvent`, `waitForConnectError`, `collectEvents`.
+- Testes: `gateway.test.ts`, 9 (sem token, token inválido, dono recebe estado, eleição alheia, pedido malformado, `voterState` só ao eleitor certo e ao destinatário, voto via HTTP gera `admin:state` com 1/2 e `VOTED` ao eleitor). Servidor: 420 testes, 99,79% linhas; arquivos novos com 100%. Estável em 10 execuções seguidas. Mutações manuais (sem checagem de dono; `voterState` para todos) derrubam um teste cada.
+- Decisões: (1) **Assinatura diferente do TO-DO:** `attachRealtime(io, httpServer, deps)` recebe o `io` em vez de criá-lo, porque há um ciclo (notificador → `io` → servidor HTTP → app → serviços → notificador); o `io` nasce antes (`createRealtimeServer`) e o `buildApp` o liga quando `AppDeps.realtime` vem (campo opcional novo; testes só com `inject` não mudam). (2) Testes de "não recebeu" usam um evento sentinela na mesma conexão (a ordem é garantida), sem `sleep`. (3) `admin:watch` inválido, alheio ou inexistente só não entra na sala (sem resposta: o contrato do `shared` não tem *ack* nem evento de erro); o cliente se ressincroniza por HTTP. (4) A sala `voters:<eid>` é criada conforme a §7, mas nenhum evento a usa ainda. (5) Sem `cors` no Socket.IO: front e API ficam na mesma origem (proxy do Vite em dev).
 
 ---
 
 ## Integração, persistência e produção
 
-### [ ] B16a — Cenário de integração HTTP completo (fluxo básico)
+### [x] B16a — Cenário de integração HTTP completo (fluxo básico)
 **Depende de:** nada pendente (o domínio de A já está pronto; o marco M1 foi atingido antes do Sprint 0). Referência útil: `packages/domain/test/scenarios/full-election.test.ts` (A22) mostra a sequência de comandos.
 **Fazer:**
 - `test/integration/election-flow.test.ts`, um cenário só por HTTP:
@@ -701,7 +739,12 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - Corrigir divergências reais entre o servidor e o domínio. Se a divergência estiver no domínio, avise o usuário/A.
 
 **Commit sugerido:** `test(server): cobre cenário completo de votação via HTTP`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: cenário de ponta a ponta só por HTTP (`app.inject`): login da Ana, eleição com o cargo Mayor e 2 candidatos, 3 códigos, abertura, 3 sessões, rodada, 3 votos (fecha sozinha), resultado visível ao admin e oculto ao eleitor (`WAITING`), `release` e eleitor em `RESULTS`.
+- Arquivos: `apps/server/test/integration/election-flow.test.ts` (nenhum código de produção alterado).
+- Como usar: cada passo é uma função auxiliar nomeada (`logIn`, `createMayorRace`, `credentialThreeVotersAndOpen`, `startVoterSession`, `openRound`, `castVote`, `voterState`, `adminCall`); a B16b pode copiá-las para um helper compartilhado se precisar dos mesmos passos.
+- Testes: 1 (cenário único, de propósito, como a tarefa pede). Servidor: 421 testes, 99,62% statements / 98,62% branches / 99,79% linhas. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
+- Decisões: (1) nenhuma divergência entre servidor e domínio apareceu: o teste já nasceu verde, então a prova de que ele testa algo foi uma mutação manual (`releaseResults` virando no-op no serviço) que o derrubou com `WAITING` no lugar de `RESULTS`; revertida. (2) Os códigos de eleitor vêm de um `StubCodeGenerator`, e o admin é semeado com `auth.seedAdmin` antes do login real por HTTP. (3) Os ids de candidatos vêm do DTO devolvido ao cadastrá-los, sem depender do formato de `newId`.
 
 ### [ ] B17 — Repositórios PostgreSQL
 **Ref.:** architecture §8.1, §13.
@@ -801,4 +844,5 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - 2026-11-23 — replanejamento — o Sprint 0 integra o `packages/domain` já existente (TS 7, Vitest 5): S0.1 e S0.2 absorvem as configs, S0.3a move `model.ts` para `@voto/shared`, e a S0.4 virou "servidor enxergando o domínio real". As assinaturas reais do domínio (`todo-domain.md`, "Decisões e desvios") valem mais que a §5.2.
 - 2026-11-23 — replanejamento — o servidor incrementa `election.version` ao salvar (o domínio mantém o campo, mas não o altera).
 - 2026-11-23 — S0.1 — `typescript-eslint` 8.73 aborta com TS 7 (peer `<6.1`), mesmo na config sem regras de tipos. Solução do post oficial do TS 7: na raiz, `"typescript": "npm:@typescript/typescript6@^6.0.2"` (API usada pelo ESLint) e `"@typescript/native": "npm:typescript@^7.0.2"` (fornece o `tsc` 7). Sem `legacy-peer-deps`. Remover o alias quando o typescript-eslint suportar TS 7.1 (issue #10940).
+- 2026-11-24 — B15 — `attachRealtime(io, httpServer, deps)` recebe o `io` já criado (`createRealtimeServer`) e `AppDeps` ganhou `realtime?: RealtimeServer`, ligado pelo `buildApp`; quebra o ciclo notificador → io → app. Detalha a §8.1.
 - 2026-11-23 — S0.3a — `ElectionSummaryDTO` (citado na §6.1, mas sem forma na §6.3) é `{ id, name, status, positionCount, voterCount }`; basta para a lista de eleições do admin. `ErrorDTO.error.code` é `ErrorCode` (a §6.3 dizia `string`), para o front checar códigos com o compilador. `RoundResultDTO` não tem `positionId` (como o `RoundResultView` do domínio).

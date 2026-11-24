@@ -1,9 +1,11 @@
 import { revokeVoter } from '@voto/domain';
 import { describe, expect, it } from 'vitest';
 import { InMemoryElectionRepository } from '../../src/adapters/in-memory-election-repository';
+import type { ElectionRepository } from '../../src/ports';
 import { ElectionService } from '../../src/services/election-service';
 import { FakeClock } from '../doubles/fake-clock';
 import { FakeScheduler } from '../doubles/fake-scheduler';
+import { SpyLogger } from '../doubles/spy-logger';
 import { SpyNotifier } from '../doubles/spy-notifier';
 import { StubCodeGenerator } from '../doubles/stub-code-generator';
 import { anElectionRecord, unwrap } from '../support/election-records';
@@ -20,26 +22,35 @@ const ONE_MINUTE_AND_ONE_SECOND_MS = 61_000;
 /**
  * Cria o serviço com o domínio real, repositório em memória e doubles nas fronteiras.
  *
- * @param options - Limite do histórico e códigos que o gerador devolve, quando o teste é sobre eles.
+ * @param options - Limite do histórico, códigos do gerador e, se o teste precisar de falhas, um
+ *   repositório que o serviço usa no lugar do em memória (o `repository` devolvido segue sendo o em memória).
  * @returns O serviço e os doubles, para o teste montar o cenário e inspecionar o efeito.
  */
-function makeService(options: { historyLimit?: number; codes?: readonly string[] } = {}) {
+function makeService(
+  options: {
+    historyLimit?: number;
+    codes?: readonly string[];
+    repository?: ElectionRepository;
+  } = {},
+) {
   const repository = new InMemoryElectionRepository();
   const clock = new FakeClock(START);
   const scheduler = new FakeScheduler();
   const notifier = new SpyNotifier();
+  const logger = new SpyLogger();
   let nextId = 0;
   const service = new ElectionService({
-    electionRepository: repository,
+    electionRepository: options.repository ?? repository,
     clock,
     scheduler,
     notifier,
+    logger,
     codeGenerator: new StubCodeGenerator(options.codes ?? []),
     newId: () => `id-${++nextId}`,
     voteGraceMs: VOTE_GRACE_MS,
     historyLimit: options.historyLimit ?? HISTORY_LIMIT,
   });
-  return { service, repository, clock, scheduler, notifier };
+  return { service, repository, clock, scheduler, notifier, logger };
 }
 
 describe('ElectionService command flow', () => {
@@ -640,5 +651,128 @@ describe('ElectionService.revokeVoter', () => {
     const command = service.revokeVoter(OWNER, 'e1', 'ghost');
 
     await expect(command).rejects.toMatchObject({ code: 'VOTER_NOT_FOUND' });
+  });
+});
+
+describe('ElectionService.handleDeadline', () => {
+  const LOG_MESSAGE = 'Failed to close the round at its deadline';
+
+  /**
+   * Serviço com a eleição `e1` do dono e uma rodada de 1 min aberta (versão 1).
+   *
+   * @param options - Repassadas a `makeService` (ex.: limite do histórico ou outro repositório).
+   * @returns O serviço e os doubles, como `makeService`.
+   */
+  async function serviceWithOpenRound(options: Parameters<typeof makeService>[0] = {}) {
+    const test = makeService(options);
+    await test.repository.create(
+      openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
+    );
+    await test.service.openRound(OWNER, 'e1', {
+      positionId: 'president',
+      durationSeconds: ONE_MINUTE_SECONDS,
+    });
+    return test;
+  }
+
+  it('closes the round once its deadline has passed', async () => {
+    const { service, repository, clock } = await serviceWithOpenRound();
+    clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+
+    await service.handleDeadline('e1');
+
+    expect((await repository.get('e1'))?.current).toMatchObject({
+      version: 2,
+      rounds: [{ status: 'CLOSED' }],
+    });
+  });
+
+  it('notifies the admin that the round closed', async () => {
+    const { service, clock, notifier } = await serviceWithOpenRound();
+    clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+
+    await service.handleDeadline('e1');
+
+    expect(notifier.adminStates.at(-1)?.state).toMatchObject({ election: { version: 2 } });
+  });
+
+  it('notifies each credentialed voter that the round closed', async () => {
+    const { service, clock, notifier } = await serviceWithOpenRound();
+    clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+
+    await service.handleDeadline('e1');
+
+    expect(notifier.voterStates.at(-1)).toMatchObject({
+      voterId: 'e1:VOTER1',
+      state: { phase: 'WAITING' },
+    });
+  });
+
+  it('cancels the scheduled closing once the round is closed', async () => {
+    const { service, clock, scheduler } = await serviceWithOpenRound();
+    clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+
+    await service.handleDeadline('e1');
+
+    expect(scheduler.pending()).toEqual([]);
+  });
+
+  describe('when the round is not due', () => {
+    it('saves nothing', async () => {
+      const { service, repository, clock } = await serviceWithOpenRound();
+      const before = await repository.get('e1');
+      clock.advance(ONE_MINUTE_MS);
+
+      await service.handleDeadline('e1');
+
+      expect(await repository.get('e1')).toEqual(before);
+    });
+
+    it('notifies nobody', async () => {
+      const { service, clock, notifier } = await serviceWithOpenRound();
+      const notifiedBefore = notifier.adminStates.length;
+      clock.advance(ONE_MINUTE_MS);
+
+      await service.handleDeadline('e1');
+
+      expect(notifier.adminStates).toHaveLength(notifiedBefore);
+    });
+  });
+
+  it('ignores an election that no longer exists', async () => {
+    const { service, logger } = makeService();
+
+    await service.handleDeadline('missing');
+
+    expect(logger.errors).toEqual([]);
+  });
+
+  it('closes the round when the closing scheduled by openRound fires', async () => {
+    const { repository, clock, scheduler } = await serviceWithOpenRound();
+    // 1 min de prazo + 1 s de tolerância: o horário agendado pela abertura.
+    clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+
+    await scheduler.fireDue(clock.now());
+
+    expect((await repository.get('e1'))?.current.rounds).toMatchObject([{ status: 'CLOSED' }]);
+  });
+
+  describe('when something fails', () => {
+    /** Repositório cuja leitura falha, como um banco fora do ar. */
+    class UnavailableRepository extends InMemoryElectionRepository {
+      override async get(): Promise<never> {
+        throw new Error('database down');
+      }
+    }
+
+    it('logs the failure instead of rejecting', async () => {
+      const { service, logger } = makeService({ repository: new UnavailableRepository() });
+
+      await service.handleDeadline('e1');
+
+      expect(logger.errors).toMatchObject([
+        { context: { electionId: 'e1', err: new Error('database down') }, message: LOG_MESSAGE },
+      ]);
+    });
   });
 });
