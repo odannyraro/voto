@@ -89,6 +89,9 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/adapters/crypto-code-generator.ts` → `createCryptoCodeGenerator()`: gerador do domínio com `crypto.randomInt`.
 - `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
 - `apps/server/test/support/admin-test-app.ts` → `appWithTwoAdmins(overrides?)`: app de teste com os cabeçalhos `asAna`/`asBia` (ids `ANA`/`BIA`), fechado sozinho ao fim do teste (`onTestFinished`).
+- `apps/server/src/realtime/gateway.ts` → `createRealtimeServer()`, `attachRealtime(io, httpServer, deps)` (handshake JWT, salas do eleitor, `admin:watch`), tipos `RealtimeServer`/`RealtimeDeps`; `rooms.ts` → nomes das salas.
+- `apps/server/src/adapters/socket-notifier.ts` → `SocketNotifier(io)`: `Notifier` que emite `admin:state`/`voter:state` para as salas.
+- `apps/server/test/support/realtime-test-app.ts` → `startRealtimeApp()` (app em porta efêmera com gateway real) e helpers `connected`, `waitForEvent`, `waitForConnectError`, `collectEvents`.
 - `apps/server/test/support/election-fixtures.ts` → `openElectionWithVoters(...)`: eleição aberta montada com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
@@ -689,7 +692,7 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 - Testes: `timeout-scheduler.test.ts` 15 (disparo no instante e 1 ms antes, passado dispara logo, uma vez só, substituir chave, chaves independentes, reagendar a própria chave, atraso > 2³¹−1 ms em etapas, cancelar inclusive em etapas, `cancelAll`), `handleDeadline` 9 em `election-service.test.ts` (fecha, notifica admin e eleitores, cancela o agendamento, nada salvo/notificado sem prazo vencido, eleição inexistente, tarefa agendada pela abertura fecha a rodada, falha vai ao log sem rejeitar), `spy-logger.test.ts` 2. Servidor: 411 testes, 99,6% statements / 98,5% branches / 100% linhas.
 - Decisões: (1) `handleDeadline` reaproveita `settleDueRound` (mesmo caminho do `getElection`), então não há lógica de fechamento duplicada. (2) Falha vira `logger.error({ electionId, err })`; a rodada não fecha pelo timer, mas fecha na próxima leitura/escrita (§8.3). Se a falha for `VERSION_CONFLICT`, a escrita vencedora já reagendou a chave. (3) Nova porta `Logger` (a B14 pedia log, e o serviço não conhecia logger); o Fastify a satisfaz. (4) `TimeoutScheduler` lê `Date.now()` (é a fronteira com o tempo real; as regras usam `Clock`) e cumpre prazos acima de 2³¹−1 ms rearmando em etapas. A tarefa agendada não pode lançar (documentado na classe). (5) Mutações manuais: sem `cancel` ao reagendar e sem rearmar são detectadas; remover o `timers.delete` no disparo (vazamento de memória) e o `Math.min` (laço de timers de 1 ms) sobrevivem porque não mudam o comportamento observável.
 
-### [ ] B15 — Tempo real com Socket.IO
+### [x] B15 — Tempo real com Socket.IO
 **Ref.:** architecture §7.
 **Fazer:**
 - `realtime/gateway.ts`: `attachRealtime(httpServer, deps)` → instância `io`, tipada com os eventos do `shared`.
@@ -708,7 +711,12 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem `sleep`**. Feche os sockets e o servidor no `afterEach`.
 
 **Commit sugerido:** `feat(server): adiciona gateway Socket.IO autenticado e notificador`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: gateway Socket.IO no mesmo servidor HTTP do Fastify: handshake com JWT (`connect_error` `INVALID_TOKEN`), eleitor entra em `voters:<eid>` e `voter:<vid>`, admin entra em `admin:<eid>` via `admin:watch` (com checagem de dono por `getElection`) e recebe `admin:state` na hora. `SocketNotifier` emite para as salas.
+- Arquivos: `apps/server/src/realtime/{gateway,rooms}.ts`, `src/adapters/socket-notifier.ts`, `src/app.ts` (`AppDeps.realtime?`), `test/realtime/gateway.test.ts`, `test/support/realtime-test-app.ts`, `package.json` (`socket.io`; `socket.io-client` em dev).
+- Como usar (B18): `const io = createRealtimeServer(); buildApp({ ...deps, notifier: new SocketNotifier(io), realtime: io })`. O `buildApp` liga o `io` ao `app.server` e o fecha no `preClose`. Testes: `startRealtimeApp()` (porta efêmera, clientes fechados no fim do teste), `connected`, `waitForEvent`, `waitForConnectError`, `collectEvents`.
+- Testes: `gateway.test.ts`, 9 (sem token, token inválido, dono recebe estado, eleição alheia, pedido malformado, `voterState` só ao eleitor certo e ao destinatário, voto via HTTP gera `admin:state` com 1/2 e `VOTED` ao eleitor). Servidor: 420 testes, 99,79% linhas; arquivos novos com 100%. Estável em 10 execuções seguidas. Mutações manuais (sem checagem de dono; `voterState` para todos) derrubam um teste cada.
+- Decisões: (1) **Assinatura diferente do TO-DO:** `attachRealtime(io, httpServer, deps)` recebe o `io` em vez de criá-lo, porque há um ciclo (notificador → `io` → servidor HTTP → app → serviços → notificador); o `io` nasce antes (`createRealtimeServer`) e o `buildApp` o liga quando `AppDeps.realtime` vem (campo opcional novo; testes só com `inject` não mudam). (2) Testes de "não recebeu" usam um evento sentinela na mesma conexão (a ordem é garantida), sem `sleep`. (3) `admin:watch` inválido, alheio ou inexistente só não entra na sala (sem resposta: o contrato do `shared` não tem *ack* nem evento de erro); o cliente se ressincroniza por HTTP. (4) A sala `voters:<eid>` é criada conforme a §7, mas nenhum evento a usa ainda. (5) Sem `cors` no Socket.IO: front e API ficam na mesma origem (proxy do Vite em dev).
 
 ---
 
@@ -831,4 +839,5 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - 2026-11-23 — replanejamento — o Sprint 0 integra o `packages/domain` já existente (TS 7, Vitest 5): S0.1 e S0.2 absorvem as configs, S0.3a move `model.ts` para `@voto/shared`, e a S0.4 virou "servidor enxergando o domínio real". As assinaturas reais do domínio (`todo-domain.md`, "Decisões e desvios") valem mais que a §5.2.
 - 2026-11-23 — replanejamento — o servidor incrementa `election.version` ao salvar (o domínio mantém o campo, mas não o altera).
 - 2026-11-23 — S0.1 — `typescript-eslint` 8.73 aborta com TS 7 (peer `<6.1`), mesmo na config sem regras de tipos. Solução do post oficial do TS 7: na raiz, `"typescript": "npm:@typescript/typescript6@^6.0.2"` (API usada pelo ESLint) e `"@typescript/native": "npm:typescript@^7.0.2"` (fornece o `tsc` 7). Sem `legacy-peer-deps`. Remover o alias quando o typescript-eslint suportar TS 7.1 (issue #10940).
+- 2026-11-24 — B15 — `attachRealtime(io, httpServer, deps)` recebe o `io` já criado (`createRealtimeServer`) e `AppDeps` ganhou `realtime?: RealtimeServer`, ligado pelo `buildApp`; quebra o ciclo notificador → io → app. Detalha a §8.1.
 - 2026-11-23 — S0.3a — `ElectionSummaryDTO` (citado na §6.1, mas sem forma na §6.3) é `{ id, name, status, positionCount, voterCount }`; basta para a lista de eleições do admin. `ErrorDTO.error.code` é `ErrorCode` (a §6.3 dizia `string`), para o front checar códigos com o compilador. `RoundResultDTO` não tem `positionId` (como o `RoundResultView` do domínio).
