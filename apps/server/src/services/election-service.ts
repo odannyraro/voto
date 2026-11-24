@@ -6,10 +6,12 @@ import {
   closeRoundIfDue,
   createElection,
   createHistory,
+  credentialVoters,
   ok,
   openRound,
   removeCandidate,
   removePosition,
+  revokeVoter,
   suggestOrder,
   updateCandidate,
   updateElection,
@@ -18,6 +20,7 @@ import {
   type AddCandidateInput,
   type AddPositionInput,
   type CreateElectionInput,
+  type CredentialVotersInput,
   type DomainContext,
   type OpenRoundInput,
   type Result,
@@ -27,7 +30,14 @@ import {
 } from '@voto/domain';
 import type { Election, ElectionSummaryDTO } from '@voto/shared';
 import { httpErrorFor } from '../http/errors';
-import type { Clock, ElectionRecord, ElectionRepository, Notifier, Scheduler } from '../ports';
+import type {
+  Clock,
+  CodeGenerator,
+  ElectionRecord,
+  ElectionRepository,
+  Notifier,
+  Scheduler,
+} from '../ports';
 import { toAdminElectionDTO, toElectionSummaryDTO, toVoterStateDTO } from './presenters';
 
 /** Dependências do `ElectionService`: portas e os ajustes da configuração que ele usa. */
@@ -36,6 +46,8 @@ export interface ElectionServiceDeps {
   readonly clock: Clock;
   readonly scheduler: Scheduler;
   readonly notifier: Notifier;
+  /** Fonte dos códigos de eleitor (a unicidade global é conferida pelo serviço). */
+  readonly codeGenerator: CodeGenerator;
   /** Gera ids novos de entidades criadas pelos comandos. */
   readonly newId: () => string;
   /** Tolerância depois do prazo antes de fechar a rodada (compensa a latência do voto). */
@@ -319,6 +331,46 @@ export class ElectionService {
   }
 
   /**
+   * Credencia eleitores novos. Os códigos são únicos em **todas** as eleições (o eleitor
+   * entra só com o código), então o serviço gera e confere cada um antes de chamar o domínio.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param input - Quantidade (1 a 500) e rótulos opcionais, na ordem dos eleitores.
+   * @returns O registro salvo e os códigos novos, para o admin distribuir (só aparecem aqui
+   *   e no painel dele).
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ELECTION_FINISHED`, `INVALID_VOTER_COUNT` ou `INVALID_VOTER_LABELS`.
+   */
+  async credentialVoters(
+    adminId: string,
+    electionId: string,
+    input: CredentialVotersInput,
+  ): Promise<{ record: ElectionRecord; codes: readonly string[] }> {
+    const loaded = await this.loadOwned(adminId, electionId);
+    const codes = await this.generateUniqueCodes(input.count);
+    const record = await this.commit(loaded, (election, ctx) => {
+      const result = credentialVoters(election, input, fixedCodes(codes), ctx);
+      return result.ok ? ok(result.value.election) : result;
+    });
+    return { record, codes };
+  }
+
+  /**
+   * Revoga o código de um eleitor: ele não entra mais nem vota nas próximas rodadas.
+   *
+   * @param adminId - Admin autenticado; precisa ser o dono da eleição.
+   * @param electionId - Eleição alvo.
+   * @param voterId - Eleitor a revogar.
+   * @returns O registro salvo, com o eleitor `REVOKED`.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {DomainError} `ELECTION_FINISHED`, `VOTER_NOT_FOUND` ou `VOTER_REVOKED`.
+   */
+  async revokeVoter(adminId: string, electionId: string, voterId: string): Promise<ElectionRecord> {
+    return this.execute(adminId, electionId, (election) => revokeVoter(election, voterId));
+  }
+
+  /**
    * Fluxo único de todo comando do admin (§8.2): carrega, autoriza e aplica o comando.
    *
    * @param adminId - Admin autenticado.
@@ -364,6 +416,25 @@ export class ElectionService {
     this.rescheduleClosing(next.current);
     this.notifyAll(next, ctx.now);
     return next;
+  }
+
+  /**
+   * Gera `count` códigos que não existem em nenhuma eleição nem se repetem na mesma leva;
+   * os que colidem são descartados e sorteados de novo.
+   *
+   * @param count - Quantos códigos gerar.
+   * @returns Os códigos, na ordem em que foram aceitos.
+   */
+  private async generateUniqueCodes(count: number): Promise<string[]> {
+    const codes = new Set<string>();
+    while (codes.size < count) {
+      const code = this.deps.codeGenerator.generate();
+      // Sequencial de propósito: cada código é conferido contra o repositório antes do próximo.
+      if (!codes.has(code) && !(await this.deps.electionRepository.isCodeTaken(code))) {
+        codes.add(code);
+      }
+    }
+    return [...codes];
   }
 
   /**
@@ -424,4 +495,22 @@ export class ElectionService {
       this.deps.notifier.voterState(voter.id, toVoterStateDTO(election, voter.id, now));
     }
   }
+}
+
+/**
+ * Gerador que devolve, em ordem, códigos já escolhidos e conferidos. É a ponte entre a
+ * geração assíncrona do serviço e o `credentialVoters` do domínio, que é síncrono.
+ *
+ * @param codes - Códigos já únicos; o domínio pede exatamente um por eleitor.
+ * @returns Um `CodeGenerator` que entrega `codes` na ordem.
+ */
+function fixedCodes(codes: readonly string[]): CodeGenerator {
+  const remaining = [...codes];
+  return {
+    generate: () => {
+      const next = remaining.shift();
+      if (next === undefined) throw new Error('More codes requested than were generated');
+      return next;
+    },
+  };
 }

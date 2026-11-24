@@ -5,6 +5,7 @@ import { ElectionService } from '../../src/services/election-service';
 import { FakeClock } from '../doubles/fake-clock';
 import { FakeScheduler } from '../doubles/fake-scheduler';
 import { SpyNotifier } from '../doubles/spy-notifier';
+import { StubCodeGenerator } from '../doubles/stub-code-generator';
 import { anElectionRecord, unwrap } from '../support/election-records';
 import { openElectionWithVoters } from '../support/election-fixtures';
 
@@ -19,10 +20,10 @@ const ONE_MINUTE_AND_ONE_SECOND_MS = 61_000;
 /**
  * Cria o serviço com o domínio real, repositório em memória e doubles nas fronteiras.
  *
- * @param options - Limite do histórico, quando o teste é sobre ele.
+ * @param options - Limite do histórico e códigos que o gerador devolve, quando o teste é sobre eles.
  * @returns O serviço e os doubles, para o teste montar o cenário e inspecionar o efeito.
  */
-function makeService(options: { historyLimit?: number } = {}) {
+function makeService(options: { historyLimit?: number; codes?: readonly string[] } = {}) {
   const repository = new InMemoryElectionRepository();
   const clock = new FakeClock(START);
   const scheduler = new FakeScheduler();
@@ -33,6 +34,7 @@ function makeService(options: { historyLimit?: number } = {}) {
     clock,
     scheduler,
     notifier,
+    codeGenerator: new StubCodeGenerator(options.codes ?? []),
     newId: () => `id-${++nextId}`,
     voteGraceMs: VOTE_GRACE_MS,
     historyLimit: options.historyLimit ?? HISTORY_LIMIT,
@@ -456,5 +458,108 @@ describe('ElectionService.updateElection', () => {
 
     await expect(update).rejects.toMatchObject({ code: 'INVALID_ELECTION_NAME' });
     expect(await repository.get('e1')).toEqual(stored);
+  });
+});
+
+describe('ElectionService.credentialVoters', () => {
+  it('credentials one voter per requested code and returns the codes', async () => {
+    const { service, repository } = makeService({ codes: ['AAAAAAAA', 'BBBBBBBB'] });
+    await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER }));
+
+    const { codes } = await service.credentialVoters(OWNER, 'e1', { count: 2 });
+
+    expect(codes).toEqual(['AAAAAAAA', 'BBBBBBBB']);
+    expect((await repository.get('e1'))?.current.voters).toMatchObject([
+      { code: 'AAAAAAAA', status: 'CREDENTIALED' },
+      { code: 'BBBBBBBB', status: 'CREDENTIALED' },
+    ]);
+  });
+
+  it('gives each voter the label at the same position', async () => {
+    const { service, repository } = makeService({ codes: ['AAAAAAAA', 'BBBBBBBB'] });
+    await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER }));
+
+    await service.credentialVoters(OWNER, 'e1', { count: 2, labels: ['Table 1', 'Table 2'] });
+
+    expect((await repository.get('e1'))?.current.voters).toMatchObject([
+      { label: 'Table 1' },
+      { label: 'Table 2' },
+    ]);
+  });
+
+  it('discards a generated code that already belongs to another election', async () => {
+    const { service, repository } = makeService({ codes: ['TAKEN222', 'FRESH222'] });
+    await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER }));
+    await repository.create(
+      anElectionRecord({ id: 'e2', adminId: 'admin-2', voterCodes: ['TAKEN222'] }),
+    );
+
+    const { codes } = await service.credentialVoters(OWNER, 'e1', { count: 1 });
+
+    expect(codes).toEqual(['FRESH222']);
+  });
+
+  it('discards a generated code repeated within the same batch', async () => {
+    const { service, repository } = makeService({ codes: ['AAAAAAAA', 'AAAAAAAA', 'BBBBBBBB'] });
+    await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER }));
+
+    const { codes } = await service.credentialVoters(OWNER, 'e1', { count: 2 });
+
+    expect(codes).toEqual(['AAAAAAAA', 'BBBBBBBB']);
+  });
+
+  it('notifies the admin and each newly credentialed voter', async () => {
+    const { service, repository, notifier } = makeService({ codes: ['AAAAAAAA'] });
+    await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER }));
+
+    await service.credentialVoters(OWNER, 'e1', { count: 1 });
+
+    expect(notifier.voterStates.map((notified) => notified.voterId)).toEqual(['id-1']);
+    expect(notifier.adminStates).toHaveLength(1);
+  });
+
+  it("rejects another admin's election with 403", async () => {
+    const { service, repository } = makeService({ codes: ['AAAAAAAA'] });
+    await repository.create(anElectionRecord({ id: 'e1', adminId: 'admin-2' }));
+
+    const command = service.credentialVoters(OWNER, 'e1', { count: 1 });
+
+    await expect(command).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+
+  it('rejects more labels than voters and saves nothing', async () => {
+    const { service, repository } = makeService({ codes: ['AAAAAAAA'] });
+    const stored = anElectionRecord({ id: 'e1', adminId: OWNER });
+    await repository.create(stored);
+
+    const command = service.credentialVoters(OWNER, 'e1', { count: 1, labels: ['A', 'B'] });
+
+    await expect(command).rejects.toMatchObject({ code: 'INVALID_VOTER_LABELS' });
+    expect(await repository.get('e1')).toEqual(stored);
+  });
+});
+
+describe('ElectionService.revokeVoter', () => {
+  it('marks the voter as revoked and keeps the others credentialed', async () => {
+    const { service, repository } = makeService();
+    await repository.create(
+      anElectionRecord({ id: 'e1', adminId: OWNER, voterCodes: ['AAAAAAAA', 'BBBBBBBB'] }),
+    );
+
+    await service.revokeVoter(OWNER, 'e1', 'e1:AAAAAAAA');
+
+    expect((await repository.get('e1'))?.current.voters).toMatchObject([
+      { code: 'AAAAAAAA', status: 'REVOKED' },
+      { code: 'BBBBBBBB', status: 'CREDENTIALED' },
+    ]);
+  });
+
+  it('rejects an unknown voter with VOTER_NOT_FOUND', async () => {
+    const { service, repository } = makeService();
+    await repository.create(anElectionRecord({ id: 'e1', adminId: OWNER }));
+
+    const command = service.revokeVoter(OWNER, 'e1', 'ghost');
+
+    await expect(command).rejects.toMatchObject({ code: 'VOTER_NOT_FOUND' });
   });
 });

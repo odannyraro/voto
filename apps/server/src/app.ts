@@ -6,6 +6,7 @@ import { registerCandidateRoutes } from './http/candidate-routes';
 import { registerElectionRoutes } from './http/election-routes';
 import { registerErrorHandling } from './http/error-handler';
 import { registerPositionRoutes } from './http/position-routes';
+import { registerVoterRoutes } from './http/voter-routes';
 import type {
   AdminRepository,
   Clock,
@@ -35,7 +36,7 @@ export interface AppDeps {
  * O domínio não entra nas deps: é puro e determinístico, então é importado direto.
  *
  * @param deps - Configuração e portas da aplicação.
- * @returns A instância Fastify com health check, tratamento de erros, login do admin e rotas de eleição, cargos e fila.
+ * @returns A instância Fastify com health check, tratamento de erros, login do admin e rotas de eleição, cargos, fila, candidatos e eleitores.
  */
 export function buildApp(deps: AppDeps): FastifyInstance {
   // Silencia o log nos testes; em dev e produção o Fastify loga requisições e erros.
@@ -59,6 +60,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     clock: deps.clock,
     scheduler: deps.scheduler,
     notifier: deps.notifier,
+    codeGenerator: deps.codeGenerator,
     newId: deps.newId,
     voteGraceMs: deps.config.voteGraceMs,
     historyLimit: deps.config.historyLimit,
@@ -66,6 +68,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerElectionRoutes(app, { service: elections, clock: deps.clock, hooks });
   registerPositionRoutes(app, { service: elections, clock: deps.clock, hooks });
   registerCandidateRoutes(app, { service: elections, clock: deps.clock, hooks });
+  registerVoterRoutes(app, { service: elections, clock: deps.clock, hooks });
 
   return app;
 }

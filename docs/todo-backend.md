@@ -75,10 +75,12 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/test/support/election-records.ts` → `anElectionRecord(...)` e `unwrap(result)` para montar registros com o domínio real.
 - `apps/server/src/http/auth-plugin.ts` → `registerAuth(app, auth)` (`requireAdmin`, `requireVoter`, `request.auth`) e `getAdminId(request)`.
 - `apps/server/src/http/auth-routes.ts` → `registerAuthRoutes`: `POST /api/admin/login`, `GET /api/admin/me`.
-- `apps/server/src/services/election-service.ts` → `ElectionService`: fluxo único `execute`/`commit` (§8.2) e comandos do admin (`createElection`, `listElections`, `getElection`, `updateElection`, `addPosition`, `openRound`); notifica admin e eleitores via apresentadores.
+- `apps/server/src/services/election-service.ts` → `ElectionService`: fluxo único `execute`/`commit` (§8.2) e comandos do admin (eleição, cargos, fila, candidatos, `credentialVoters`, `revokeVoter`, `openRound`); notifica admin e eleitores via apresentadores.
 - `apps/server/src/http/election-routes.ts` → `registerElectionRoutes`: `GET/POST /api/elections`, `GET/PATCH /api/elections/:id`.
 - `apps/server/src/http/position-routes.ts` → `registerPositionRoutes`: `POST/PATCH/DELETE .../positions[/:pid]`, `PUT .../queue`, `GET .../queue/suggestion`.
 - `apps/server/src/http/candidate-routes.ts` → `registerCandidateRoutes`: `POST .../candidates`, `PATCH/DELETE .../candidates/:cid`, `POST .../positions/:pid/candidates/:cid`.
+- `apps/server/src/http/voter-routes.ts` → `registerVoterRoutes`: `POST .../voters` (gera códigos) e `DELETE .../voters/:vid` (revoga).
+- `apps/server/src/adapters/crypto-code-generator.ts` → `createCryptoCodeGenerator()`: gerador do domínio com `crypto.randomInt`.
 - `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
 - `apps/server/test/support/election-fixtures.ts` → `openElectionWithVoters(...)`: eleição aberta montada com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
@@ -541,7 +543,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `candidate-routes.test.ts`, 19 execuções (criar 3, editar 3, remover 2, anexar 3, autenticação 8 com `it.each`). Servidor: 252 testes, 100% linhas / 100% branches. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
 - Decisões: (1) o cenário de candidato eleito (`CANDIDATE_ALREADY_ELECTED`) é montado no próprio teste com `openRound` + `castVote` do domínio real (um eleitor só: o voto fecha a rodada e decide o cargo). (2) Nenhum schema novo: `createCandidateBodySchema` e `updateCandidateBodySchema` já existiam (S0.3b). (3) Erros de domínio seguem o mapa da S0.4: `CANDIDATE_NOT_FOUND`/`POSITION_NOT_FOUND` 404; `CANDIDATE_ALREADY_ELECTED` 409.
 
-### [ ] B11 — Credenciamento de eleitores e gerador de códigos
+### [x] B11 — Credenciamento de eleitores e gerador de códigos
 **Ref.:** architecture §5.5 (formato do código), §6.1 (`voters`).
 **Fazer:**
 - `adapters/crypto-code-generator.ts`: `createCodeGenerator((max) => crypto.randomInt(max))`, usando o gerador puro do domínio (A7) com `crypto` como fonte de aleatoriedade. Chamada do domínio: `credentialVoters(election, { count, labels? }, codeGenerator, ctx)` → `Result<{ election, codes }>`.
@@ -555,7 +557,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - revogar → o eleitor fica `REVOKED` no DTO.
 
 **Commit sugerido:** `feat(server): credencia eleitores com códigos únicos e aleatórios`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST /api/elections/:id/voters` (201 `{ codes, election }`) e `DELETE .../voters/:vid` (devolve o `AdminElectionDTO`), ambas com `requireAdmin`. Os códigos vêm de `createCryptoCodeGenerator()` e são únicos em todas as eleições.
+- Arquivos: `apps/server/src/adapters/crypto-code-generator.ts`, `src/http/voter-routes.ts`, `src/services/election-service.ts` (`credentialVoters`, `revokeVoter`, `generateUniqueCodes`, `fixedCodes`), `src/app.ts` (`codeGenerator` entra no `ElectionService`), `test/adapters/crypto-code-generator.test.ts`, `test/http/voter-routes.test.ts`.
+- Como usar: `service.credentialVoters(adminId, id, { count, labels? })` → `{ record, codes }`; `service.revokeVoter(adminId, id, voterId)` → `ElectionRecord`. `ElectionServiceDeps` ganhou `codeGenerator`; no teste, `makeService({ codes })` e `makeTestApp({ codeGenerator: new StubCodeGenerator([...]) })`. Na B18, `compose.ts` passa `createCryptoCodeGenerator()` em `AppDeps.codeGenerator`.
+- Testes: gerador 2 (200 amostras no formato; sem repetição), serviço 9 (códigos e rótulos, colisão com outra eleição, repetição na mesma leva, notificações, 403, rótulos demais sem salvar, revogar, `VOTER_NOT_FOUND`), rotas 8 (201, lote de 500, `count` 0 e 501 → 400, 401 nas duas rotas, `REVOKED`, 404). Servidor: 271 testes, 100% linhas / 99,09% branches.
+- Decisões: (1) o serviço gera os N códigos **antes** de chamar o domínio (a conferência no repositório é assíncrona e o domínio é síncrono) e entrega a ele um gerador fixo (`fixedCodes`). (2) Código repetido ou já usado é descartado e sorteado de novo, sem limite de tentativas (31^8 combinações). (3) Duas credenciais simultâneas em eleições diferentes podem gerar o mesmo código entre a conferência e o `save`; no Pg a chave primária de `voter_codes` (B17) barra, e a rota responde 500. Aceito pelo risco ínfimo. (4) Revogar um eleitor já revogado devolve 403 `VOTER_REVOKED` (mapa da S0.4). (5) Sem schema novo: `credentialVotersBodySchema` já existia.
 
 ### [ ] B12a — Rotas do ciclo de votação (parte 1)
 **Ref.:** architecture §5.3, §6.1.
