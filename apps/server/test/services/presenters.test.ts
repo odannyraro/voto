@@ -8,6 +8,7 @@ import {
 } from '@voto/domain';
 import type { Election } from '@voto/shared';
 import { describe, expect, it } from 'vitest';
+import type { ElectionRecord } from '../../src/ports';
 import { toAdminElectionDTO, toVoterStateDTO } from '../../src/services/presenters';
 import { openElectionWithVoters } from '../support/election-fixtures';
 import { unwrap } from '../support/election-records';
@@ -15,9 +16,15 @@ import { unwrap } from '../support/election-records';
 const NOW = new Date('2026-01-01T12:00:00.000Z');
 const ONE_MINUTE_SECONDS = 60;
 const ROUND_ID = 'round-1';
+const ANY_HISTORY_LIMIT = 10;
 const ctx: DomainContext = { now: NOW, newId: () => ROUND_ID };
 
-/** Eleição aberta com a rodada do cargo `president` em andamento e eleitores `ana` e `bia`. */
+/**
+ * Eleição aberta com a rodada de 1 min do cargo `president` em andamento (candidato único
+ * `president-candidate`) e os eleitores `e1:ANA-CODE` e `e1:BIA-CODE`.
+ *
+ * @returns A eleição com a rodada `ROUND_ID` aberta em `NOW`.
+ */
 function electionWithOpenRound(): Election {
   const { current } = openElectionWithVoters({
     id: 'e1',
@@ -29,8 +36,23 @@ function electionWithOpenRound(): Election {
   );
 }
 
-/** Registro (sem histórico) de uma eleição qualquer, para os testes do apresentador. */
-function recordOf(election: Election) {
+/**
+ * Eleição de `electionWithOpenRound` depois de um voto na rodada aberta.
+ *
+ * @param vote - Quem votou e em quem.
+ * @returns A eleição com o voto registrado.
+ */
+function electionWithVote(vote: { voterId: string; choice: string }): Election {
+  return unwrap(castVote(electionWithOpenRound(), { roundId: ROUND_ID, ...vote }, ctx));
+}
+
+/**
+ * Embrulha uma eleição num registro sem histórico, que é o que o apresentador do admin recebe.
+ *
+ * @param election - Eleição atual.
+ * @returns O registro, sem estados anteriores.
+ */
+function recordOf(election: Election): ElectionRecord {
   return { current: election, past: [] };
 }
 
@@ -53,7 +75,7 @@ describe('toAdminElectionDTO', () => {
 
   it('can undo when there is a previous state', () => {
     const { current } = openElectionWithVoters({ id: 'e1', positionIds: ['president'] });
-    const withHistory = pushSnapshot(recordOf(current), current, 10);
+    const withHistory = pushSnapshot(recordOf(current), current, ANY_HISTORY_LIMIT);
 
     const dto = toAdminElectionDTO(withHistory, NOW);
 
@@ -108,13 +130,7 @@ describe('toAdminElectionDTO', () => {
     });
 
     it('counts a voter who already voted in the progress', () => {
-      const voted = unwrap(
-        castVote(
-          electionWithOpenRound(),
-          { roundId: ROUND_ID, voterId: 'e1:ANA-CODE', choice: 'president-candidate' },
-          ctx,
-        ),
-      );
+      const voted = electionWithVote({ voterId: 'e1:ANA-CODE', choice: 'president-candidate' });
 
       const dto = toAdminElectionDTO(recordOf(voted), NOW);
 
@@ -122,13 +138,7 @@ describe('toAdminElectionDTO', () => {
     });
 
     it('does not reveal the partial tally to the admin', () => {
-      const voted = unwrap(
-        castVote(
-          electionWithOpenRound(),
-          { roundId: ROUND_ID, voterId: 'e1:ANA-CODE', choice: 'president-candidate' },
-          ctx,
-        ),
-      );
+      const voted = electionWithVote({ voterId: 'e1:ANA-CODE', choice: 'president-candidate' });
 
       const dto = toAdminElectionDTO(recordOf(voted), NOW);
 
@@ -139,13 +149,7 @@ describe('toAdminElectionDTO', () => {
 
   describe('with a closed round that was not released to the voters', () => {
     it('shows the result to the admin', () => {
-      const voted = unwrap(
-        castVote(
-          electionWithOpenRound(),
-          { roundId: ROUND_ID, voterId: 'e1:ANA-CODE', choice: 'president-candidate' },
-          ctx,
-        ),
-      );
+      const voted = electionWithVote({ voterId: 'e1:ANA-CODE', choice: 'president-candidate' });
       const closed = unwrap(closeRound(voted, ROUND_ID));
 
       const dto = toAdminElectionDTO(recordOf(closed), NOW);
@@ -202,13 +206,7 @@ describe('toVoterStateDTO', () => {
   });
 
   it('shows each voter their own state: voted for one, still voting for the other', () => {
-    const voted = unwrap(
-      castVote(
-        electionWithOpenRound(),
-        { roundId: ROUND_ID, voterId: 'e1:ANA-CODE', choice: 'president-candidate' },
-        ctx,
-      ),
-    );
+    const voted = electionWithVote({ voterId: 'e1:ANA-CODE', choice: 'president-candidate' });
 
     const ana = toVoterStateDTO(voted, 'e1:ANA-CODE', NOW);
     const bia = toVoterStateDTO(voted, 'e1:BIA-CODE', NOW);
@@ -218,13 +216,7 @@ describe('toVoterStateDTO', () => {
   });
 
   it('hides the vote count while the closed round is not released', () => {
-    const voted = unwrap(
-      castVote(
-        electionWithOpenRound(),
-        { roundId: ROUND_ID, voterId: 'e1:ANA-CODE', choice: 'president-candidate' },
-        ctx,
-      ),
-    );
+    const voted = electionWithVote({ voterId: 'e1:ANA-CODE', choice: 'president-candidate' });
     const closed = unwrap(closeRound(voted, ROUND_ID));
 
     const dto = toVoterStateDTO(closed, 'e1:ANA-CODE', NOW);
@@ -237,13 +229,7 @@ describe('toVoterStateDTO', () => {
   });
 
   it('shows the result once it is released', () => {
-    const voted = unwrap(
-      castVote(
-        electionWithOpenRound(),
-        { roundId: ROUND_ID, voterId: 'e1:ANA-CODE', choice: 'president-candidate' },
-        ctx,
-      ),
-    );
+    const voted = electionWithVote({ voterId: 'e1:ANA-CODE', choice: 'president-candidate' });
     const released = unwrap(releaseResults(unwrap(closeRound(voted, ROUND_ID)), ROUND_ID));
 
     const dto = toVoterStateDTO(released, 'e1:ANA-CODE', NOW);
