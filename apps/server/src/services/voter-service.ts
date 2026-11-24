@@ -1,6 +1,6 @@
 import type { CastVoteBody, Voter, VoterStateDTO } from '@voto/shared';
-import { httpErrorFor } from '../http/errors';
-import type { Clock, ElectionRepository } from '../ports';
+import { httpErrorFor, type HttpError } from '../http/errors';
+import type { Clock, ElectionRecord, ElectionRepository } from '../ports';
 import type { AuthService } from './auth';
 import type { ElectionService } from './election-service';
 import { toVoterStateDTO } from './presenters';
@@ -42,7 +42,7 @@ export class VoterService {
     if (!owner) throw httpErrorFor('INVALID_CODE', 'Unknown voter code');
 
     const record = await this.deps.electionRepository.get(owner.electionId);
-    const voter = record?.current.voters.find((candidate) => candidate.id === owner.voterId);
+    const voter = findVoter(record, owner.voterId);
     // Só acontece se o índice de códigos e a eleição divergirem; para o eleitor é código inválido.
     if (!record || !voter) throw httpErrorFor('INVALID_CODE', 'Unknown voter code');
     assertNotRevoked(voter);
@@ -62,9 +62,9 @@ export class VoterService {
    */
   async getState(voterId: string, electionId: string): Promise<VoterStateDTO> {
     const record = await this.deps.elections.settleDueRound(electionId);
-    const voter = record?.current.voters.find((candidate) => candidate.id === voterId);
+    const voter = findVoter(record, voterId);
     // Token ainda válido, mas a eleição ou o eleitor sumiram: a sessão deixa de valer.
-    if (!record || !voter) throw httpErrorFor('INVALID_TOKEN', 'Voter session is no longer valid');
+    if (!record || !voter) throw invalidSession();
     assertNotRevoked(voter);
 
     return toVoterStateDTO(record.current, voterId, this.deps.clock.now());
@@ -84,8 +84,29 @@ export class VoterService {
   async castVote(voterId: string, electionId: string, vote: CastVoteBody): Promise<void> {
     const record = await this.deps.elections.castVote(voterId, electionId, vote);
     // Token ainda válido, mas a eleição sumiu: a sessão deixa de valer.
-    if (!record) throw httpErrorFor('INVALID_TOKEN', 'Voter session is no longer valid');
+    if (!record) throw invalidSession();
   }
+}
+
+/**
+ * Procura o eleitor dentro da eleição guardada.
+ *
+ * @param record - Registro da eleição, ou `null` se ela não existe.
+ * @param voterId - Eleitor procurado.
+ * @returns O eleitor, ou `undefined` se a eleição ou o eleitor não existem.
+ */
+function findVoter(record: ElectionRecord | null, voterId: string): Voter | undefined {
+  return record?.current.voters.find((voter) => voter.id === voterId);
+}
+
+/**
+ * Erro de sessão de eleitor que deixou de valer: o token ainda é válido, mas a eleição ou o
+ * eleitor dele não existem mais.
+ *
+ * @returns O erro 401 `INVALID_TOKEN`, pronto para ser lançado.
+ */
+function invalidSession(): HttpError {
+  return httpErrorFor('INVALID_TOKEN', 'Voter session is no longer valid');
 }
 
 /**
