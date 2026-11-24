@@ -1,8 +1,6 @@
 import {
   addPosition,
-  canUndo,
   closeRoundIfDue,
-  nextPositionStatus,
   openRound,
   pushSnapshot,
   type AddPositionInput,
@@ -10,9 +8,10 @@ import {
   type OpenRoundInput,
   type Result,
 } from '@voto/domain';
-import type { AdminElectionDTO, Election } from '@voto/shared';
+import type { Election } from '@voto/shared';
 import { httpErrorFor } from '../http/errors';
 import type { Clock, ElectionRecord, ElectionRepository, Notifier, Scheduler } from '../ports';
+import { toAdminElectionDTO, toVoterStateDTO } from './presenters';
 
 /** Dependências do `ElectionService`: portas e os ajustes da configuração que ele usa. */
 export interface ElectionServiceDeps {
@@ -112,7 +111,7 @@ export class ElectionService {
     await this.deps.electionRepository.save(next, expectedVersion);
 
     this.rescheduleClosing(next.current);
-    this.deps.notifier.adminState(electionId, this.adminState(next, ctx.now));
+    this.notifyAll(next, ctx.now);
     return next;
   }
 
@@ -151,19 +150,18 @@ export class ElectionService {
   }
 
   /**
-   * Monta o estado enviado ao painel do admin. Versão provisória: a B7b troca pelo
-   * apresentador completo (rodada atual e último resultado).
+   * Empurra o novo estado: o painel completo ao admin e, a cada eleitor credenciado, o que a
+   * tela dele deve mostrar. Eleitores revogados não recebem nada.
    *
    * @param record - Registro recém-salvo.
    * @param now - Instante do comando, enviado como hora do servidor.
-   * @returns O estado do painel.
    */
-  private adminState(record: ElectionRecord, now: Date): AdminElectionDTO {
-    return {
-      election: record.current,
-      next: nextPositionStatus(record.current),
-      canUndo: canUndo(record),
-      serverNow: now.toISOString(),
-    };
+  private notifyAll(record: ElectionRecord, now: Date): void {
+    const election = record.current;
+    this.deps.notifier.adminState(election.id, toAdminElectionDTO(record, now));
+    for (const voter of election.voters) {
+      if (voter.status !== 'CREDENTIALED') continue;
+      this.deps.notifier.voterState(voter.id, toVoterStateDTO(election, voter.id, now));
+    }
   }
 }

@@ -75,7 +75,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/test/support/election-records.ts` → `anElectionRecord(...)` e `unwrap(result)` para montar registros com o domínio real.
 - `apps/server/src/http/auth-plugin.ts` → `registerAuth(app, auth)` (`requireAdmin`, `requireVoter`, `request.auth`) e `getAdminId(request)`.
 - `apps/server/src/http/auth-routes.ts` → `registerAuthRoutes`: `POST /api/admin/login`, `GET /api/admin/me`.
-- `apps/server/src/services/election-service.ts` → `ElectionService`: fluxo único `execute` (§8.2) e comandos do admin (`addPosition`, `openRound`).
+- `apps/server/src/services/election-service.ts` → `ElectionService`: fluxo único `execute` (§8.2) e comandos do admin (`addPosition`, `openRound`); notifica admin e eleitores via apresentadores.
+- `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)` e `toVoterStateDTO(election, voterId, now)`.
 - `apps/server/test/support/election-fixtures.ts` → `openElectionWithVoters(...)`: eleição aberta montada com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
@@ -453,7 +454,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - Testes: `election-service.test.ts`, 13 (404, 403, erro do domínio propagado / nada salvo / ninguém notificado, versão incrementada, retorno, snapshot, limite do histórico, notificação, agendamento com horário exato, cancelamento, fechamento preguiçoso). Mutações manuais conferidas: sem `closeRoundIfDue` e ignorando `historyLimit`, um teste falha em cada. Servidor: 161 testes, 99,5% linhas / 100% branches.
 - Decisões: (1) `execute` é privado, então a B7a já expõe `addPosition` (B9) e `openRound` (B12a) no serviço, só para exercitar o fluxo pela API pública; essas tarefas só criam as rotas. (2) A tarefa agendada é um *placeholder* (`() => undefined` em `rescheduleClosing`): **a B14 troca por `handleDeadline`**. É a única função sem cobertura do servidor. (3) A notificação provisória já monta um `AdminElectionDTO` válido (`election`, `next` via `nextPositionStatus`, `canUndo`, `serverNow`); a B7b troca pelo apresentador e acrescenta `currentRound`, `lastResult` e os `voterState`. (4) O snapshot empilhado é o estado lido (antes do fechamento preguiçoso). (5) Se o comando falha, o fechamento preguiçoso também não é salvo (a próxima leitura refaz). (6) Comandos do admin usam `now = clock.now()` sem tolerância; a tolerância só entra no voto (B13b) e no horário do agendamento.
 
-### [ ] B7b — Apresentadores: `AdminElectionDTO` e `VoterStateDTO`
+### [x] B7b — Apresentadores: `AdminElectionDTO` e `VoterStateDTO`
 **Ref.:** architecture §6.3, §7.
 **Fazer:**
 - `services/presenters.ts`: `toAdminElectionDTO(record, now)` e `toVoterStateDTO(record, voterId, now)`. O cálculo fica no domínio:
@@ -474,7 +475,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** testes verdes.
 **Commit sugerido:** `feat(server): monta DTOs de admin e eleitor e notifica após comandos`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: apresentadores `toAdminElectionDTO` e `toVoterStateDTO`; o `execute` do `ElectionService` agora notifica o `AdminElectionDTO` real e um `VoterStateDTO` para cada eleitor `CREDENTIALED` (revogados não recebem). O `adminState` provisório da B7a foi removido.
+- Arquivos: `apps/server/src/services/presenters.ts`, `src/services/election-service.ts` (método `notifyAll`), `test/services/presenters.test.ts`.
+- Como usar: `toAdminElectionDTO(record, now)` e `toVoterStateDTO(election, voterId, now)` (puros; `now` é `Date`). B8/B13a chamam o apresentador direto nas rotas de leitura (`GET /elections/:id`, `GET /voter/state`); o `voterState` do eleitor usa `voterView` do domínio, que garante sigilo (sem códigos nem contagem antes da liberação).
+- Testes: `presenters.test.ts` 17 (relógio, `canUndo`, `next`, progresso x/y, cédula, sem tally parcial, `lastResult` com rodada fechada não liberada, fallback de ids, estado por eleitor, sigilo antes da liberação, `RESULTS` após liberar) e +4 em `election-service.test.ts` (DTO do admin, estado por eleitor, revogado ignorado, nada notificado em erro). Servidor: 182 testes, 99,56% statements / 100% branches / 100% linhas.
+- Decisões: (1) `toVoterStateDTO` recebe a `Election` (não o registro): o voto não usa histórico. (2) `currentRound` é montado no apresentador porque o domínio só exporta a cédula do eleitor (`voterView`), não a do admin. (3) Campos opcionais (`currentRound`, `lastResult`) são omitidos, não `undefined`. (4) Notificação por eleitor usa `voter.id` (globalmente único, ver "Decisões e desvios").
 
 ### [ ] B8 — Rotas de eleição
 **Ref.:** architecture §6.1 (`/elections`, `/elections/:id`).

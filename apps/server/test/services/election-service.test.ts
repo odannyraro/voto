@@ -1,10 +1,11 @@
+import { revokeVoter } from '@voto/domain';
 import { describe, expect, it } from 'vitest';
 import { InMemoryElectionRepository } from '../../src/adapters/in-memory-election-repository';
 import { ElectionService } from '../../src/services/election-service';
 import { FakeClock } from '../doubles/fake-clock';
 import { FakeScheduler } from '../doubles/fake-scheduler';
 import { SpyNotifier } from '../doubles/spy-notifier';
-import { anElectionRecord } from '../support/election-records';
+import { anElectionRecord, unwrap } from '../support/election-records';
 import { openElectionWithVoters } from '../support/election-fixtures';
 
 const START = new Date('2026-01-01T12:00:00.000Z');
@@ -156,6 +157,81 @@ describe('ElectionService command flow', () => {
       expect(notifier.adminStates).toMatchObject([
         { electionId: 'e1', state: { election: { version: 1 }, canUndo: true } },
       ]);
+    });
+  });
+
+  describe('notifications', () => {
+    it('sends the admin the full panel state, with the open round and the server clock', async () => {
+      const { service, repository, notifier } = makeService();
+      await repository.create(
+        openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
+      );
+
+      await service.openRound(OWNER, 'e1', {
+        positionId: 'president',
+        durationSeconds: ONE_MINUTE_SECONDS,
+      });
+
+      expect(notifier.adminStates).toMatchObject([
+        {
+          electionId: 'e1',
+          state: {
+            currentRound: { positionTitle: 'president', votedCount: 0, eligibleCount: 1 },
+            next: { status: 'ROUND_IN_PROGRESS' },
+            serverNow: '2026-01-01T12:00:00.000Z',
+          },
+        },
+      ]);
+    });
+
+    it('sends every credentialed voter their own state', async () => {
+      const { service, repository, notifier } = makeService();
+      await repository.create(
+        openElectionWithVoters({
+          id: 'e1',
+          adminId: OWNER,
+          positionIds: ['president'],
+          voterCodes: ['ANA-CODE', 'BIA-CODE'],
+        }),
+      );
+
+      await service.openRound(OWNER, 'e1', { positionId: 'president' });
+
+      expect(notifier.voterStates).toMatchObject([
+        { voterId: 'e1:ANA-CODE', state: { phase: 'VOTING' } },
+        { voterId: 'e1:BIA-CODE', state: { phase: 'VOTING' } },
+      ]);
+    });
+
+    it('does not notify a revoked voter', async () => {
+      const { service, repository, notifier } = makeService();
+      const open = openElectionWithVoters({
+        id: 'e1',
+        adminId: OWNER,
+        positionIds: ['president'],
+        voterCodes: ['ANA-CODE', 'BIA-CODE'],
+      });
+      await repository.create({
+        ...open,
+        current: unwrap(revokeVoter(open.current, 'e1:BIA-CODE')),
+      });
+
+      await service.openRound(OWNER, 'e1', { positionId: 'president' });
+
+      expect(notifier.voterStates.map(({ voterId }) => voterId)).toEqual(['e1:ANA-CODE']);
+    });
+
+    it('notifies no voter when the domain rejects the command', async () => {
+      const { service, repository, notifier } = makeService();
+      await repository.create(
+        anElectionRecord({ id: 'e1', adminId: OWNER, voterCodes: ['ANA-CODE'] }),
+      );
+
+      await expect(
+        service.addPosition(OWNER, 'e1', { title: '   ', tiebreak: 'YOUNGEST' }),
+      ).rejects.toThrow();
+
+      expect(notifier.voterStates).toEqual([]);
     });
   });
 
