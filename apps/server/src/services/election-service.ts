@@ -126,10 +126,20 @@ export class ElectionService {
    * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
    */
   async getElection(adminId: string, electionId: string): Promise<ElectionRecord> {
-    const record = await this.loadOwned(adminId, electionId);
-    // `closeRoundIfDue` devolve a mesma instância quando nada vence: aí não há o que gravar.
-    if (closeRoundIfDue(record.current, this.newContext()) === record.current) return record;
-    return this.commit(record, (election) => ok(election));
+    return this.settle(await this.loadOwned(adminId, electionId));
+  }
+
+  /**
+   * Lê a eleição para quem não é o dono (o eleitor), com o mesmo fechamento de prazo vencido
+   * do `getElection`. Não confere dono: quem chama é responsável pela autorização.
+   *
+   * @param electionId - Eleição alvo.
+   * @returns O registro atual já com o prazo vencido aplicado, ou `null` se a eleição não existir.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou durante o fechamento.
+   */
+  async settleDueRound(electionId: string): Promise<ElectionRecord | null> {
+    const record = await this.deps.electionRepository.get(electionId);
+    return record && this.settle(record);
   }
 
   /**
@@ -565,6 +575,20 @@ export class ElectionService {
     command: ElectionCommand,
   ): Promise<ElectionRecord> {
     return this.commit(await this.loadOwned(adminId, electionId), command);
+  }
+
+  /**
+   * Aplica o prazo vencido ao registro: se uma rodada passou do prazo, fecha, salva e notifica;
+   * senão não grava nada.
+   *
+   * @param record - Registro lido do repositório.
+   * @returns O registro salvo, ou o mesmo registro se nenhum prazo venceu.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
+   */
+  private async settle(record: ElectionRecord): Promise<ElectionRecord> {
+    // `closeRoundIfDue` devolve a mesma instância quando nada vence: aí não há o que gravar.
+    if (closeRoundIfDue(record.current, this.newContext()) === record.current) return record;
+    return this.commit(record, (election) => ok(election));
   }
 
   /**

@@ -8,6 +8,7 @@ import { registerErrorHandling } from './http/error-handler';
 import { registerPositionRoutes } from './http/position-routes';
 import { registerResolutionRoutes } from './http/resolution-routes';
 import { registerRoundRoutes } from './http/round-routes';
+import { registerVoterAccessRoutes } from './http/voter-access-routes';
 import { registerVoterRoutes } from './http/voter-routes';
 import type {
   AdminRepository,
@@ -19,6 +20,7 @@ import type {
 } from './ports';
 import { AuthService } from './services/auth';
 import { ElectionService } from './services/election-service';
+import { VoterService } from './services/voter-service';
 
 /** Tudo o que o app precisa de fora: configuração e portas (architecture.md §8.1). */
 export interface AppDeps {
@@ -39,7 +41,8 @@ export interface AppDeps {
  *
  * @param deps - Configuração e portas da aplicação.
  * @returns A instância Fastify com health check, tratamento de erros, login do admin e as
- *   rotas de eleição, cargos, fila, candidatos, eleitores, rodadas e o desfecho delas (2º turno, liberação, desfazer...).
+ *   rotas de eleição, cargos, fila, candidatos, eleitores, rodadas e o desfecho delas (2º turno,
+ *   liberação, desfazer...) e a entrada do eleitor (sessão por código e estado).
  */
 export function buildApp(deps: AppDeps): FastifyInstance {
   // Silencia o log nos testes; em dev e produção o Fastify loga requisições e erros.
@@ -75,6 +78,14 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerVoterRoutes(app, adminRouteDeps);
   registerRoundRoutes(app, adminRouteDeps);
   registerResolutionRoutes(app, adminRouteDeps);
+
+  const voters = new VoterService({
+    electionRepository: deps.electionRepository,
+    elections,
+    auth,
+    clock: deps.clock,
+  });
+  registerVoterAccessRoutes(app, { service: voters, hooks });
 
   return app;
 }

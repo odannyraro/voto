@@ -83,6 +83,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/voter-routes.ts` → `registerVoterRoutes`: `POST .../voters` (gera códigos) e `DELETE .../voters/:vid` (revoga).
 - `apps/server/src/http/round-routes.ts` → `registerRoundRoutes`: `POST .../open`, `GET .../next`, `POST .../rounds`, `POST .../rounds/:rid/close`.
 - `apps/server/src/http/resolution-routes.ts` → `registerResolutionRoutes`: `POST .../positions/:pid/{runoff,defer,cancel}`, `.../rounds/:rid/{release,annul}`, `.../undo`, `.../finish`.
+- `apps/server/src/services/voter-service.ts` → `VoterService`: `startSession(code)` (token do eleitor) e `getState(voterId, electionId)` (aplica prazo vencido e devolve o `VoterStateDTO`).
+- `apps/server/src/http/voter-access-routes.ts` → `registerVoterAccessRoutes`: `POST /api/voter/session` (pública) e `GET /api/voter/state` (`requireVoter`).
 - `apps/server/src/adapters/crypto-code-generator.ts` → `createCryptoCodeGenerator()`: gerador do domínio com `crypto.randomInt`.
 - `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
 - `apps/server/test/support/admin-test-app.ts` → `appWithTwoAdmins(overrides?)`: app de teste com os cabeçalhos `asAna`/`asBia` (ids `ANA`/`BIA`), fechado sozinho ao fim do teste (`onTestFinished`).
@@ -621,7 +623,7 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 - Testes: `resolution-routes.test.ts`, 41 execuções (runoff 5, release 4, defer 3, cancel 4, annul 3, finish 2, undo 6, autenticação 14 com `it.each`). Servidor: 346 testes, 100% linhas / 99,13% branches. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
 - Decisões: (1) `undo` não passa por `commit`: não empilha snapshot nem aplica `closeRoundIfDue`; grava o estado restaurado com `version = atual + 1` e `expectedVersion = atual` (teste: versão salva 2, depois de 0 → 1 → undo). Rodada reaberta pelo undo é reagendada pelo `persist`. (2) `POST .../runoff` aceita corpo ausente (`request.body ?? {}`), pois `durationSeconds` é opcional; `cancel` exige `confirmTitle` (400 sem ele). (3) Erros de domínio seguem o mapa da S0.4: `*_NOT_FOUND` 404; `POSITION_NOT_AWAITING_RUNOFF`, `ROUND_NOT_CLOSED`, `POSITION_NOT_PENDING`, `CONFIRMATION_MISMATCH`, `ROUND_IN_PROGRESS` e `NOTHING_TO_UNDO` 409. (4) O cenário de 2º turno é montado no próprio teste com o domínio real (3 candidatos, 5 eleitores, votos 2/2/1).
 
-### [ ] B13a — Sessão e estado do eleitor
+### [x] B13a — Sessão e estado do eleitor
 **Ref.:** architecture §6.2.
 **Fazer:**
 - `services/voter-service.ts`:
@@ -638,7 +640,12 @@ Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `
 - prazo vencido é fechado ao consultar o estado.
 
 **Commit sugerido:** `feat(server): adiciona entrada do eleitor por código e consulta de estado`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST /api/voter/session` (pública, `{ token, electionId, electionName }`) e `GET /api/voter/state` (`requireVoter`). `VoterService` com `startSession` e `getState`; o estado aplica o prazo vencido (salva, reagenda e notifica) antes de montar o `VoterStateDTO`.
+- Arquivos: `apps/server/src/services/voter-service.ts`, `src/http/voter-access-routes.ts`, `src/http/auth-plugin.ts` (`getVoterIds`), `src/services/election-service.ts` (`settleDueRound`, `settle`), `src/app.ts`, `test/http/voter-access-routes.test.ts`.
+- Como usar: `voters.startSession(code)` / `voters.getState(voterId, electionId)` (os ids vêm do token via `getVoterIds(request)`). `ElectionService.settleDueRound(electionId)` → registro com o prazo aplicado ou `null`, sem conferir dono: a B13b e a B14 podem reaproveitá-lo; `getElection` agora usa o mesmo `settle` privado. A B13b acrescenta `castVote` ao `VoterService` (mesmas deps) e a rota em `voter-access-routes.ts`.
+- Testes: `voter-access-routes.test.ts`, 18 execuções (sessão 8: válido, minúsculas, inexistente, revogado, índice inconsistente, 3 formatos inválidos com `it.each`; estado 10: sem token, token de admin, eleição e eleitor sumidos, `WAITING`, `VOTING`, revogado, prazo vencido fechado e salvo, admin notificado, nada gravado sem prazo vencido). Servidor: 364 testes, ~99,8% linhas. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
+- Decisões: (1) revogado com token ainda válido → 403 `VOTER_REVOKED` também em `/voter/state`. (2) Token cuja eleição ou eleitor não existe mais → 401 `INVALID_TOKEN` (mesma lógica do `/admin/me`). (3) Índice de códigos apontando para eleição/eleitor inexistente → 404 `INVALID_CODE` (coberto com um repositório de teste que estende o em memória). (4) Arquivo e função se chamam `voter-access-routes` / `registerVoterAccessRoutes` para não colidir com `voter-routes.ts` (credenciamento do admin). (5) O exemplo `npx vitest run arquivo -w apps/server` do CLAUDE.md não funciona (`-w` é `--watch` no Vitest): rode de dentro do workspace (`cd apps/server && npx vitest run test/...`).
 
 ### [ ] B13b — Registro de votos
 **Ref.:** architecture §5.4 (votação), §6.2, §8.3.
