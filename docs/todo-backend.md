@@ -75,6 +75,16 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/test/support/election-records.ts` → `anElectionRecord(...)` e `unwrap(result)` para montar registros com o domínio real.
 - `apps/server/src/http/auth-plugin.ts` → `registerAuth(app, auth)` (`requireAdmin`, `requireVoter`, `request.auth`) e `getAdminId(request)`.
 - `apps/server/src/http/auth-routes.ts` → `registerAuthRoutes`: `POST /api/admin/login`, `GET /api/admin/me`.
+- `apps/server/src/services/election-service.ts` → `ElectionService`: fluxo único `execute`/`commit` (§8.2) e comandos do admin (eleição, cargos, fila, candidatos, `credentialVoters`, `revokeVoter`, `openRound`); notifica admin e eleitores via apresentadores.
+- `apps/server/src/http/admin-route-deps.ts` → `AdminRouteDeps` (serviço, relógio e hooks das rotas de admin sobre eleições) e `ElectionParams` (`:id`), compartilhados pelas 4 rotas abaixo.
+- `apps/server/src/http/election-routes.ts` → `registerElectionRoutes`: `GET/POST /api/elections`, `GET/PATCH /api/elections/:id`.
+- `apps/server/src/http/position-routes.ts` → `registerPositionRoutes`: `POST/PATCH/DELETE .../positions[/:pid]`, `PUT .../queue`, `GET .../queue/suggestion`.
+- `apps/server/src/http/candidate-routes.ts` → `registerCandidateRoutes`: `POST .../candidates`, `PATCH/DELETE .../candidates/:cid`, `POST .../positions/:pid/candidates/:cid`.
+- `apps/server/src/http/voter-routes.ts` → `registerVoterRoutes`: `POST .../voters` (gera códigos) e `DELETE .../voters/:vid` (revoga).
+- `apps/server/src/adapters/crypto-code-generator.ts` → `createCryptoCodeGenerator()`: gerador do domínio com `crypto.randomInt`.
+- `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
+- `apps/server/test/support/admin-test-app.ts` → `appWithTwoAdmins(overrides?)`: app de teste com os cabeçalhos `asAna`/`asBia` (ids `ANA`/`BIA`), fechado sozinho ao fim do teste (`onTestFinished`).
+- `apps/server/test/support/election-fixtures.ts` → `openElectionWithVoters(...)`: eleição aberta montada com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
 - `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
@@ -416,7 +426,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 > Todos os testes daqui em diante usam o **domínio real**. Doubles só nas fronteiras: `FakeClock`, `FakeScheduler`, `SpyNotifier`, `StubCodeGenerator` e repositório em memória (fake).
 
-### [ ] B7a — `ElectionService`: o fluxo padrão de comandos
+### [x] B7a — `ElectionService`: o fluxo padrão de comandos
 **Ref.:** architecture §8.2; `todo-domain.md` (A14: `closeRoundIfDue` devolve a mesma instância quando nada muda; A20: `History`).
 **Fazer:**
 - `test/support/election-fixtures.ts`: funções curtas que montam estados comuns **chamando os comandos públicos do domínio**, por exemplo `draftElectionWithPosition(...)` e `openElectionWithVoters(...)`. Os builders do domínio não são exportados, então isso substitui eles no servidor. Mantenha DAMP: os valores que importam ficam visíveis no teste.
@@ -444,9 +454,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** testes verdes; o fluxo está num único lugar.
 **Commit sugerido:** `feat(server): implementa fluxo padrão de comandos do ElectionService`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `ElectionService` com o fluxo único `execute` (privado): carrega (404), confere o dono (403), `closeRoundIfDue`, aplica o comando, lança o `DomainError`, incrementa `version`, `pushSnapshot` com `historyLimit`, salva com a versão lida, reagenda/cancela `round:<id>` em `deadline + voteGraceMs` e notifica o admin.
+- Arquivos: `apps/server/src/services/election-service.ts`, `test/services/election-service.test.ts`, `test/support/election-fixtures.ts`.
+- Como usar: `new ElectionService({ electionRepository, clock, scheduler, notifier, newId, voteGraceMs, historyLimit })` (a B8 monta no `buildApp` a partir de `AppDeps`/`config`). Comandos públicos já existentes: `addPosition(adminId, electionId, input)` e `openRound(adminId, electionId, input)`, ambos devolvem o `ElectionRecord` salvo. Novo comando = método público de 1 linha: `this.execute(adminId, id, (e, ctx) => dominio(e, input, ctx))`. Fixture: `openElectionWithVoters({ id, adminId?, positionIds, voterCodes? })` → eleição `OPEN`, cargo com título = id, um candidato `<cargo>-candidate` por cargo, eleitor padrão `VOTER1`.
+- Testes: `election-service.test.ts`, 13 (404, 403, erro do domínio propagado / nada salvo / ninguém notificado, versão incrementada, retorno, snapshot, limite do histórico, notificação, agendamento com horário exato, cancelamento, fechamento preguiçoso). Mutações manuais conferidas: sem `closeRoundIfDue` e ignorando `historyLimit`, um teste falha em cada. Servidor: 161 testes, 99,5% linhas / 100% branches.
+- Decisões: (1) `execute` é privado, então a B7a já expõe `addPosition` (B9) e `openRound` (B12a) no serviço, só para exercitar o fluxo pela API pública; essas tarefas só criam as rotas. (2) A tarefa agendada é um *placeholder* (`() => undefined` em `rescheduleClosing`): **a B14 troca por `handleDeadline`**. É a única função sem cobertura do servidor. (3) A notificação provisória já monta um `AdminElectionDTO` válido (`election`, `next` via `nextPositionStatus`, `canUndo`, `serverNow`); a B7b troca pelo apresentador e acrescenta `currentRound`, `lastResult` e os `voterState`. (4) O snapshot empilhado é o estado lido (antes do fechamento preguiçoso). (5) Se o comando falha, o fechamento preguiçoso também não é salvo (a próxima leitura refaz). (6) Comandos do admin usam `now = clock.now()` sem tolerância; a tolerância só entra no voto (B13b) e no horário do agendamento.
 
-### [ ] B7b — Apresentadores: `AdminElectionDTO` e `VoterStateDTO`
+### [x] B7b — Apresentadores: `AdminElectionDTO` e `VoterStateDTO`
 **Ref.:** architecture §6.3, §7.
 **Fazer:**
 - `services/presenters.ts`: `toAdminElectionDTO(record, now)` e `toVoterStateDTO(record, voterId, now)`. O cálculo fica no domínio:
@@ -467,9 +482,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 **Pronto quando:** testes verdes.
 **Commit sugerido:** `feat(server): monta DTOs de admin e eleitor e notifica após comandos`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: apresentadores `toAdminElectionDTO` e `toVoterStateDTO`; o `execute` do `ElectionService` agora notifica o `AdminElectionDTO` real e um `VoterStateDTO` para cada eleitor `CREDENTIALED` (revogados não recebem). O `adminState` provisório da B7a foi removido.
+- Arquivos: `apps/server/src/services/presenters.ts`, `src/services/election-service.ts` (método `notifyAll`), `test/services/presenters.test.ts`.
+- Como usar: `toAdminElectionDTO(record, now)` e `toVoterStateDTO(election, voterId, now)` (puros; `now` é `Date`). B8/B13a chamam o apresentador direto nas rotas de leitura (`GET /elections/:id`, `GET /voter/state`); o `voterState` do eleitor usa `voterView` do domínio, que garante sigilo (sem códigos nem contagem antes da liberação).
+- Testes: `presenters.test.ts` 17 (relógio, `canUndo`, `next`, progresso x/y, cédula, sem tally parcial, `lastResult` com rodada fechada não liberada, fallback de ids, estado por eleitor, sigilo antes da liberação, `RESULTS` após liberar) e +4 em `election-service.test.ts` (DTO do admin, estado por eleitor, revogado ignorado, nada notificado em erro). Servidor: 182 testes, 99,56% statements / 100% branches / 100% linhas.
+- Decisões: (1) `toVoterStateDTO` recebe a `Election` (não o registro): o voto não usa histórico. (2) `currentRound` é montado no apresentador porque o domínio só exporta a cédula do eleitor (`voterView`), não a do admin. (3) Campos opcionais (`currentRound`, `lastResult`) são omitidos, não `undefined`. (4) Notificação por eleitor usa `voter.id` (globalmente único, ver "Decisões e desvios").
 
-### [ ] B8 — Rotas de eleição
+### [x] B8 — Rotas de eleição
 **Ref.:** architecture §6.1 (`/elections`, `/elections/:id`).
 **Fazer:**
 - `ElectionService`: `createElection` (sem carregar nada antes), `listElections(adminId)`, `getElection` (aplica `closeRoundIfDue` e, se mudar algo, salva e notifica) e `updateElection`.
@@ -484,9 +504,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - rotas sem token → 401.
 
 **Commit sugerido:** `feat(server): adiciona rotas de criação, listagem e edição de eleições`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `GET/POST /api/elections` e `GET/PATCH /api/elections/:id`, todas com `requireAdmin`. O `buildApp` agora monta o `ElectionService` a partir das deps/config.
+- Arquivos: `apps/server/src/http/election-routes.ts`, `src/services/election-service.ts` (`createElection`, `listElections`, `getElection`, `updateElection`; `execute` virou `loadOwned` + `commit`), `src/services/presenters.ts` (`toElectionSummaryDTO`), `src/app.ts`, `test/http/election-routes.test.ts`, `test/services/election-service.test.ts`.
+- Como usar: `service.createElection(adminId, { name, defaultVotingSeconds? })`, `listElections(adminId)` (→ `ElectionSummaryDTO[]`), `getElection(adminId, id)`, `updateElection(adminId, id, input)`; os três últimos devolvem `ElectionRecord`. Rotas novas seguem o molde de `election-routes.ts`: `parse(schema, body)`, `service.<comando>(getAdminId(request), ...)` e `toAdminElectionDTO(record, clock.now())`. Comando novo no serviço = `this.execute(adminId, id, (e, ctx) => dominio(e, input, ctx))`.
+- Testes: `election-routes.test.ts` 16 (criar 3, listar 1, ler 3, editar 4, autenticação 5 com `it.each`) e +14 em `election-service.test.ts` (criar 4, listar 2, ler 5, editar 3). Servidor: 212 testes, 99,6% statements / 100% branches / 100% linhas. Domínio 223, shared 138, web 2. `lint`, `format:check` e `typecheck` verdes.
+- Decisões: (1) `getElection` só grava se o prazo venceu (`closeRoundIfDue` devolve outra instância); nesse caso reaproveita `commit` com um comando identidade, então ganha versão nova, snapshot, reagendamento e notificação. Sem prazo vencido, não grava nem notifica. (2) `createElection` não passa por `execute`: nada a carregar; salva com versão 0 e notifica o admin. (3) `POST /elections` responde 201 com o `AdminElectionDTO`; `GET /elections` devolve `ElectionSummaryDTO[]` direto (array, como na §6.1). (4) `serverNow` da resposta vem de `clock.now()` lido na rota, separado do `now` do comando (iguais no `FakeClock`).
 
-### [ ] B9 — Rotas de cargos e fila
+### [x] B9 — Rotas de cargos e fila
 **Ref.:** architecture §6.1 (`positions`, `queue`, `queue/suggestion`).
 **Fazer:** métodos no serviço e `http/position-routes.ts`: criar, editar e remover cargo; `PUT /queue` (aplica a ordem); `GET /queue/suggestion` (só leitura, chama `suggestOrder`, não salva).
 **Testes (escrever antes):**
@@ -496,9 +521,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - `suggestion` não salva nem notifica.
 
 **Commit sugerido:** `feat(server): adiciona rotas de cargos e ordem de votação`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST/PATCH/DELETE /api/elections/:id/positions[/:pid]`, `PUT /api/elections/:id/queue` e `GET /api/elections/:id/queue/suggestion`, todas com `requireAdmin`. A sugestão é só leitura (não salva, não agenda, não notifica).
+- Arquivos: `apps/server/src/http/position-routes.ts`, `src/services/election-service.ts` (`updatePosition`, `removePosition`, `applyQueueOrder`, `suggestQueueOrder`), `src/app.ts`, `src/http/election-routes.ts` (exporta `ElectionParams`), `test/http/position-routes.test.ts`, `test/support/election-fixtures.ts` (`draftElectionWithPositions`).
+- Como usar: `service.updatePosition(adminId, id, pid, input)`, `removePosition(adminId, id, pid)`, `applyQueueOrder(adminId, id, positionIds)` (os três devolvem `ElectionRecord`) e `suggestQueueOrder(adminId, id)` → `string[]`. `addPosition` já existia (B7a). Fixture: `draftElectionWithPositions({ id, adminId?, positionIds })` → rascunho só com cargos (título = id), que a B10 pode reaproveitar.
+- Testes: `position-routes.test.ts`, 21 execuções (criar 3, editar 2, remover 2, fila 3, sugestão 3, autenticação 8 com `it.each`). Servidor: 233 testes, 99,66% statements / 100% branches / 100% linhas. Domínio 223, shared 138, web 2. `lint`, `format:check` e `typecheck` verdes. Os testes de sugestão usam um cenário em que a ordem sugerida difere da atual (`[treasurer, mayor]` contra `[mayor, treasurer]`), então o teste falha se a rota devolver a fila armazenada.
+- Decisões: (1) `suggestQueueOrder` usa `loadOwned` direto, sem `closeRoundIfDue`: a sugestão só olha cargos pendentes e não grava. (2) Erros de domínio seguem o mapa da S0.4: `POSITION_NOT_FOUND` 404, `ELECTION_NOT_DRAFT`, `DUPLICATE_POSITION_TITLE` e `INVALID_QUEUE_ORDER` 409. (3) Nenhum schema novo: `createPositionBodySchema`, `updatePositionBodySchema` e `queueBodySchema` já existiam (S0.3b).
 
-### [ ] B10 — Rotas de candidatos
+### [x] B10 — Rotas de candidatos
 **Ref.:** architecture §6.1 (`candidates`, anexar candidato existente).
 **Fazer:** criar, editar e remover candidato; `POST /positions/:pid/candidates/:cid`.
 **Testes (escrever antes):**
@@ -508,9 +538,14 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - remover candidato inexistente → 404.
 
 **Commit sugerido:** `feat(server): adiciona rotas de candidatos`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST /api/elections/:id/candidates` (201), `PATCH` e `DELETE .../candidates/:cid` e `POST .../positions/:pid/candidates/:cid` (anexa candidato existente), todas com `requireAdmin` e devolvendo o `AdminElectionDTO`.
+- Arquivos: `apps/server/src/http/candidate-routes.ts`, `src/services/election-service.ts` (`addCandidate`, `updateCandidate`, `removeCandidate`, `attachCandidate`), `src/app.ts`, `test/http/candidate-routes.test.ts`.
+- Como usar: `service.addCandidate(adminId, id, input)`, `updateCandidate(adminId, id, cid, input)`, `removeCandidate(adminId, id, cid)`, `attachCandidate(adminId, id, pid, cid)`; todos devolvem `ElectionRecord`. A B16b usa o `attachCandidate` no cenário de candidatos insuficientes.
+- Testes: `candidate-routes.test.ts`, 19 execuções (criar 3, editar 3, remover 2, anexar 3, autenticação 8 com `it.each`). Servidor: 252 testes, 100% linhas / 100% branches. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
+- Decisões: (1) o cenário de candidato eleito (`CANDIDATE_ALREADY_ELECTED`) é montado no próprio teste com `openRound` + `castVote` do domínio real (um eleitor só: o voto fecha a rodada e decide o cargo). (2) Nenhum schema novo: `createCandidateBodySchema` e `updateCandidateBodySchema` já existiam (S0.3b). (3) Erros de domínio seguem o mapa da S0.4: `CANDIDATE_NOT_FOUND`/`POSITION_NOT_FOUND` 404; `CANDIDATE_ALREADY_ELECTED` 409.
 
-### [ ] B11 — Credenciamento de eleitores e gerador de códigos
+### [x] B11 — Credenciamento de eleitores e gerador de códigos
 **Ref.:** architecture §5.5 (formato do código), §6.1 (`voters`).
 **Fazer:**
 - `adapters/crypto-code-generator.ts`: `createCodeGenerator((max) => crypto.randomInt(max))`, usando o gerador puro do domínio (A7) com `crypto` como fonte de aleatoriedade. Chamada do domínio: `credentialVoters(election, { count, labels? }, codeGenerator, ctx)` → `Result<{ election, codes }>`.
@@ -524,7 +559,12 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 - revogar → o eleitor fica `REVOKED` no DTO.
 
 **Commit sugerido:** `feat(server): credencia eleitores com códigos únicos e aleatórios`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `POST /api/elections/:id/voters` (201 `{ codes, election }`) e `DELETE .../voters/:vid` (devolve o `AdminElectionDTO`), ambas com `requireAdmin`. Os códigos vêm de `createCryptoCodeGenerator()` e são únicos em todas as eleições.
+- Arquivos: `apps/server/src/adapters/crypto-code-generator.ts`, `src/http/voter-routes.ts`, `src/services/election-service.ts` (`credentialVoters`, `revokeVoter`, `generateUniqueCodes`, `fixedCodes`), `src/app.ts` (`codeGenerator` entra no `ElectionService`), `test/adapters/crypto-code-generator.test.ts`, `test/http/voter-routes.test.ts`.
+- Como usar: `service.credentialVoters(adminId, id, { count, labels? })` → `{ record, codes }`; `service.revokeVoter(adminId, id, voterId)` → `ElectionRecord`. `ElectionServiceDeps` ganhou `codeGenerator`; no teste, `makeService({ codes })` e `makeTestApp({ codeGenerator: new StubCodeGenerator([...]) })`. Na B18, `compose.ts` passa `createCryptoCodeGenerator()` em `AppDeps.codeGenerator`.
+- Testes: gerador 2 (200 amostras no formato; sem repetição), serviço 9 (códigos e rótulos, colisão com outra eleição, repetição na mesma leva, notificações, 403, rótulos demais sem salvar, revogar, `VOTER_NOT_FOUND`), rotas 8 (201, lote de 500, `count` 0 e 501 → 400, 401 nas duas rotas, `REVOKED`, 404). Servidor: 271 testes, 100% linhas / 99,09% branches.
+- Decisões: (1) o serviço gera os N códigos **antes** de chamar o domínio (a conferência no repositório é assíncrona e o domínio é síncrono) e entrega a ele um gerador fixo (`fixedCodes`). (2) Código repetido ou já usado é descartado e sorteado de novo, sem limite de tentativas (31^8 combinações). (3) Duas credenciais simultâneas em eleições diferentes podem gerar o mesmo código entre a conferência e o `save`; no Pg a chave primária de `voter_codes` (B17) barra, e a rota responde 500. Aceito pelo risco ínfimo. (4) Revogar um eleitor já revogado devolve 403 `VOTER_REVOKED` (mapa da S0.4). (5) Sem schema novo: `credentialVotersBodySchema` já existia.
 
 ### [ ] B12a — Rotas do ciclo de votação (parte 1)
 **Ref.:** architecture §5.3, §6.1.
@@ -557,7 +597,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 
 Funções do domínio: `openRunoff(e, { positionId, durationSeconds? }, ctx)`, `releaseResults(e, roundId)`, `deferPosition(e, positionId)`, `cancelPosition(e, positionId, confirmTitle)`, `annulRound(e, roundId)`, `finishElection(e)` e `undo(record)`. Confira as assinaturas exatas no `index.ts` do domínio.
 
-`undo` é especial: em vez de um comando do domínio sobre a eleição, aplica `undo` sobre o histórico do registro. Sem histórico → 409 `NOTHING_TO_UNDO`. O `undo` **não** empilha um novo snapshot.
+`undo` é especial: em vez de um comando do domínio sobre a eleição, aplica `undo` sobre o histórico do registro. Sem histórico → 409 `NOTHING_TO_UNDO`. O `undo` **não** empilha um novo snapshot. **Atenção à versão:** o estado restaurado tem uma `version` antiga. Antes de salvar, troque-a por `versão atual + 1` (e salve com a versão atual como esperada); senão a versão "volta no tempo" e um cliente com dados velhos poderia sobrescrever o estado sem `VERSION_CONFLICT`. Teste: depois de um `undo`, a versão salva é maior que a anterior.
 
 **Testes (escrever antes):**
 - `cancel` sem `confirmTitle` → 400;
