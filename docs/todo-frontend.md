@@ -15,7 +15,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 ## Como o agente usa este arquivo
 
 1. **Antes de qualquer tarefa**, leia este arquivo inteiro e confira as tarefas `[x]` e as
-   *Notas do agente*. A partir da C2, nenhuma tarefa C está concluída.
+   *Notas do agente*.
 2. **Execute apenas a próxima subtarefa `[ ]`** da lista abaixo, exceto quando o
    usuário indicar outra. Os títulos C2–C24 continuam identificando o escopo arquitetural.
 3. Confira o campo **Depende de**. C não deve esperar o servidor real: até o marco M2, C2–C16
@@ -77,10 +77,14 @@ por conta própria.
   irrelevantes à asserção, como nomes/rótulos de apoio.
 - Qualquer uso deve ser determinístico e isolado por teste/factory: fixe a seed, evite estado
   aleatório global compartilhado e não dependa de valores diferentes entre execuções.
+- Configure o locale com uma instância própria por factory ou teste:
+  `import { Faker, pt_BR } from '@faker-js/faker'`, `new Faker({ locale: [pt_BR] })` e
+  `faker.seed(20261125)`. Reutilize `createTestFaker(seed?)` de
+  `apps/web/test/utils/faker.ts`; não use o singleton global `faker`.
 - Faker só entra em testes, handlers MSW e doubles; nunca em código de produção.
-- `@faker-js/faker` ainda não faz parte da stack nem das dependências atuais. Antes de adicioná-lo
-  ao `apps/web`, peça autorização ao usuário conforme `CLAUDE.md`; até lá, use valores literais e
-  factories determinísticas sem nova dependência.
+- `@faker-js/faker` está instalado como dependência de desenvolvimento de `apps/web`; a autorização
+  para adicioná-lo foi concedida. Seu uso continua restrito a testes, handlers MSW e doubles e deve
+  seguir as regras de determinismo acima.
 
 ---
 
@@ -133,7 +137,8 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/setup.ts` → jest-dom e cleanup do Testing Library.
 - `apps/web/test/App.test.tsx` → teste de fumaça do esqueleto atual.
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
-- `apps/web/test/utils/factories.ts` → factories determinísticas dos DTOs de eleição, rodada, eleitor e erro.
+- `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
+- `apps/web/test/utils/factories.ts` → factories dos DTOs; nomes acessórios são localizados e reproduzíveis.
 - `apps/web/test/utils.test.tsx` → testes da composição de providers, isolamento e factories.
 - `e2e/` → ainda não existe; será criado por C17 ou por uma subdivisão dela.
 - Módulos novos planejados:
@@ -171,15 +176,16 @@ seguem `ErrorDTO`.
 - Como usar: `createMockApiServer()`; `listen()` no `beforeAll`, `reset()` no `afterEach`,
   `close()` no `afterAll`.
 - Testes: `apps/web/test/msw/msw.test.ts` (4 testes: health, `INVALID_CODE`, credenciais inválidas
-  e criação/listagem administrativa).
-- Decisões: MSW 3.0.7 usa `SetupServer`; Node 24.22.3 foi ativado pelo NVM.
+  e criação/listagem administrativa; mais um verifica o nome inicial determinístico em pt-BR).
+- Decisões: MSW 3.0.7 usa `SetupServer`; o nome acessório da eleição usa Faker localizado e seed
+  fixa, enquanto IDs, status, códigos e regras do mock permanecem explícitos.
 
 ### [x] C2.b — Providers e fábricas de teste
 **Ref.:** architecture §9 e §10.1.
 **Depende de:** C2.a.
 **Fazer:** criar `renderWithProviders`, fábricas de DTO e reset compartilhado, sem estado global.
-Factories podem usar Faker com seed fixa para campos acessórios, após autorização para adicionar a
-dependência; valores relevantes ao comportamento devem ser fornecidos explicitamente ou ter
+Factories usam `createTestFaker()` de `apps/web/test/utils/faker.ts` para nomes acessórios,
+com locale `pt_BR` e seed fixa; valores relevantes ao comportamento permanecem explícitos ou têm
 defaults determinísticos.
 **Testes (escrever antes):** providers não vazam estado; fábricas permitem sobrescritas mínimas.
 **Pronto quando:** componentes podem ser renderizados com router, auth e socket configuráveis.
@@ -193,9 +199,10 @@ defaults determinísticos.
 - Como usar: `renderWithProviders(ui, { initialEntries, authProvider, socketProvider })`;
   factories `makeAdminElectionDTO`, `makeVoterStateDTO`, `makeElectionSummaryDTO`,
   `makeRoundView`, `makeRoundResultDTO` e `makeErrorDTO` aceitam overrides.
-- Testes: `apps/web/test/utils.test.tsx` (6: composição, isolamento e overrides nos DTOs).
-- Decisões: não adicionei Faker: a dependência ainda precisa de autorização, então os defaults
-  são literais e determinísticos. A limpeza de RTL já ocorre em `test/setup.ts`.
+- Testes: `apps/web/test/utils.test.tsx` (8: composição, isolamento, overrides e localização/
+  determinismo dos dados fictícios).
+- Decisões: nomes e rótulos acessórios usam Faker `pt_BR` por instância isolada; IDs, títulos de
+  cargo, status, votos e prazos continuam explícitos. A limpeza de RTL já ocorre em `test/setup.ts`.
 
 ### [ ] C3.a — Núcleo tipado do cliente REST
 **Ref.:** architecture §6.1–§6.3.

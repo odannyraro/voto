@@ -9,6 +9,7 @@ import type {
 } from '@voto/shared';
 import { http, HttpResponse, type JsonBodyType } from 'msw';
 import { setupServer, type SetupServer } from 'msw/node';
+import { createTestFaker } from '../utils/faker';
 
 const API_ORIGIN = 'http://localhost';
 const ADMIN_TOKEN = 'mock-admin-token';
@@ -32,10 +33,12 @@ export interface MockApiServer extends SetupServer {
  * @returns Eleição em RASCUNHO com identificadores estáveis.
  */
 function createElection(): Election {
+  const faker = createTestFaker();
+
   return {
     id: 'election-1',
     adminId: 'admin-1',
-    name: 'Mock Election',
+    name: faker.company.name(),
     status: 'DRAFT',
     defaultVotingSeconds: 60,
     positions: [],

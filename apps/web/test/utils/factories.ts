@@ -8,6 +8,7 @@ import type {
   RoundView,
   VoterStateDTO,
 } from '@voto/shared';
+import { createTestFaker } from './faker';
 
 const SERVER_NOW = '2026-01-01T12:00:00.000Z';
 
@@ -25,10 +26,12 @@ type VoterStateOptions =
  * @returns Eleição completa com defaults determinísticos.
  */
 function makeElection(overrides: Partial<Election> = {}): Election {
+  const faker = createTestFaker();
+
   return {
     id: 'election-1',
     adminId: 'admin-1',
-    name: 'Mock Election',
+    name: faker.company.name(),
     status: 'DRAFT',
     defaultVotingSeconds: 60,
     positions: [],
@@ -42,7 +45,7 @@ function makeElection(overrides: Partial<Election> = {}): Election {
 }
 
 /**
- * Cria um resumo de eleição determinístico para handlers e testes de interface.
+ * Cria um resumo de eleição com campos acessórios reproduzíveis para testes.
  *
  * @param overrides - Campos específicos que importam para o cenário.
  * @returns Resumo completo de eleição com defaults válidos.
@@ -50,9 +53,11 @@ function makeElection(overrides: Partial<Election> = {}): Election {
 export function makeElectionSummaryDTO(
   overrides: Partial<ElectionSummaryDTO> = {},
 ): ElectionSummaryDTO {
+  const faker = createTestFaker();
+
   return {
     id: 'election-1',
-    name: 'Mock Election',
+    name: faker.company.name(),
     status: 'DRAFT',
     positionCount: 0,
     voterCount: 0,
@@ -61,34 +66,38 @@ export function makeElectionSummaryDTO(
 }
 
 /**
- * Cria uma cédula de eleitor com um candidato e prazo conhecidos.
+ * Cria uma cédula de eleitor com campos de cenário explícitos e nome localizado.
  *
  * @param overrides - Campos específicos que importam para o cenário.
  * @returns Cédula completa com defaults determinísticos.
  */
 export function makeRoundView(overrides: Partial<RoundView> = {}): RoundView {
+  const faker = createTestFaker();
+
   return {
     roundId: 'round-1',
     positionTitle: 'President',
     kind: 'FIRST',
-    candidates: [{ id: 'candidate-1', name: 'Ana' }],
+    candidates: [{ id: 'candidate-1', name: faker.person.firstName() }],
     deadline: '2026-01-01T12:01:00.000Z',
     ...overrides,
   };
 }
 
 /**
- * Cria o resultado de uma rodada fechada com contagem válida.
+ * Cria o resultado de uma rodada fechada com contagem válida e nome localizado.
  *
  * @param overrides - Campos específicos que importam para o cenário.
  * @returns Resultado completo com defaults determinísticos.
  */
 export function makeRoundResultDTO(overrides: Partial<RoundResultDTO> = {}): RoundResultDTO {
+  const faker = createTestFaker();
+
   return {
     roundId: 'round-1',
     positionTitle: 'President',
     kind: 'FIRST',
-    counts: [{ candidateId: 'candidate-1', name: 'Ana', votes: 1 }],
+    counts: [{ candidateId: 'candidate-1', name: faker.person.firstName(), votes: 1 }],
     blank: 0,
     validVotes: 1,
     outcome: 'ELECTED',
@@ -128,7 +137,7 @@ export function makeVoterStateDTO(options: VoterStateOptions = {}): VoterStateDT
     case 'WAITING':
       return {
         phase: 'WAITING',
-        electionName: options.electionName ?? 'Mock Election',
+        electionName: options.electionName ?? createTestFaker().company.name(),
         serverNow,
       };
     case 'VOTING':

@@ -1,6 +1,7 @@
 import type { ErrorDTO } from '@voto/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createMockApiServer } from './mock-api-server';
+import { createTestFaker } from '../utils/faker';
 
 const mockApi = createMockApiServer();
 
@@ -44,6 +45,21 @@ describe('createMockApiServer', () => {
     });
 
     expect(response.status).toBe(401);
+  });
+
+  it('uses deterministic Brazilian Portuguese data in the initial election', async () => {
+    const loginResponse = await fetch('http://localhost/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'password' }),
+    });
+    const login = (await loginResponse.json()) as { token: string };
+    const response = await fetch('http://localhost/api/elections', {
+      headers: { Authorization: `Bearer ${login.token}` },
+    });
+    const elections = (await response.json()) as Array<{ name: string }>;
+
+    expect(elections[0]?.name).toBe(createTestFaker().company.name());
   });
 
   it('creates and lists an election for an authenticated admin', async () => {

@@ -10,6 +10,7 @@ import {
   makeRoundView,
   makeVoterStateDTO,
 } from './utils/factories';
+import { createTestFaker } from './utils/faker';
 import { renderWithProviders } from './utils/render-with-providers';
 
 const AuthContext = createContext('anonymous');
@@ -88,6 +89,12 @@ describe('renderWithProviders', () => {
 });
 
 describe('test data factories', () => {
+  it('uses deterministic Brazilian Portuguese names for non-semantic defaults', () => {
+    const names = [createTestFaker().person.firstName(), createTestFaker().person.firstName()];
+
+    expect(names).toEqual(['Fabrício', 'Fabrício']);
+  });
+
   it('preserves selected election summary values over deterministic defaults', () => {
     const summary = makeElectionSummaryDTO({
       id: 'election-special',
@@ -101,6 +108,19 @@ describe('test data factories', () => {
       status: 'DRAFT',
       positionCount: 2,
       voterCount: 0,
+    });
+  });
+
+  it('uses localized Faker data in default DTO display names', () => {
+    const summary = makeElectionSummaryDTO();
+    const round = makeRoundView();
+
+    expect({
+      electionName: summary.name,
+      candidateName: round.candidates[0]?.name,
+    }).toEqual({
+      electionName: createTestFaker().company.name(),
+      candidateName: createTestFaker().person.firstName(),
     });
   });
 
