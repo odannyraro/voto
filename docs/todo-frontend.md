@@ -16,7 +16,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 
 1. **Antes de qualquer tarefa**, leia este arquivo inteiro e confira as tarefas `[x]` e as
    *Notas do agente*. A partir da C2, nenhuma tarefa C está concluída.
-2. **Execute apenas a próxima tarefa `[ ]`** da lista, exceto quando o usuário indicar outra.
+2. **Execute apenas a próxima subtarefa `[ ]`** da lista abaixo, exceto quando o
+   usuário indicar outra. Os títulos C2–C24 continuam identificando o escopo arquitetural.
 3. Confira o campo **Depende de**. C não deve esperar o servidor real: até o marco M2, C2–C16
    usam o contrato de `@voto/shared`, MSW e socket fake.
 4. Faça RED antes de GREEN. Escreva comportamentos de caminho feliz, erro e limites.
@@ -64,6 +65,44 @@ por conta própria.
 
 ---
 
+## Avaliação e plano de commits
+
+Cada subtarefa abaixo é uma unidade que pode passar por TDD e terminar verde antes do próximo
+commit. Uma tarefa não dividida representa uma única entrega; tarefas divididas não devem ser
+agrupadas em um único commit.
+
+| Tarefa | Avaliação | Plano de commits |
+|---|---|---|
+| C2 | Divide-se: rede simulada e testes auxiliares são dependências distintas | `[ ] C2.a` handlers MSW; `[ ] C2.b` providers/fábricas |
+| C3 | Divide-se: transporte/erro e API pública podem ser validados separadamente | `[ ] C3.a` núcleo de `fetch` e `ErrorDTO`; `[ ] C3.b` métodos tipados de cada grupo de rotas |
+| C4 | Divide-se: o cliente real e a injeção por fake têm responsabilidades independentes | `[ ] C4.a` interface e cliente Socket.IO; `[ ] C4.b` `SocketProvider` e `createFakeSocket()` |
+| C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[ ] C5.a` countdown corrigido por `serverNow`; `[ ] C5.b` porcentagens e rótulos |
+| C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[ ] C6.a` diálogos de confirmação; `[ ] C6.b` `Countdown` e `ErrorMessage` |
+| C7 | Divide-se: formulário/rota e integração da sessão são dois comportamentos fechados | `[ ] C7.a` formulário e armazenamento do token; `[ ] C7.b` navegação e erros da sessão |
+| C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[ ] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[ ] C8.b` cédula e voto candidato/branco |
+| C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[ ] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[ ] C9.b` reconexão e ordenação de estado |
+| C10 | Divide-se: login em si não exige a proteção de toda a árvore de rotas | `[ ] C10.a` login, token e `/admin/me`; `[ ] C10.b` rotas protegidas e logout |
+| C11 | Divide-se: leitura da lista e mutação/criação têm UI e testes distintos | `[ ] C11.a` lista de eleições; `[ ] C11.b` criação e navegação |
+| C12 | Divide-se: adicionar/editar cargos não inclui remover e confirmar | `[ ] C12.a` criar e editar cargos; `[ ] C12.b` remover cargo e confirmar estado permitido |
+| C13 | Divide-se: cadastro/validação e edição/removal têm casos próprios | `[ ] C13.a` criar candidato e validações; `[ ] C13.b` editar/remover candidato |
+| C14 | Divide-se: eleitores e fila são abas independentes com contratos próprios | `[ ] C14.a` gerar, listar, copiar e revogar códigos; `[ ] C14.b` ordem, sugestão e confirmação |
+| C15 | Divide-se: sincronização via socket e controles ao vivo podem ser validados separadamente | `[ ] C15.a` `useAdminElection` e ressincronização; `[ ] C15.b` abrir rodada, prazo e fechar antes |
+| C16 | Divide-se: resolução de rodada e ações de cargo insuficiente são fluxos distintos | `[ ] C16.a` resultado, 2º turno, liberar, desfazer e anular; `[ ] C16.b` anexar, adiar e cancelar |
+| C17 | Divide-se: configuração do runner e dados de preparação são entregáveis separadas | `[ ] C17.a` `playwright.config.ts` e `webServer`; `[ ] C17.b` fixtures e helpers de API |
+| C18 | Não divide: uma jornada curta e linear de configuração | `[ ] C18` uma spec administrativa completa |
+| C19 | Divide-se: preparação de contexto/votos e liberação/verificação são dois grupos de risco | `[ ] C19.a` três contextos, entrada e votos; `[ ] C19.b` fechamento e liberação do resultado |
+| C20 | Divide-se: montagem do cenário e ação do 2º turno têm verificações independentes | `[ ] C20.a` cenário de `AWAITING_RUNOFF`; `[ ] C20.b` abrir 2º turno e verificar vencedor |
+| C21 | Divide-se: elegibilidade do eleito e candidatos insuficientes são cenários separados | `[ ] C21.a` exclusão do eleito no cargo seguinte; `[ ] C21.b` cargo sem candidatos e confirmação |
+| C22 | Divide-se: desfazer e invalidade/integração não precisam estar no mesmo commit | `[ ] C22.a` e2e de `undo`; `[ ] C22.b` código inválido e coordenação da execução no CI |
+| C23 | Divide-se: semântica acessível e layout responsivo podem ser revisados separadamente | `[ ] C23.a` labels, roles, foco e mensagens; `[ ] C23.b` layout móvel e estados visíveis |
+| C24 | Divide-se: revisar duas pirâmides de testes separadamente reduz o risco | `[ ] C24.a` test smells no front; `[ ] C24.b` test smells nos e2e e cobertura final |
+
+**Ordem de execução:** C2–C6 podem começar assim que o esqueleto estiver disponível. C7–C16 seguem
+as dependências internas da lista original. C17–C22 aguardam o M2, exceto pela estrutura que puder
+ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve começar após C23.
+
+---
+
 ## Mapa rápido do código
 
 > Atualizar esta seção quando cada tarefa criar módulos novos.
@@ -90,383 +129,412 @@ por conta própria.
 
 ## Tarefas
 
-### [ ] C2 — Infraestrutura de testes com MSW
-**Ref.:** architecture §6, §10.1; `divisao-tarefas.md` §5.
+### [ ] C2.a — Handlers MSW
+**Ref.:** architecture §6 e §10.1.
 **Depende de:** S0.5 concluído; S0.3b concluído.
-**Fazer:**
-- Criar handlers MSW que implementem as rotas REST necessárias ao desenvolvimento C7–C16, com
-  estado em memória isolado por servidor de teste.
-- Criar helpers de `renderWithProviders` para `MemoryRouter`, contexto de autenticação e socket,
-  sem estado global entre testes.
-- Criar fábricas de `AdminElectionDTO`, `VoterStateDTO`, `ElectionSummaryDTO`,
-  `RoundView`, `RoundResultDTO` e `ErrorDTO`.
-- Implementar respostas coerentes de sucesso, 400, 401, 403, 404, 409 e 410.
-**Testes (escrever antes):**
-- um handler válido devolve JSON do contrato;
-- o helper aplica o estado inicial sem vazamento entre testes;
-- fábricas permitem sobrescrever somente os campos relevantes.
-**Pronto quando:** os testes do front podem fazer chamadas REST sem rede real e resetar o estado
-entre casos.
-**Arquivos esperados:** `apps/web/test/msw/`, `apps/web/test/utils/`.
+**Fazer:** criar handlers MSW com estado em memória isolado, cobertura das rotas REST usadas pelas
+telas C7–C16 e respostas coerentes de sucesso e erro.
+**Testes (escrever antes):** um handler válido devolve o DTO correto; respostas 400/401/403/404/409/410
+seguem `ErrorDTO`.
+**Pronto quando:** rede de teste funciona sem servidor real e o estado pode ser resetado.
+**Arquivos:** `apps/web/test/msw/`.
+**Commit sugerido:** `test(web): adiciona handlers MSW para o contrato da API`
 
-### [ ] C3 — Cliente REST tipado
+### [ ] C2.b — Providers e fábricas de teste
+**Ref.:** architecture §9 e §10.1.
+**Depende de:** C2.a.
+**Fazer:** criar `renderWithProviders`, fábricas de DTO e reset compartilhado, sem estado global.
+**Testes (escrever antes):** providers não vazam estado; fábricas permitem sobrescritas mínimas.
+**Pronto quando:** componentes podem ser renderizados com router, auth e socket configuráveis.
+**Arquivos:** `apps/web/test/utils/`, `apps/web/test/setup.ts`.
+**Commit sugerido:** `test(web): adiciona providers e fábricas de dados`
+
+### [ ] C3.a — Núcleo tipado do cliente REST
 **Ref.:** architecture §6.1–§6.3.
-**Depende de:** C2; schemas e DTOs de `@voto/shared`.
-**Fazer:**
-- Criar `api-client.ts` com `fetch` tipado, prefixo `/api` e token Bearer opcional.
-- Ler `ErrorDTO` em respostas não 2xx e lançar um erro HTTP tipado usado pela UI.
-- Cobrir os métodos usados pelas telas sem expor detalhes de `fetch` aos componentes.
-**Testes (escrever antes):**
-- GET adiciona Authorization quando há token;
-- POST serializa o body esperado;
-- erro JSON vira código e mensagem do `ErrorDTO`;
-- resposta não JSON/sem corpo gera erro controlado;
-- 204 não tenta interpretar JSON.
-**Pronto quando:** todas as chamadas conhecidas usam o mesmo cliente e não há `fetch` espalhado em
-componentes.
-**Arquivos esperados:** `apps/web/src/api/api-client.ts`.
+**Depende de:** C2.b.
+**Fazer:** criar `fetch` tipado, token Bearer, prefixo `/api`, `ErrorDTO` tipado e tratamento de 204.
+**Testes (escrever antes):** autorização; serialização; JSON de erro; resposta vazia; resposta não JSON.
+**Pronto quando:** o núcleo HTTP retorna dados tipados ou um erro controlado.
+**Arquivos:** `apps/web/src/api/api-client.ts`.
+**Commit sugerido:** `feat(web): cria núcleo tipado do cliente REST`
 
-### [ ] C4 — Cliente e provedor de Socket.IO
-**Ref.:** architecture §7; `SOCKET_EVENTS`.
-**Depende de:** C2; C3 pode ser paralelo.
-**Fazer:**
-- Criar a interface do socket, `socket-client.ts`, `SocketProvider` injetável e
-  `createFakeSocket()` para testes.
-- Usar `SOCKET_EVENTS.ADMIN_STATE`, `VOTER_STATE` e `ADMIN_WATCH`.
-- O provedor deve permitir substituir o cliente real por fake sem importar implementação concreta
-  nos componentes.
-**Testes (escrever antes):**
-- conecta com o token no `auth`;
-- ouve `admin:state` e `voter:state`;
-- `admin:watch` envia o `electionId`;
-- desconexão limpa listeners;
-- componente consumidor recebe estado completo substituindo o anterior.
-**Pronto quando:** hooks e telas dependem apenas do provedor, nunca de `socket.io-client` diretamente.
-**Arquivos esperados:** `apps/web/src/api/socket-client.ts`, `apps/web/test/fakes/`.
+### [ ] C3.b — Métodos REST das telas
+**Ref.:** architecture §6.1–§6.2.
+**Depende de:** C3.a.
+**Fazer:** agrupar métodos por admin, eleitor e público sem espalhar `fetch` pelos componentes.
+**Testes (escrever antes):** método GET/POST/PATCH/DELETE usa rota, método e body corretos.
+**Pronto quando:** C7–C16 podem chamar toda a API por funções do cliente.
+**Arquivos:** `apps/web/src/api/api-client.ts`.
+**Commit sugerido:** `feat(web): adiciona métodos REST de admin e eleitor`
 
-### [ ] C5 — Funções puras de tempo e apresentação
-**Ref.:** architecture §5.4 (desempate), §8.3 (serverNow).
-**Depende de:** contratos de `@voto/shared`; pode começar em paralelo a C2–C4.
-**Fazer:**
-- Implementar contagem regressiva corrigida pela diferença entre o relógio do servidor e do cliente.
-- Implementar porcentagens sobre votos válidos e rótulos em português.
-- Implementar rótulos das regras `YOUNGEST`, `OLDEST` e `MOST_REMAINING_TIME`.
-- Usar deadline ISO como entrada e evitar `Date.now()` dentro de regras testáveis.
-**Testes (escrever antes):**
-- prazo futuro, limite exato, prazo vencido e relógios fora de sincronismo;
-- 0 votos válidos não divide por zero;
-- porcentagens arredondadas conforme o formato escolhido;
-- três rótulos de desempate.
-**Pronto quando:** countdown e formatação são puros, determinísticos e reutilizáveis.
-**Arquivos esperados:** `apps/web/src/lib/`.
+### [ ] C4.a — Cliente Socket.IO
+**Ref.:** architecture §7.
+**Depende de:** C2.b.
+**Fazer:** criar interface tipada e cliente com `SOCKET_EVENTS`, token no handshake e listeners seguros.
+**Testes (escrever antes):** conexão usa auth; admin watch envia ID; dois eventos recebem DTOs; desconexão limpa listeners.
+**Pronto quando:** o cliente real conversa com o gateway pelo contrato compartilhado.
+**Arquivos:** `apps/web/src/api/socket-client.ts`.
+**Commit sugerido:** `feat(web): cria cliente tipado de Socket.IO`
 
-### [ ] C6 — Componentes base
+### [ ] C4.b — SocketProvider e fake
+**Ref.:** architecture §7 e §9.
+**Depende de:** C4.a.
+**Fazer:** criar provider injetável e `createFakeSocket()` substituível pelos testes.
+**Testes (escrever antes):** consumidor recebe estado novo e substitui o anterior; fake conecta/desconecta.
+**Pronto quando:** componentes não importam a implementação concreta do socket.
+**Arquivos:** `apps/web/src/api/socket-client.ts`, `apps/web/test/`.
+**Commit sugerido:** `test(web): adiciona socket fake e provider injetável`
+
+### [ ] C5.a — Countdown corrigido pelo servidor
+**Ref.:** architecture §8.3.
+**Depende de:** contratos de `@voto/shared`.
+**Fazer:** calcular tempo restante comparando deadline ISO com o deslocamento de `serverNow`.
+**Testes (escrever antes):** futuro, limite exato, vencido e relógios do cliente desincronizados.
+**Pronto quando:** countdown é puro e determinístico.
+**Arquivos:** `apps/web/src/lib/countdown.ts`.
+**Commit sugerido:** `feat(web): calcula countdown sincronizado com o servidor`
+
+### [ ] C5.b — Porcentagens e rótulos
+**Ref.:** architecture §5.4.
+**Depende de:** C5.a.
+**Fazer:** calcular porcentagens sobre válidos e rótulos dos três desempates.
+**Testes (escrever antes):** zero votos válidos, arredondamento e todos os rótulos.
+**Pronto quando:** formatação não contém regra implícita no componente.
+**Arquivos:** `apps/web/src/lib/format.ts`.
+**Commit sugerido:** `feat(web): adiciona formatação de votos e desempates`
+
+### [ ] C6.a — Diálogos de confirmação
+**Ref.:** architecture §9 e regra de dupla confirmação.
+**Depende de:** C2.b.
+**Fazer:** criar `ConfirmDialog` e `DoubleConfirmDialog` acessíveis; o segundo exige título exato.
+**Testes (escrever antes):** confirmar/cancelar, nome vazio/diferente/exato.
+**Pronto quando:** cancelamento e confirmação são acionados por callbacks explícitos.
+**Arquivos:** `apps/web/src/components/ConfirmDialog.tsx`, `DoubleConfirmDialog.tsx`.
+**Commit sugerido:** `feat(web): cria diálogos simples e de dupla confirmação`
+
+### [ ] C6.b — Countdown e mensagem de erro
 **Ref.:** architecture §9.
-**Depende de:** C2; C5 para countdown.
-**Fazer:**
-- Criar `ConfirmDialog`, `DoubleConfirmDialog`, `Countdown` e `ErrorMessage`.
-- `DoubleConfirmDialog` deve exigir o título exato do cargo no segundo passo.
-- Usar elementos acessíveis e callbacks explícitos; não ocultar regras de negócio fora do domínio.
-**Testes (escrever antes):**
-- confirmar/cancelar em um clique;
-- segundo passo não confirma com nome vazio ou diferente;
-- nome exato confirma;
-- countdown mostra prazo, vencimento e atualização;
-- `ErrorMessage` mostra código e mensagem sem vazar conteúdo técnico.
-**Pronto quando:** componentes são acessíveis e testados pelo role/label.
-**Arquivos esperados:** `apps/web/src/components/`.
+**Depende de:** C5.b.
+**Fazer:** criar componentes acessíveis `Countdown` e `ErrorMessage`.
+**Testes (escrever antes):** countdown atualiza/vence; erro mostra código e mensagem legível.
+**Pronto quando:** componentes reutilizáveis passam pelos seletores de role/label.
+**Arquivos:** `apps/web/src/components/Countdown.tsx`, `ErrorMessage.tsx`.
+**Commit sugerido:** `feat(web): cria countdown e mensagens de erro reutilizáveis`
 
-### [ ] C7 — Entrada do eleitor
-**Ref.:** architecture §6.2 (`POST /voter/session`), §9 rota `/`.
-**Depende de:** C2, C3.
-**Fazer:**
-- Substituir a página provisória `/` por formulário com código e botão "Entrar".
-- Armazenar token/identidade necessários à navegação sem implementar regras de segurança no front.
-- Mostrar `INVALID_CODE` como código inválido e `VOTER_REVOKED` como código revogado.
-- Em sucesso, navegar para `/votar`.
-**Testes (escrever antes):**
-- código válido inicia a sessão;
-- código vazio não chama a API ou mostra validação;
-- `INVALID_CODE` mostra mensagem de código inválido;
-- `VOTER_REVOKED` mostra mensagem de revogado;
-- erro de rede mostra mensagem reutilizável.
-**Pronto quando:** `/` está pronta para uso pelo celular e falha pelos estados definidos pelo backend.
-**Arquivos esperados:** `apps/web/src/features/voter/`.
+### [ ] C7.a — Formulário de entrada do eleitor
+**Ref.:** architecture §9 rota `/`.
+**Depende de:** C3.b, C6.b.
+**Fazer:** substituir a página provisória por campo de código, botão Entrar e validação local.
+**Testes (escrever antes):** código válido inicia sessão; vazio não chama API.
+**Pronto quando:** `/` é uma tela mobile, acessível e funcional.
+**Arquivos:** `apps/web/src/features/voter/VoterEntryPage.tsx`.
+**Commit sugerido:** `feat(web): cria entrada do eleitor por código`
 
-### [ ] C8 — Sessão e cédula do eleitor
-**Ref.:** architecture §6.2 e §7 (`VoterStateDTO`, `VOTER_STATE`).
-**Depende de:** C4, C5, C7.
-**Fazer:**
-- Criar `useVoterSession`, que consulta estado inicial e reage a `voter:state`.
-- Renderizar as fases `WAITING` e `VOTING`.
-- `VOTING` mostra cargo, candidatos, voto branco e countdown usando `serverNow`.
-- Postar voto em `POST /api/voter/votes` sem passar pelo socket.
-**Testes (escrever antes):**
-- fase WAITING mostra espera;
-- fase VOTING lista a cédula e o deadline;
-- votar em candidato chama a API com round/candidate;
-- votar em branco usa `BLANK`;
-- `VOTER_ALREADY_VOTED` não permite ação duplicada;
-- `ROUND_EXPIRED` exibe prazo expirado.
-**Pronto quando:** o eleitor consegue aguardar, votar em candidato ou branco e receber estados em tempo real.
-**Arquivos esperados:** `apps/web/src/features/voter/`, hook e tela de `/votar`.
+### [ ] C7.b — Erros e navegação da sessão do eleitor
+**Ref.:** architecture §6.2.
+**Depende de:** C7.a.
+**Fazer:** guardar token/electionId, navegar para `/votar` e mapear `INVALID_CODE`/`VOTER_REVOKED`.
+**Testes (escrever antes):** sucesso navega; inválido e revogado mostram mensagens distintas.
+**Pronto quando:** sessão criada é persistida apenas no que a UI precisa para continuar.
+**Arquivos:** `apps/web/src/features/voter/`.
+**Commit sugerido:** `feat(web): integra a sessão do eleitor à tela de voto`
 
-### [ ] C9 — Fases finais e reconexão do eleitor
-**Ref.:** architecture §6.2, §7 (`VOTED`, `RESULTS`, `FINISHED`).
-**Depende de:** C8.
-**Fazer:**
-- Renderizar `VOTED`, `RESULTS` e `FINISHED`.
-- Ao reconectar ou remontar, buscar `GET /api/voter/state` e substituir o estado pelo servidor.
-- Não inferir ou manter contagem parcial antes de a API liberar o resultado.
-**Testes (escrever antes):**
-- VOTED mostra confirmação;
-- RESULTS mostra contagem, brancos e desfecho;
-- FINISHED encerra a sessão;
-- reconexão chama o estado atual;
-- resposta stale não sobrescreve um estado mais novo recebido pelo socket.
-**Pronto quando:** as fases finais são fielmente renderizadas e reconexão não perde estado.
-**Arquivos esperados:** `apps/web/src/features/voter/`.
+### [ ] C8.a — Hook da sessão e fase WAITING
+**Ref.:** architecture §6.2 e §7.
+**Depende de:** C4.b, C5.b, C7.b.
+**Fazer:** criar `useVoterSession`, consulta inicial e assinatura de `voter:state`.
+**Testes (escrever antes):** WAITING exibe espera; reconexão recebe estado atual.
+**Pronto quando:** hook substitui o estado local pelo estado recebido do servidor.
+**Arquivos:** `apps/web/src/features/voter/useVoterSession.ts`.
+**Commit sugerido:** `feat(web): adiciona hook da sessão do eleitor`
 
-### [ ] C10 — Autenticação do admin
-**Ref.:** architecture §6.1 (`/admin/login`, `/admin/me`), §9.
-**Depende de:** C2, C3.
-**Fazer:**
-- Criar login em `/admin/login`, armazenamento do token e busca de `/admin/me`.
-- Criar proteção de rotas `/admin` e `/admin/eleicoes/:id/*`.
-- Token ausente ou inválido retorna ao login; usuário de papel eleitor é bloqueado.
-**Testes (escrever antes):**
-- credenciais válidas armazenam token e entram;
-- credenciais inválidas mostram erro;
-- `/admin/me` sem token redireciona;
-- token de eleitor é rejeitado;
-- logout remove o acesso protegido.
-**Pronto quando:** todas as rotas administrativas exigem o fluxo de autenticação.
-**Arquivos esperados:** `apps/web/src/features/admin/auth/`.
+### [ ] C8.b — Cédula e registro do voto
+**Ref.:** architecture §6.2.
+**Depende de:** C8.a.
+**Fazer:** renderizar candidatos, voto branco e countdown; postar voto por REST.
+**Testes (escrever antes):** candidato e `BLANK`; já votou; rodada vencida.
+**Pronto quando:** `/votar` permite votar uma vez enquanto a fase é VOTING.
+**Arquivos:** `apps/web/src/features/voter/VoterVotePage.tsx`.
+**Commit sugerido:** `feat(web): adiciona cédula e envio do voto`
 
-### [ ] C11 — Lista e criação de eleições
-**Ref.:** architecture §6.1 (`GET/POST /elections`), §9.
-**Depende de:** C10.
-**Fazer:**
-- Criar `/admin` com lista de `ElectionSummaryDTO`.
-- Mostrar nome, estado, quantidade de cargos e eleitores.
-- Criar eleição pelo nome e prazo padrão opcional, validando 5–3600 segundos.
-- Navegar para configuração da eleição criada.
-**Testes (escrever antes):**
-- lista mostra apenas os dados presentes na resposta;
-- criação válida adiciona/navega para a eleição;
-- nome vazio é bloqueado;
-- prazo 4/3601/fracionário é bloqueado;
-- 403/404/409 usa `ErrorMessage`.
-**Pronto quando:** admin consegue listar e criar uma eleição pela UI.
-**Arquivos esperados:** `apps/web/src/features/admin/elections/`.
+### [ ] C9.a — Fases VOTED, RESULTS e FINISHED
+**Ref.:** architecture §6.2.
+**Depende de:** C8.b.
+**Fazer:** renderizar confirmação, resultado liberado e eleição encerrada.
+**Testes (escrever antes):** cada fase mostra somente os dados presentes no DTO.
+**Pronto quando:** telas finais não calculam nem inferem contagens.
+**Arquivos:** `apps/web/src/features/voter/`.
+**Commit sugerido:** `feat(web): adiciona fases finais da tela do eleitor`
 
-### [ ] C12 — Configuração de cargos
-**Ref.:** architecture §6.1 (`positions`), §5.3.
-**Depende de:** C11.
-**Fazer:**
-- Criar a aba Cargos com criar, editar e remover apenas em estados permitidos pela API.
-- Formulário usa título e enum de desempate.
-- Recarregar o estado completo a partir da resposta `AdminElectionDTO`.
-**Testes (escrever antes):**
-- criar cargo aparece na fila;
-- título vazio é bloqueado;
-- editar título e desempate mantém os demais dados;
-- remover cargo sem candidatos é confirmado;
-- erro de cargo em estado inválido mostra a mensagem.
-**Pronto quando:** configuração de cargos usa o estado do servidor como fonte da verdade.
-**Arquivos esperados:** `apps/web/src/features/admin/config/`.
+### [ ] C9.b — Reconexão e estado stale
+**Ref.:** architecture §7.
+**Depende de:** C9.a.
+**Fazer:** buscar `GET /voter/state` em remount/reconexão e impedir resultado stale mais antigo.
+**Testes (escrever antes):** reconexão chama API; socket mais novo prevalece.
+**Pronto quando:** reconectar restaura a fase real da votação.
+**Arquivos:** `apps/web/src/features/voter/useVoterSession.ts`.
+**Commit sugerido:** `fix(web): ressincroniza o eleitor após reconexão`
 
-### [ ] C13 — Configuração de candidatos
-**Ref.:** architecture §6.1 (`candidates`), §5.4.
-**Depende de:** C12.
-**Fazer:**
-- Criar a aba Candidatos com nome, idade, meses restantes, candidaturas e primeira opção.
-- Permitir editar/remover candidato e verificar que a primeira opção pertence às candidaturas.
-- Marcar visualmente os cargos marcados em cada candidatura.
-**Testes (escrever antes):**
-- cria candidato válido;
-- idade 16/120 aceita e limites fora rejeitam;
-- candidaturas vazias são bloqueadas;
-- primeira opção fora das candidaturas é bloqueada;
-- editar/remover candidato usa a resposta completa da API;
-- candidato eleito não pode ser removido/mostra erro.
-**Pronto quando:** a configuração representa candidaturas e primeira opção sem divergência do domínio.
-**Arquivos esperados:** `apps/web/src/features/admin/config/`.
+### [ ] C10.a — Login e identidade do admin
+**Ref.:** architecture §6.1.
+**Depende de:** C3.b.
+**Fazer:** criar `/admin/login`, armazenar token e consultar `/admin/me`.
+**Testes (escrever antes):** credenciais válidas/ inválidas; dados do `/me`.
+**Pronto quando:** um admin autenticado pode manter sua identidade na sessão.
+**Arquivos:** `apps/web/src/features/admin/auth/`.
+**Commit sugerido:** `feat(web): adiciona login e identidade do admin`
 
-### [ ] C14 — Eleitores e ordem da fila
-**Ref.:** architecture §6.1 (`voters`, `queue`, `queue/suggestion`).
-**Depende de:** C13.
-**Fazer:**
-- Criar aba Eleitores: gerar de 1–500 códigos, rótulos opcionais, listar, copiar e revogar.
-- Mostrar somente os códigos da resposta da geração; não inferir outros códigos.
-- Criar aba Ordem com botões ↑↓ e sugestão.
-- `Sugerir ordem` exige confirmação antes de aplicar `PUT /queue`.
-**Testes (escrever antes):**
-- gera quantidade válida e mostra os códigos;
-- count 0/501 é bloqueado;
-- rótulo opcional é enviado;
-- revogar muda o status de `CREDENTIALED` para `REVOKED`;
-- ↑/↓ altera a ordem proposta;
-- sugestão difere da atual até o usuário confirmar.
-**Pronto quando:** admins conseguem credenciar eleitores e confirmar uma ordem de votação.
-**Arquivos esperados:** `apps/web/src/features/admin/config/`.
+### [ ] C10.b — Rotas protegidas e logout
+**Ref.:** architecture §9.
+**Depende de:** C10.a.
+**Fazer:** proteger `/admin` e rotas de eleição; rejeitar token ausente, inválido ou de outro papel.
+**Testes (escrever antes):** sem token redireciona; papel errado bloqueia; logout limpa acesso.
+**Pronto quando:** todas as áreas administrativas usam uma proteção única.
+**Arquivos:** `apps/web/src/features/admin/auth/`, `App.tsx`.
+**Commit sugerido:** `feat(web): protege as rotas administrativas`
 
-### [ ] C15 — Painel ao vivo e estado via socket
-**Ref.:** architecture §6.1, §7, §8.2.
-**Depende de:** C4, C11, C14.
-**Fazer:**
-- Criar `useAdminElection`, que obtém `GET /elections/:id` e depois observa `admin:state`.
-- Renderizar próximo cargo, abrir 1º turno/rodada, progresso x/y, prazo e fechar antes.
-- Em reconnect, emitir `admin:watch` e buscar o estado completo novamente.
-**Testes (escrever antes):**
-- READY mostra cargo e ação de abrir;
-- ROUND_IN_PROGRESS mostra progresso sem contagem parcial;
-- abertura envia cargo e duração opcional;
-- deadline usa `serverNow`;
-- fechar antes chama a rota correta;
-- socket substitui o estado pelo DTO recebido.
-**Pronto quando:** o painel ao vivo não mantém estado próprio divergente do servidor.
-**Arquivos esperados:** `apps/web/src/features/admin/live/`.
+### [ ] C11.a — Lista de eleições
+**Ref.:** architecture §6.1.
+**Depende de:** C10.b.
+**Fazer:** criar `/admin` com `ElectionSummaryDTO`, estados e contagens.
+**Testes (escrever antes):** resposta vazia; itens mostram nome, status, cargos e eleitores.
+**Pronto quando:** admin visualiza suas eleições.
+**Arquivos:** `apps/web/src/features/admin/elections/`.
+**Commit sugerido:** `feat(web): lista eleições do administrador`
 
-### [ ] C16 — Resultados e candidatos insuficientes
-**Ref.:** architecture §5.4, §6.1, §9.
-**Depende de:** C15; C6.
-**Fazer:**
-- Mostrar resultado da última rodada, abrir 2º turno, liberar resultado, desfazer e anular.
-- Mostrar painel de candidatos insuficientes: anexar existente, criar novo, adiar e cancelar.
-- Cancelamento usa `DoubleConfirmDialog` no front e envia `confirmTitle`.
-- Desabilitar ações que não correspondem ao `next.status`.
-**Testes (escrever antes):**
-- resultado eleito mostra o candidato;
-- RUNOFF_REQUIRED oferece abrir 2º turno;
-- NO_VALID_VOTES mostra o desfecho;
-- liberar/anular/undo usam as rotas corretas;
-- anexar candidato atualiza o estado;
-- adiar não pede título; cancelar exige título exato;
-- desfazer sem histórico é rejeitado pela API/UI.
-**Pronto quando:** todas as ações de resolução usam o DTO completo e não calculam eleições no front.
-**Arquivos esperados:** `apps/web/src/features/admin/live/`.
+### [ ] C11.b — Criação de eleição
+**Ref.:** architecture §6.1.
+**Depende de:** C11.a.
+**Fazer:** criar formulário com nome e prazo padrão válido; navegar para configuração criada.
+**Testes (escrever antes):** nome vazio; prazo 4/3601/fracionário; criação válida.
+**Pronto quando:** eleição criada aparece no fluxo de configuração.
+**Arquivos:** `apps/web/src/features/admin/elections/`.
+**Commit sugerido:** `feat(web): cria eleições pela interface`
 
-### [ ] C17 — Infraestrutura Playwright
-**Ref.:** architecture §10.2, §14.
-**Depende de:** marco M2 (`REPOSITORY=memory`, servidor real integrado).
-**Fazer enquanto o M2 não chega:**
-- Planejar fixtures e não criar testes contra servidores fictícios permanentes.
-- Ao chegar o M2, criar `e2e/playwright.config.ts` com `webServer` que sobe o servidor real,
-  Chromium e base URL.
-- Criar fixtures de login admin, eleição pronta e códigos pela API.
-- Configurar a pasta `e2e/specs`.
-- Não editar `.github/workflows/ci.yml`; a ativação no CI depende de B.
-**Testes (escrever antes):**
-- smoke de conexão da configuração;
-- fixtures autenticam e retornam dados válidos;
-- contexto novo começa sem sessão de admin.
-**Pronto quando:** os testes podem subir o servidor real em memória e criar dados pelo backend.
-**Arquivos esperados:** `e2e/playwright.config.ts`, `e2e/fixtures/`.
+### [ ] C12.a — Criar e editar cargos
+**Ref.:** architecture §6.1 e §5.3.
+**Depende de:** C11.b.
+**Fazer:** criar aba Cargos com título e desempate; atualizar cargo via DTO completo.
+**Testes (escrever antes):** criar no fim da fila; título vazio; editar regra/título.
+**Pronto quando:** cargos são criados/editados sem recarregar estado manualmente.
+**Arquivos:** `apps/web/src/features/admin/config/`.
+**Commit sugerido:** `feat(web): cria e edita cargos da eleição`
+
+### [ ] C12.b — Remover cargos
+**Ref.:** architecture §6.1.
+**Depende de:** C12.a.
+**Fazer:** confirmar remoção e respeitar estados retornados pela API.
+**Testes (escrever antes):** removido some da lista; erro de estado inválido é exibido.
+**Pronto quando:** remoção usa confirmação acessível e estado real do servidor.
+**Arquivos:** `apps/web/src/features/admin/config/`.
+**Commit sugerido:** `feat(web): remove cargos com confirmação`
+
+### [ ] C13.a — Criar candidato
+**Ref.:** architecture §6.1 e §5.4.
+**Depende de:** C12.b.
+**Fazer:** criar formulário de candidato com candidaturas e primeira opção.
+**Testes (escrever antes):** limites de idade; candidaturas vazias; primeira opção fora das candidaturas.
+**Pronto quando:** candidato válido é criado e aparece nas opções dos cargos.
+**Arquivos:** `apps/web/src/features/admin/config/`.
+**Commit sugerido:** `feat(web): cria candidatos e suas candidaturas`
+
+### [ ] C13.b — Editar e remover candidato
+**Ref.:** architecture §6.1.
+**Depende de:** C13.a.
+**Fazer:** permitir edição/removal e bloquear candidato eleito pela resposta da API.
+**Testes (escrever antes):** editar primeira opção; remover candidato; eleito gera erro.
+**Pronto quando:** ações de candidato usam o agregado completo recebido do servidor.
+**Arquivos:** `apps/web/src/features/admin/config/`.
+**Commit sugerido:** `feat(web): edita e remove candidatos`
+
+### [ ] C14.a — Gestão de eleitores
+**Ref.:** architecture §6.1.
+**Depende de:** C13.b.
+**Fazer:** gerar 1–500 códigos, mostrar rótulos/códigos, copiar e revogar.
+**Testes (escrever antes):** count 0/501; rótulos; revogação altera status.
+**Pronto quando:** admin credencia eleitores sem inferir códigos.
+**Arquivos:** `apps/web/src/features/admin/config/VotersTab.tsx`.
+**Commit sugerido:** `feat(web): gerencia códigos de eleitores`
+
+### [ ] C14.b — Ordem da fila
+**Ref.:** architecture §6.1.
+**Depende de:** C14.a.
+**Fazer:** criar abas com ↑↓, buscar sugestão e confirmar antes de aplicar a fila.
+**Testes (escrever antes):** mover cargos; sugestão difere até confirmar; aplicar fila.
+**Pronto quando:** ordem proposta e aplicada ficam distintas até confirmação.
+**Arquivos:** `apps/web/src/features/admin/config/QueueTab.tsx`.
+**Commit sugerido:** `feat(web): permite ordenar e sugerir cargos`
+
+### [ ] C15.a — Estado ao vivo via socket
+**Ref.:** architecture §6.1 e §7.
+**Depende de:** C4.b, C11.b.
+**Fazer:** criar `useAdminElection`, obter estado REST e observar `admin:state`.
+**Testes (escrever antes):** estado inicial; socket substitui estado; watch reconecta.
+**Pronto quando:** painel não mantém snapshot próprio divergente do servidor.
+**Arquivos:** `apps/web/src/features/admin/live/useAdminElection.ts`.
+**Commit sugerido:** `feat(web): sincroniza o painel ao vivo do admin`
+
+### [ ] C15.b — Controles de abertura e fechamento
+**Ref.:** architecture §6.1.
+**Depende de:** C15.a, C14.b.
+**Fazer:** mostrar próximo cargo, abrir rodada, progresso, deadline e fechar antes.
+**Testes (escrever antes):** READY; ROUND_IN_PROGRESS; abertura; deadline; fechamento.
+**Pronto quando:** todas as ações usam as rotas corretas e o DTO atual.
+**Arquivos:** `apps/web/src/features/admin/live/`.
+**Commit sugerido:** `feat(web): adiciona controles da rodada ao vivo`
+
+### [ ] C16.a — Resultado e resolução da rodada
+**Ref.:** architecture §5.4 e §6.1.
+**Depende de:** C15.b.
+**Fazer:** mostrar resultado, abrir 2º turno, liberar, desfazer e anular.
+**Testes (escrever antes):** ELECTED, RUNOFF_REQUIRED, NO_VALID_VOTES e ações disponíveis.
+**Pronto quando:** a resolução usa status e DTO do servidor sem cálculos locais.
+**Arquivos:** `apps/web/src/features/admin/live/`.
+**Commit sugerido:** `feat(web): resolve resultados e segundo turno no painel`
+
+### [ ] C16.b — Candidatos insuficientes
+**Ref.:** architecture §5.4.
+**Depende de:** C16.a, C6.a.
+**Fazer:** anexar candidato, adiar e cancelar com dupla confirmação e `confirmTitle`.
+**Testes (escrever antes):** anexar; adiar; cancelar nome vazio/diferente/exato.
+**Pronto quando:** todas as opções aparecem somente para `INSUFFICIENT_CANDIDATES`.
+**Arquivos:** `apps/web/src/features/admin/live/`.
+**Commit sugerido:** `feat(web): adiciona ações para candidatos insuficientes`
+
+### [ ] C17.a — Configuração Playwright
+**Ref.:** architecture §10.2 e §14.
+**Depende de:** marco M2.
+**Fazer:** criar `playwright.config.ts`, Chromium, base URL e `webServer` com servidor real em memória.
+**Testes (escrever antes):** smoke sobe o servidor e encontra a página.
+**Pronto quando:** Playwright inicia o app real sem configuração manual.
+**Arquivos:** `e2e/playwright.config.ts`.
+**Commit sugerido:** `test(e2e): configura Playwright com servidor real`
+
+### [ ] C17.b — Fixtures Playwright
+**Ref.:** architecture §10.2.
+**Depende de:** C17.a.
+**Fazer:** criar fixtures de admin, eleição pronta, códigos e contexto limpo.
+**Testes (escrever antes):** fixture autentica; contexto novo não herda sessão.
+**Pronto quando:** specs podem montar dados pela API sem duplicação.
+**Arquivos:** `e2e/fixtures/`.
+**Commit sugerido:** `test(e2e): adiciona fixtures de API e autenticação`
 
 ### [ ] C18 — E2E de configuração pelo admin
 **Ref.:** architecture §10.2 cenário 1.
-**Depende de:** C17, C10–C14.
-**Fazer:**
-- Criar um único e2e que faz login, cria eleição, cria cargo, cria candidatos, gera códigos e abre
-  a eleição pela UI.
-**Testes (escrever antes):**
-- jornada completa termina em eleição aberta;
-- ausência de candidato/cargo não abre eleição conforme o backend.
-**Pronto quando:** C18 cobre a jornada crítica de configuração.
-**Arquivos esperados:** `e2e/specs/admin-configures-election.spec.ts`.
+**Depende de:** C17.b, C10–C14.
+**Fazer:** criar login, eleição, cargo, candidatos, códigos e abrir eleição pela UI.
+**Testes (escrever antes):** jornada completa; ausência de cargo/candidato não abre indevidamente.
+**Pronto quando:** spec termina com eleição aberta.
+**Arquivos:** `e2e/specs/admin-configures-election.spec.ts`.
+**Commit sugerido:** `test(e2e): cobre configuração completa pela interface`
 
-### [ ] C19 — E2E de fluxo completo de um cargo
+### [ ] C19.a — Contextos e votos dos eleitores
 **Ref.:** architecture §10.2 cenário 2.
-**Depende de:** C17, C18; C8–C9 e C15–C16.
-**Fazer:**
-- Abrir 3 contextos separados de navegador para 3 eleitores.
-- Admin abre rodada, eleitores entram e votam, o sistema fecha a rodada ao atingir todos,
-  admin libera o resultado e eleitores recebem `RESULTS`.
-**Testes (escrever antes):**
-- 3 eleitores veem a cédula;
-- votos são aceitos uma vez;
-- fechamento ocorre após os 3 votos;
-- resultado só aparece após liberação;
-- não é necessário sleep; usar expectativas do Playwright.
-**Pronto quando:** a jornada completa de um cargo passa com o servidor real.
-**Arquivos esperados:** `e2e/specs/full-position.spec.ts`.
+**Depende de:** C17.b, C18.
+**Fazer:** preparar três contextos, fazer login por código e abrir a cédula em cada um.
+**Testes (escrever antes):** três eleitores veem a cédula; votos válido/branco são aceitos uma vez.
+**Pronto quando:** os três votos podem ser enviados ao servidor real.
+**Arquivos:** `e2e/specs/full-position.spec.ts`.
+**Commit sugerido:** `test(e2e): cobre entrada e voto de três eleitores`
 
-### [ ] C20 — E2E de segundo turno
+### [ ] C19.b — Fechamento e liberação do resultado
+**Ref.:** architecture §10.2 cenário 2.
+**Depende de:** C19.a, C15–C16.
+**Fazer:** verificar fechamento após todos votarem, resultado privado antes da liberação e público depois.
+**Testes (escrever antes):** fechamento automático; liberado só pelo admin.
+**Pronto quando:** a spec cobre a jornada completa de um cargo.
+**Arquivos:** `e2e/specs/full-position.spec.ts`.
+**Commit sugerido:** `test(e2e): cobre fechamento e liberação de resultado`
+
+### [ ] C20.a — Cenário de segundo turno
 **Ref.:** architecture §10.2 cenário 3.
-**Depende de:** C19.
-**Fazer:**
-- Configurar 3 candidatos e votos que exigem 2º turno.
-- Admin abre o 2º turno com os finalistas e registra o vencedor.
-**Testes (escrever antes):**
-- posição fica `AWAITING_RUNOFF`;
-- 2º turno contém exatamente os 2 finalistas;
-- vencedor fica decidido após o 2º turno.
-**Pronto quando:** C20 cobre 1º turno sem maioria e 2º turno real.
-**Arquivos esperados:** `e2e/specs/runoff.spec.ts`.
+**Depende de:** C19.b.
+**Fazer:** preparar três candidatos e votos que deixam a posição em `AWAITING_RUNOFF`.
+**Testes (escrever antes):** posição aguarda runoff; exatamente dois finalistas estão disponíveis.
+**Pronto quando:** cenário cria estado válido de 2º turno.
+**Arquivos:** `e2e/specs/runoff.spec.ts`.
+**Commit sugerido:** `test(e2e): prepara cenário de segundo turno`
 
-### [ ] C21 — E2E de elegibilidade e cargo sem candidatos
+### [ ] C20.b — Abrir segundo turno e verificar vencedor
+**Ref.:** architecture §10.2 cenário 3.
+**Depende de:** C20.a.
+**Fazer:** abrir 2º turno pela UI e verificar a decisão do cargo.
+**Testes (escrever antes):** vencedor eleito; finalistas são os únicos candidatos.
+**Pronto quando:** runoff completo passa no servidor real.
+**Arquivos:** `e2e/specs/runoff.spec.ts`.
+**Commit sugerido:** `test(e2e): cobre abertura e resultado do segundo turno`
+
+### [ ] C21.a — Exclusão do eleito
 **Ref.:** architecture §10.2 cenário 4.
-**Depende de:** C20.
-**Fazer:**
-- Fazer candidato eleito no cargo A e verificar que ele não aparece no cargo seguinte.
-- Montar cargo sem candidatos e testar anexar, adiar e cancelar pela UI.
-**Testes (escrever antes):**
-- eleito não é elegível no cargo seguinte;
-- cargo sem aptos oferece os candidatos anexáveis;
-- adiar mantém o cargo no fluxo adequado;
-- cancelar requer confirmação dupla.
-**Pronto quando:** C21 cobre exclusão de eleito e estados de candidatos insuficientes.
-**Arquivos esperados:** `e2e/specs/elected-exclusion.spec.ts`.
+**Depende de:** C20.b.
+**Fazer:** eleger candidato no cargo A e verificar que ele não aparece na cédula do cargo B.
+**Testes (escrever antes):** eleito ausente; demais candidatos aptos presentes.
+**Pronto quando:** elegibilidade entre cargos fica coberta pela UI.
+**Arquivos:** `e2e/specs/elected-exclusion.spec.ts`.
+**Commit sugerido:** `test(e2e): cobre exclusão de eleito no cargo seguinte`
 
-### [ ] C22 — E2E de resiliência e integração no CI
-**Ref:** architecture §10.2 cenário 5.
-**Depende de:** C21; C17.
-**Fazer:**
-- Criar e2e em que admin desfaz liberação/resultado e o estado volta ao anterior.
-- Criar e2e ou caso de login inválido do eleitor com código inexistente.
-- Validar o total mínimo de 5 specs antes de chamar C22 concluída.
-- Coordenar com B para adicionar o passo Playwright no CI dos 3 SOs.
-**Testes (escrever antes):**
-- undo restaura o estado anterior;
-- código inválido mostra mensagem;
-- nenhum e2e depende de tempo real/sleep.
-**Pronto quando:** os ≥5 e2e passam localmente e a execução nos 3 SOs é assumida pelo CI combinado.
-**Arquivos esperados:** `e2e/specs/resilience.spec.ts`, `e2e/`.
+### [ ] C21.b — Cargo sem candidatos
+**Ref.:** architecture §10.2 cenário 4.
+**Depende de:** C21.a.
+**Fazer:** verificar anexar existente, adiar e cancelar pela UI com confirmação dupla.
+**Testes (escrever antes):** anexar, adiar e cancelamento confirmado.
+**Pronto quando:** todas as ações de insuficiência passam no e2e.
+**Arquivos:** `e2e/specs/elected-exclusion.spec.ts`.
+**Commit sugerido:** `test(e2e): cobre cargos sem candidatos suficientes`
 
-### [ ] C23 — Acessibilidade e polimento responsivo
+### [ ] C22.a — E2E de desfazer
+**Ref.:** architecture §10.2 cenário 5.
+**Depende de:** C21.b.
+**Fazer:** liberar resultado e desfazer pela UI, verificando o estado anterior.
+**Testes (escrever antes):** undo restaurado; nada a desfazer mostra erro.
+**Pronto quando:** resiliência de desfazer fica coberta sem sleep.
+**Arquivos:** `e2e/specs/resilience.spec.ts`.
+**Commit sugerido:** `test(e2e): cobre desfazer resultado pela interface`
+
+### [ ] C22.b — Código inválido e integração no CI
+**Ref.:** architecture §10.2 cenário 5.
+**Depende de:** C22.a.
+**Fazer:** cobrir código inválido e coordenar com B o passo Playwright no CI dos três SOs.
+**Testes (escrever antes):** mensagem inválida; nenhum e2e usa waitForTimeout.
+**Pronto quando:** existem pelo menos cinco specs estáveis e o CI foi preparado por B.
+**Arquivos:** `e2e/specs/resilience.spec.ts`, `.github/workflows/ci.yml` somente via coordenação.
+**Commit sugerido:** `test(e2e): cobre código inválido e prepara execução no CI`
+
+### [ ] C23.a — Acessibilidade semântica
 **Ref.:** architecture §9.
-**Depende de:** pode começar após C6; finalizar após C16.
-**Fazer:**
-- Revisar labels, roles, foco, mensagens, navegação por teclado e estados vazios.
-- Garantir layout funcional em celular, especialmente `/`, `/votar` e botões de voto.
-- Evitar layout que esconda ações críticas ou dependam apenas de cor.
-**Testes (escrever antes):**
-- telas principais têm heading e labels encontrados por role/label;
-- botões de ação têm nomes visíveis;
-- dialogs recebem foco e podem ser cancelados;
-- layout não quebra com largura estreita;
-- mensagens de erro são claras.
-**Pronto quando:** a navegação principal é acessível por teclado e utilizável no celular.
-**Arquivos esperados:** componentes e páginas em `apps/web/src/`.
+**Depende de:** C6; pode começar antes de C16.
+**Fazer:** revisar headings, labels, roles, foco, diálogos e mensagens.
+**Testes (escrever antes):** elementos principais por role/label; diálogo recebe foco; ação cancelável.
+**Pronto quando:** teclado e leitores podem operar o fluxo principal.
+**Arquivos:** `apps/web/src/`, `apps/web/test/`.
+**Commit sugerido:** `fix(web): melhora semântica e acessibilidade da interface`
 
-### [ ] C24 — Revisão de test smells
-**Ref.:** CLAUDE.md; architecture §10.
+### [ ] C23.b — Layout responsivo móvel
+**Ref.:** architecture §9.
+**Depende de:** C23.a e C16.
+**Fazer:** validar `/`, `/votar` e ações ao vivo em largura estreita; preservar ações críticas visíveis.
+**Testes (escrever antes):** largura estreita não oculta controles; estados vazios mostram mensagem.
+**Pronto quando:** fluxo do celular funciona sem overflow ou ações dependentes de cor.
+**Arquivos:** CSS/estilos em `apps/web/src/`.
+**Commit sugerido:** `style(web): melhora layout responsivo móvel`
+
+### [ ] C24.a — Revisão de smells no front
+**Ref.:** CLAUDE.md.
 **Depende de:** C2–C23.
-**Fazer:**
-- Revisar testes de front e e2e; remover Conditional Test Logic, Assertion Roulette, Magic Numbers,
-  General Fixture, Mystery Guest, Sleepy Test e testes ignorados.
-- Garantir AAA separado por linha, nomes de comportamento em inglês e uma asserção lógica por
-  cenário.
-- Substituir sleeps por fake timers no Vitest e expectativas/locators do Playwright.
-- Usar role/label nos RTL e nos e2e; usar `data-testid` apenas sem alternativa.
-- Confirmar que a suíte web mede pelo menos 80% em linhas, branches, funções e statements.
-**Testes (escrever antes):**
-- não há `.skip`, `.only`, `waitForTimeout`, `setTimeout`/`sleep` ou seletores frágeis novos;
-- a cobertura do web fica acima do limite.
-**Pronto quando:** a revisão elimina smells e a suíte final permanece verde.
-**Arquivos esperados:** `apps/web/test/`, `e2e/specs/`, possíveis refatorações em
-`apps/web/src/`.
+**Fazer:** revisar `apps/web/test`, remover smells e manter AAA/nomes em inglês.
+**Testes (escrever antes):** nenhum `.skip`, `.only`, sleep ou fixture geral novo.
+**Pronto quando:** suíte do front usa comportamentos observáveis e fakes nas fronteiras.
+**Arquivos:** `apps/web/test/`, possíveis refatorações em `apps/web/src/`.
+**Commit sugerido:** `test(web): remove smells e estabiliza componentes`
+
+### [ ] C24.b — Revisão de smells nos e2e
+**Ref.:** CLAUDE.md e architecture §10.
+**Depende de:** C24.a.
+**Fazer:** revisar locators, remover waits e confirmar cobertura web mínima de 80%.
+**Testes (escrever antes):** nenhum `waitForTimeout`; role/label preferidos; cobertura verde.
+**Pronto quando:** e2e e componente passam sem testes frágeis ou ignorados.
+**Arquivos:** `e2e/specs/`, relatórios de cobertura.
+**Commit sugerido:** `test(e2e): estabiliza cenários e cobertura final`
 
 ---
 
