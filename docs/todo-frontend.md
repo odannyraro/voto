@@ -73,7 +73,7 @@ agrupadas em um único commit.
 
 | Tarefa | Avaliação | Plano de commits |
 |---|---|---|
-| C2 | Divide-se: rede simulada e testes auxiliares são dependências distintas | `[ ] C2.a` handlers MSW; `[ ] C2.b` providers/fábricas |
+| C2 | Divide-se: rede simulada e testes auxiliares são dependências distintas | `[x] C2.a` handlers MSW; `[ ] C2.b` providers/fábricas |
 | C3 | Divide-se: transporte/erro e API pública podem ser validados separadamente | `[ ] C3.a` núcleo de `fetch` e `ErrorDTO`; `[ ] C3.b` métodos tipados de cada grupo de rotas |
 | C4 | Divide-se: o cliente real e a injeção por fake têm responsabilidades independentes | `[ ] C4.a` interface e cliente Socket.IO; `[ ] C4.b` `SocketProvider` e `createFakeSocket()` |
 | C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[ ] C5.a` countdown corrigido por `serverNow`; `[ ] C5.b` porcentagens e rótulos |
@@ -124,12 +124,13 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
   - `apps/web/src/features/admin/config/` → configuração da eleição;
   - `apps/web/src/features/admin/live/` → painel ao vivo;
   - `apps/web/test/msw/` e `apps/web/test/utils/` → rede simulada e provedores de teste.
+  - `apps/web/test/msw/mock-api-server.ts` → servidor MSW em memória para as rotas REST do frontend.
 
 ---
 
 ## Tarefas
 
-### [ ] C2.a — Handlers MSW
+### [x] C2.a — Handlers MSW
 **Ref.:** architecture §6 e §10.1.
 **Depende de:** S0.5 concluído; S0.3b concluído.
 **Fazer:** criar handlers MSW com estado em memória isolado, cobertura das rotas REST usadas pelas
@@ -139,6 +140,16 @@ seguem `ErrorDTO`.
 **Pronto quando:** rede de teste funciona sem servidor real e o estado pode ser resetado.
 **Arquivos:** `apps/web/test/msw/`.
 **Commit sugerido:** `test(web): adiciona handlers MSW para o contrato da API`
+**Notas do agente:**
+- Feito: servidor MSW em memória com health, auth, eleições, cargos, candidatos, eleitores, fila,
+  votação e ações de resolução; reset volta o estado inicial entre testes.
+- Arquivos: `apps/web/test/msw/mock-api-server.ts`, `apps/web/test/msw/msw.test.ts`,
+  `apps/web/package.json`, `package-lock.json`.
+- Como usar: `createMockApiServer()`; `listen()` no `beforeAll`, `reset()` no `afterEach`,
+  `close()` no `afterAll`.
+- Testes: `apps/web/test/msw/msw.test.ts` (4 testes: health, `INVALID_CODE`, credenciais inválidas
+  e criação/listagem administrativa).
+- Decisões: MSW 3.0.7 usa `SetupServer`; Node 24.22.3 foi ativado pelo NVM.
 
 ### [ ] C2.b — Providers e fábricas de teste
 **Ref.:** architecture §9 e §10.1.
