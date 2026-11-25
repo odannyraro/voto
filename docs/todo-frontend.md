@@ -66,6 +66,22 @@ por conta própria.
 - C deve usar nomes, status e bodies exatamente como estão em `packages/shared/src/dto.ts`,
   `api-schemas.ts` e `socket-events.ts`.
 
+## Dados fictícios para mocks e test doubles (C2–C16)
+
+- Use Faker quando dados realistas ajudarem a exercitar mocks MSW, factories ou test doubles; ele
+  é opcional para casos pequenos em que valores literais tornam o cenário mais claro.
+- Faker é somente uma fonte de dados de teste. Nunca use valores gerados para decidir regras,
+  esconder o dado importante do cenário ou substituir o DTO/contrato real de `@voto/shared`.
+- Mantenha nomes, status, códigos de erro, quantidade de votos, candidaturas, prazos e demais
+  valores que determinam o comportamento explícitos no teste. Faker pode preencher apenas campos
+  irrelevantes à asserção, como nomes/rótulos de apoio.
+- Qualquer uso deve ser determinístico e isolado por teste/factory: fixe a seed, evite estado
+  aleatório global compartilhado e não dependa de valores diferentes entre execuções.
+- Faker só entra em testes, handlers MSW e doubles; nunca em código de produção.
+- `@faker-js/faker` ainda não faz parte da stack nem das dependências atuais. Antes de adicioná-lo
+  ao `apps/web`, peça autorização ao usuário conforme `CLAUDE.md`; até lá, use valores literais e
+  factories determinísticas sem nova dependência.
+
 ---
 
 ## Avaliação e plano de commits
@@ -159,6 +175,9 @@ seguem `ErrorDTO`.
 **Ref.:** architecture §9 e §10.1.
 **Depende de:** C2.a.
 **Fazer:** criar `renderWithProviders`, fábricas de DTO e reset compartilhado, sem estado global.
+Factories podem usar Faker com seed fixa para campos acessórios, após autorização para adicionar a
+dependência; valores relevantes ao comportamento devem ser fornecidos explicitamente ou ter
+defaults determinísticos.
 **Testes (escrever antes):** providers não vazam estado; fábricas permitem sobrescritas mínimas.
 **Pronto quando:** componentes podem ser renderizados com router, auth e socket configuráveis.
 **Arquivos:** `apps/web/test/utils/`, `apps/web/test/setup.ts`.
@@ -195,6 +214,8 @@ seguem `ErrorDTO`.
 **Ref.:** architecture §7 e §9.
 **Depende de:** C4.a.
 **Fazer:** criar provider injetável e `createFakeSocket()` substituível pelos testes.
+Payloads do fake devem usar DTOs válidos; dados gerados com Faker, se houver autorização, ficam
+limitados aos campos não relevantes à asserção e usam seed fixa.
 **Testes (escrever antes):** consumidor recebe estado novo e substitui o anterior; fake conecta/desconecta.
 **Pronto quando:** componentes não importam a implementação concreta do socket.
 **Arquivos:** `apps/web/src/api/socket-client.ts`, `apps/web/test/`.
