@@ -130,9 +130,7 @@ export function createMockApiServer(
   let state = initialState;
 
   const server = setupServer(
-    http.get(`${API_ORIGIN}/api/health`, () =>
-      HttpResponse.json({ status: 'ok' }),
-    ),
+    http.get(`${API_ORIGIN}/api/health`, () => HttpResponse.json({ status: 'ok' })),
     http.post(`${API_ORIGIN}/api/admin/login`, async ({ request }) => {
       const body = (await request.json()) as { username?: string; password?: string };
       if (body.username !== 'admin' || body.password !== 'password') {
@@ -189,8 +187,7 @@ export function createMockApiServer(
       state.election = {
         ...state.election,
         name: body.name?.trim() || state.election.name,
-        defaultVotingSeconds:
-          body.defaultVotingSeconds ?? state.election.defaultVotingSeconds,
+        defaultVotingSeconds: body.defaultVotingSeconds ?? state.election.defaultVotingSeconds,
         version: state.election.version + 1,
       };
       return HttpResponse.json(toAdminElectionDTO(state.election));
@@ -238,28 +235,31 @@ export function createMockApiServer(
       };
       return HttpResponse.json(toAdminElectionDTO(state.election), { status: 201 });
     }),
-    http.patch(`${API_ORIGIN}/api/elections/:id/positions/:positionId`, async ({ request, params }) => {
-      if (!isAdminRequest(request) || !state.adminAuthenticated) {
-        return errorResponse('INVALID_TOKEN', 'Invalid token', 401);
-      }
-      if (params.id !== state.election.id) {
-        return errorResponse('ELECTION_NOT_FOUND', 'Election not found', 404);
-      }
-      const body = (await request.json()) as { title?: string; tiebreak?: Position['tiebreak'] };
-      state.election = {
-        ...state.election,
-        positions: state.election.positions.map((position) =>
-          position.id === params.positionId
-            ? {
-                ...position,
-                title: body.title?.trim() || position.title,
-                tiebreak: body.tiebreak ?? position.tiebreak,
-              }
-            : position,
-        ),
-      };
-      return HttpResponse.json(toAdminElectionDTO(state.election));
-    }),
+    http.patch(
+      `${API_ORIGIN}/api/elections/:id/positions/:positionId`,
+      async ({ request, params }) => {
+        if (!isAdminRequest(request) || !state.adminAuthenticated) {
+          return errorResponse('INVALID_TOKEN', 'Invalid token', 401);
+        }
+        if (params.id !== state.election.id) {
+          return errorResponse('ELECTION_NOT_FOUND', 'Election not found', 404);
+        }
+        const body = (await request.json()) as { title?: string; tiebreak?: Position['tiebreak'] };
+        state.election = {
+          ...state.election,
+          positions: state.election.positions.map((position) =>
+            position.id === params.positionId
+              ? {
+                  ...position,
+                  title: body.title?.trim() || position.title,
+                  tiebreak: body.tiebreak ?? position.tiebreak,
+                }
+              : position,
+          ),
+        };
+        return HttpResponse.json(toAdminElectionDTO(state.election));
+      },
+    ),
     http.delete(`${API_ORIGIN}/api/elections/:id/positions/:positionId`, ({ request, params }) => {
       if (!isAdminRequest(request) || !state.adminAuthenticated) {
         return errorResponse('INVALID_TOKEN', 'Invalid token', 401);
@@ -274,37 +274,43 @@ export function createMockApiServer(
       };
       return HttpResponse.json(toAdminElectionDTO(state.election));
     }),
-    http.patch(`${API_ORIGIN}/api/elections/:id/candidates/:candidateId`, async ({ request, params }) => {
-      if (!isAdminRequest(request) || !state.adminAuthenticated) {
-        return errorResponse('INVALID_TOKEN', 'Invalid token', 401);
-      }
-      if (params.id !== state.election.id) {
-        return errorResponse('ELECTION_NOT_FOUND', 'Election not found', 404);
-      }
-      const body = (await request.json()) as Partial<Candidate>;
-      state.election = {
-        ...state.election,
-        candidates: state.election.candidates.map((candidate) =>
-          candidate.id === params.candidateId ? { ...candidate, ...body } : candidate,
-        ),
-      };
-      return HttpResponse.json(toAdminElectionDTO(state.election));
-    }),
-    http.delete(`${API_ORIGIN}/api/elections/:id/candidates/:candidateId`, ({ request, params }) => {
-      if (!isAdminRequest(request) || !state.adminAuthenticated) {
-        return errorResponse('INVALID_TOKEN', 'Invalid token', 401);
-      }
-      if (params.id !== state.election.id) {
-        return errorResponse('ELECTION_NOT_FOUND', 'Election not found', 404);
-      }
-      state.election = {
-        ...state.election,
-        candidates: state.election.candidates.filter(
-          (candidate) => candidate.id !== params.candidateId,
-        ),
-      };
-      return HttpResponse.json(toAdminElectionDTO(state.election));
-    }),
+    http.patch(
+      `${API_ORIGIN}/api/elections/:id/candidates/:candidateId`,
+      async ({ request, params }) => {
+        if (!isAdminRequest(request) || !state.adminAuthenticated) {
+          return errorResponse('INVALID_TOKEN', 'Invalid token', 401);
+        }
+        if (params.id !== state.election.id) {
+          return errorResponse('ELECTION_NOT_FOUND', 'Election not found', 404);
+        }
+        const body = (await request.json()) as Partial<Candidate>;
+        state.election = {
+          ...state.election,
+          candidates: state.election.candidates.map((candidate) =>
+            candidate.id === params.candidateId ? { ...candidate, ...body } : candidate,
+          ),
+        };
+        return HttpResponse.json(toAdminElectionDTO(state.election));
+      },
+    ),
+    http.delete(
+      `${API_ORIGIN}/api/elections/:id/candidates/:candidateId`,
+      ({ request, params }) => {
+        if (!isAdminRequest(request) || !state.adminAuthenticated) {
+          return errorResponse('INVALID_TOKEN', 'Invalid token', 401);
+        }
+        if (params.id !== state.election.id) {
+          return errorResponse('ELECTION_NOT_FOUND', 'Election not found', 404);
+        }
+        state.election = {
+          ...state.election,
+          candidates: state.election.candidates.filter(
+            (candidate) => candidate.id !== params.candidateId,
+          ),
+        };
+        return HttpResponse.json(toAdminElectionDTO(state.election));
+      },
+    ),
     http.post(
       `${API_ORIGIN}/api/elections/:id/positions/:positionId/candidates/:candidateId`,
       ({ request }) => {
@@ -341,10 +347,13 @@ export function createMockApiServer(
         ...state.election,
         voters: [...state.election.voters, ...Array.from(state.votersByCode.values())],
       };
-      return HttpResponse.json({
-        codes: generated,
-        election: toAdminElectionDTO(state.election),
-      }, { status: 201 });
+      return HttpResponse.json(
+        {
+          codes: generated,
+          election: toAdminElectionDTO(state.election),
+        },
+        { status: 201 },
+      );
     }),
     http.delete(`${API_ORIGIN}/api/elections/:id/voters/:voterId`, ({ request, params }) => {
       if (!isAdminRequest(request) || !state.adminAuthenticated) {

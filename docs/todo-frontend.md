@@ -31,8 +31,11 @@ Documentos de referência (leia as seções citadas em cada tarefa):
    necessária em `shared` exige pedir confirmação antes de agir.
 7. Tarefas futuras podem ser divididas em subtarefas Cx.a/Cx.b quando ficarem grandes, mas os
    números C2–C24 devem continuar representando cada entrega.
-8. Só declare conclusão depois de rodar, no repositório inteiro, `npm run lint`,
-   `npm run typecheck` e `npm run test:coverage`.
+8. Antes de concluir cada subtarefa, formate os arquivos alterados com
+   `npx prettier --write <arquivos-alterados>` (use caminhos explícitos para não formatar arquivos
+   de outras áreas). Depois execute `npm run format:check`, `npm run lint` e `npm run typecheck`;
+   ao concluir o trabalho completo, rode também `npm run test:coverage` no repositório inteiro.
+   Não marque a subtarefa como concluída se o `format:check` falhar.
 
 **Modelo das Notas do agente:**
 
@@ -137,7 +140,8 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 telas C7–C16 e respostas coerentes de sucesso e erro.
 **Testes (escrever antes):** um handler válido devolve o DTO correto; respostas 400/401/403/404/409/410
 seguem `ErrorDTO`.
-**Pronto quando:** rede de teste funciona sem servidor real e o estado pode ser resetado.
+**Pronto quando:** rede de teste funciona sem servidor real, o estado pode ser resetado e
+`npm run format:check` passa para os arquivos alterados.
 **Arquivos:** `apps/web/test/msw/`.
 **Commit sugerido:** `test(web): adiciona handlers MSW para o contrato da API`
 **Notas do agente:**
