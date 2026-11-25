@@ -19,6 +19,11 @@ export interface Config {
   readonly historyLimit: number;
   /** Pasta do build do front, servida pelo próprio servidor quando informada. */
   readonly webDistDir?: string;
+  /**
+   * Liga o limite de tentativas no login e na entrada do eleitor (§8.4). Os e2e desligam
+   * (`RATE_LIMIT=off`), porque todos os navegadores do teste saem do mesmo IP.
+   */
+  readonly rateLimit: boolean;
 }
 
 /** Variáveis de ambiente cruas (`process.env` em produção). */
@@ -74,6 +79,7 @@ const envSchema = z
     VOTE_GRACE_MS: integerVar(0).default(DEFAULT_VOTE_GRACE_MS),
     HISTORY_LIMIT: integerVar(1).default(DEFAULT_HISTORY_LIMIT),
     WEB_DIST_DIR: z.string().optional(),
+    RATE_LIMIT: z.enum(['on', 'off']).default('on'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
@@ -103,6 +109,7 @@ const envSchema = z
     voteGraceMs: env.VOTE_GRACE_MS,
     historyLimit: env.HISTORY_LIMIT,
     webDistDir: env.WEB_DIST_DIR,
+    rateLimit: env.RATE_LIMIT === 'on',
   }));
 
 /**

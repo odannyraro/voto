@@ -6,6 +6,7 @@ import { registerCandidateRoutes } from './http/candidate-routes';
 import { registerElectionRoutes } from './http/election-routes';
 import { registerErrorHandling } from './http/error-handler';
 import { registerPositionRoutes } from './http/position-routes';
+import { registerRateLimit } from './http/rate-limit';
 import { registerResolutionRoutes } from './http/resolution-routes';
 import { registerRoundRoutes } from './http/round-routes';
 import { registerVoterAccessRoutes } from './http/voter-access-routes';
@@ -46,7 +47,8 @@ export interface AppDeps {
  * O domínio não entra nas deps: é puro e determinístico, então é importado direto.
  *
  * @param deps - Configuração e portas da aplicação.
- * @returns A instância Fastify com health check, tratamento de erros, login do admin e as
+ * @returns A instância Fastify com health check, tratamento de erros, limite de tentativas no
+ *   login e na entrada do eleitor, login do admin e as
  *   rotas de eleição, cargos, fila, candidatos, eleitores, rodadas e o desfecho delas (2º turno,
  *   liberação, desfazer...) e a entrada do eleitor (sessão por código e estado); com
  *   `deps.realtime`, também o gateway Socket.IO no mesmo servidor HTTP.
@@ -55,6 +57,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   // Silencia o log nos testes; em dev e produção o Fastify loga requisições e erros.
   const app = Fastify({ logger: deps.config.nodeEnv !== 'test' });
   registerErrorHandling(app);
+  if (deps.config.rateLimit) registerRateLimit(app, deps.clock);
 
   const auth = new AuthService({
     adminRepository: deps.adminRepository,

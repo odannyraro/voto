@@ -21,6 +21,7 @@ describe('loadConfig', () => {
         bcryptRounds: 10,
         voteGraceMs: 1000,
         historyLimit: 50,
+        rateLimit: true,
       });
     });
 
@@ -52,6 +53,7 @@ describe('loadConfig', () => {
         VOTE_GRACE_MS: '250',
         HISTORY_LIMIT: '10',
         WEB_DIST_DIR: 'apps/web/dist',
+        RATE_LIMIT: 'off',
       });
 
       expect(config).toEqual({
@@ -66,6 +68,7 @@ describe('loadConfig', () => {
         voteGraceMs: 250,
         historyLimit: 10,
         webDistDir: 'apps/web/dist',
+        rateLimit: false,
       });
     });
   });
@@ -126,6 +129,7 @@ describe('loadConfig', () => {
       ['HISTORY_LIMIT', '0'],
       ['NODE_ENV', 'staging'],
       ['REPOSITORY', 'mongo'],
+      ['RATE_LIMIT', 'false'],
     ])('rejects %s=%s', (name, value) => {
       expect(() => loadConfig({ [name]: value })).toThrow(name);
     });
