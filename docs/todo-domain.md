@@ -69,6 +69,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `test/scenarios/full-election.test.ts` → cenário completo só com a API pública (A22)
 - `stryker.config.json` → teste de mutação (`npm run test:mutation`) (A23)
 - `README.md` → visão geral do pacote, API e comandos de teste (A24)
+- *(fora do pacote)* `apps/server/src/http/rate-limit.ts` → `registerRateLimit(app, clock)`: limite de tentativas no login e na entrada do eleitor (A25)
+- *(fora do pacote)* `codecov.yml`, badges no `README.md` da raiz e passo "Upload Playwright report" no `ci.yml` (A26)
 
 ---
 
@@ -374,26 +376,32 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Testes: total de 205; cobertura de cerca de 97% em linhas e 94% em branches.
 - Decisões: depois do Sprint 0, rodar `npm run lint` e `npm run format` no pacote (ainda não havia ESLint/Prettier).
 
-### [ ] A25 — *(vinda da B19)* Rate limit no login e na sessão do eleitor
+### [x] A25 — *(vinda da B19)* Rate limit no login e na sessão do eleitor
 **Depende de:** B6 e B13 na `main`.
 **Ref.:** architecture §8.4.
 **Fazer:** `apps/server/src/http/rate-limit.ts` com `@fastify/rate-limit` em `POST /api/admin/login` e `POST /api/voter/session`, registrado no `buildApp` com uma linha. Avisar B antes do PR.
 **Testes (escrever antes):** integração com `app.inject`: a tentativa N+1 recebe `429`; outra rota não é limitada.
 **Commit sugerido:** `feat(server): limita tentativas de login e de entrada do eleitor`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: limite por rota e por IP, em janela fixa de 1 minuto: 10 tentativas em `POST /api/admin/login` e 60 em `POST /api/voter/session`. A tentativa seguinte recebe **429 `RATE_LIMITED`** no formato `ErrorDTO`, com `Retry-After` em segundos. As demais rotas não são limitadas. A variável `RATE_LIMIT=off` desliga o limite (para os e2e, em que todos os navegadores saem do mesmo IP).
+- Arquivos: `apps/server/src/http/rate-limit.ts` (novo), `src/app.ts` (uma linha: `if (deps.config.rateLimit) registerRateLimit(app, deps.clock)`), `src/config.ts` (`RATE_LIMIT`: `on`/`off`, padrão `on` → `config.rateLimit`), `test/http/rate-limit.test.ts` (novo), `test/config.test.ts`.
+- Como usar: nada a chamar; o `buildApp` já registra. No e2e, subir o servidor com `RATE_LIMIT=off`.
+- Testes: `rate-limit.test.ts` com 10 testes de integração (`app.inject` no `buildApp` real): as N primeiras passam, a N+1 dá 429 com `Retry-After`, contagem por IP, reabre depois da janela (`FakeClock`), `Retry-After` arredonda para cima, folga de 60 para a sala atrás de um IP, login esgotado não bloqueia a entrada do eleitor, rotas fora da lista não são limitadas, `RATE_LIMIT=off` desliga. `config.test.ts`: padrão `on`, leitura de `off` e `RATE_LIMIT=false` rejeitado. Servidor: 433 testes; cobertura ~99,8% em linhas.
+- Decisões: (1) **sem `@fastify/rate-limit`**: um *hook* `onRequest` próprio de ~40 linhas, que usa a porta `Clock`. Com isso, a janela é testada com o `FakeClock`, sem *Sleepy Test* (a biblioteca usa o relógio do sistema) e sem dependência nova. Ver "Decisões e desvios". (2) Contadores em memória: bastam com uma instância só do servidor (o deploy da §13 tem uma). (3) Atrás de proxy (Render), `request.ip` é o IP do proxy, a menos que o Fastify seja criado com `trustProxy`. Isso fica com B no deploy; sem isso, o limite valeria para todos juntos.
 
-### [ ] A26 — *(vinda da B22)* `codecov.yml`, badges e artefato do Playwright
+### [x] A26 — *(vinda da B22)* `codecov.yml`, badges e artefato do Playwright
 **Depende de:** S0.6 na `main`; combinar com B a edição do `ci.yml`.
 **Ref.:** architecture §12.
 **Fazer:** `codecov.yml` (flags `shared`/`domain`/`server`/`web`, meta de 80%, comentário em PR), badges de CI e Codecov no README, upload do relatório do Playwright como artefato no `ci.yml`.
 **Testes (escrever antes):** não se aplica (configuração).
 **Commit sugerido:** `ci: configura Codecov com flags por pacote e badges no README`
-**Notas do agente:** *(parcial: falta só o artefato do Playwright)*
+**Notas do agente:**
 - Feito: `codecov.yml` na raiz com as 4 flags (`shared`, `domain`, `server`, `web`) e `carryforward`, status de projeto e de patch com meta de 80% (folga de 1 ponto no projeto), comentário no PR (cabeçalho, diff, flags, arquivos) e `notify.after_n_builds: 4` (um upload por flag). Badges de CI e de Codecov no topo do `README.md`.
-- Arquivos: `codecov.yml`, `README.md`.
+- Artefato do Playwright: passo `Upload Playwright report` no fim do `ci.yml` (`actions/upload-artifact@v4`, `if: failure()`, pasta `e2e/playwright-report/`, nome `playwright-report-<so>`, 14 dias, `if-no-files-found: ignore`). Enquanto o `e2e/` não existir, o passo não faz nada. Quando C criar o e2e, basta o relatório HTML sair nessa pasta (é o padrão do Playwright com o `playwright.config.ts` em `e2e/`).
+- Arquivos: `codecov.yml`, `README.md`, `.github/workflows/ci.yml` (só o passo novo, no fim).
 - Como usar: nada a chamar. O Codecov lê o arquivo no próximo upload do CI.
 - Testes: não se aplica (configuração). `codecov.yml` aprovado pelo validador do Codecov (`curl --data-binary @codecov.yml https://codecov.io/validate` → `Valid!`); as URLs dos dois badges respondem com SVG; `lint`, `format:check`, `typecheck` e `test:coverage` verdes (domínio 205, shared 138, server 24, web 2).
-- Decisões: (1) o `ci.yml` **não** foi alterado: os uploads da S0.6 já usam as flags certas. (2) O artefato do relatório do Playwright fica para quando C criar o workspace `e2e` e o passo de e2e no CI; aí esta tarefa fecha, combinando a edição do `ci.yml` com B. (3) `ignore` repete as exclusões de cobertura da §10.1 (`main.ts`, `main.tsx`), além de testes e configs.
+- Decisões: (1) os uploads da S0.6 já usavam as flags certas e não mudaram. (2) O passo do artefato entrou antes do e2e existir, para a tarefa fechar sem depender de C; os passos que **rodam** o e2e (instalar o Chromium, `build`, `npm run e2e`) ficam com B/C e devem vir antes dele. (3) `ignore` repete as exclusões de cobertura da §10.1 (`main.ts`, `main.tsx`), além de testes e configs.
 
 ---
 
@@ -410,3 +418,5 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - 2026-11-22 — A12 — `openRound` bloqueado com 2º turno pendente (`RUNOFF_PENDING`) e sem eleitores credenciados (`NO_CREDENTIALED_VOTERS`). — evita que um finalista seja eleito em outro cargo no meio do caminho e rodadas que fechariam sozinhas.
 - 2026-11-22 — A15 — 2º turno sem votos válidos volta a `AWAITING_RUNOFF`. — os finalistas continuam os mesmos.
 - 2026-11-22 — A16 — `voterView` e `lastResultView` substituem o `toVoterView` citado na S0.4. — mesmos dados, nomes mais claros.
+- 2026-11-25 — A25 — rate limit com *hook* próprio sobre a porta `Clock`, e não com `@fastify/rate-limit` (§8.4). — a janela fica testável com o `FakeClock` (sem esperar 1 minuto nem *Sleepy Test*) e não entra dependência nova; o comportamento (429, `Retry-After`, por IP) é o mesmo.
+- 2026-11-25 — A25 — `RATE_LIMIT=off` em `config.ts`. — os e2e abrem vários navegadores do mesmo IP e passariam do limite de login.

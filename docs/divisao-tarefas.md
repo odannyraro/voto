@@ -2,7 +2,7 @@
 
 Este documento complementa o [architecture.md](architecture.md) e divide o trabalho entre os três integrantes. As seções citadas como "§x" são seções do architecture.md. A divisão é **por camada**, com contratos definidos antes. Cada pessoa é dona de pastas diferentes, então quase não há conflito de merge. Também ninguém precisa esperar o código de outra pessoa para escrever e testar o seu: quem depende de outra parte usa *test doubles* até a integração.
 
-> **Situação em 2026-11-23:** A ficou com o domínio e já entregou A1–A24 na branch `feat/domain` (205 testes, cobertura ~97%), antes do Sprint 0. Por isso o Sprint 0 passou a **integrar** esse pacote ao monorepo (detalhes no [todo-backend.md](todo-backend.md)). Pendentes de A: A25 (depois da B6 e da B13) e A26 (depois da S0.6). C ficou com o Daniel; B com o Gustavo.
+> **Situação em 2026-11-23:** A ficou com o domínio e já entregou A1–A24 na branch `feat/domain` (205 testes, cobertura ~97%), antes do Sprint 0. Por isso o Sprint 0 passou a **integrar** esse pacote ao monorepo (detalhes no [todo-backend.md](todo-backend.md)). Em 2026-11-25, A fechou a A25 (rate limit, depois da B6 e da B13) e a A26 (Codecov, badges e artefato do Playwright): **a parte A está completa**. C ficou com o Daniel; B com o Gustavo.
 
 | Integrante | Área | Pastas de que é dono | Testes principais |
 |---|---|---|---|
