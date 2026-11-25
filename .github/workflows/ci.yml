@@ -83,3 +83,14 @@ jobs:
           files: apps/web/coverage/lcov.info
           flags: web
           fail_ci_if_error: false
+
+      # Relatório do Playwright para investigar e2e que falhou (architecture §12). Enquanto o
+      # workspace `e2e/` não existir, a pasta não existe e o passo não faz nada.
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.os }}
+          path: e2e/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
