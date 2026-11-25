@@ -92,7 +92,7 @@ agrupadas em um único commit.
 
 | Tarefa | Avaliação | Plano de commits |
 |---|---|---|
-| C2 | Divide-se: rede simulada e testes auxiliares são dependências distintas | `[x] C2.a` handlers MSW; `[ ] C2.b` providers/fábricas |
+| C2 | Divide-se: rede simulada e testes auxiliares são dependências distintas | `[x] C2.a` handlers MSW; `[x] C2.b` providers/fábricas |
 | C3 | Divide-se: transporte/erro e API pública podem ser validados separadamente | `[ ] C3.a` núcleo de `fetch` e `ErrorDTO`; `[ ] C3.b` métodos tipados de cada grupo de rotas |
 | C4 | Divide-se: o cliente real e a injeção por fake têm responsabilidades independentes | `[ ] C4.a` interface e cliente Socket.IO; `[ ] C4.b` `SocketProvider` e `createFakeSocket()` |
 | C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[ ] C5.a` countdown corrigido por `serverNow`; `[ ] C5.b` porcentagens e rótulos |
@@ -132,6 +132,9 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/vite.config.ts` → proxy `/api` e `/socket.io` para `localhost:3000`.
 - `apps/web/test/setup.ts` → jest-dom e cleanup do Testing Library.
 - `apps/web/test/App.test.tsx` → teste de fumaça do esqueleto atual.
+- `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
+- `apps/web/test/utils/factories.ts` → factories determinísticas dos DTOs de eleição, rodada, eleitor e erro.
+- `apps/web/test/utils.test.tsx` → testes da composição de providers, isolamento e factories.
 - `e2e/` → ainda não existe; será criado por C17 ou por uma subdivisão dela.
 - Módulos novos planejados:
   - `apps/web/src/api/` → I/O REST e Socket.IO;
@@ -171,7 +174,7 @@ seguem `ErrorDTO`.
   e criação/listagem administrativa).
 - Decisões: MSW 3.0.7 usa `SetupServer`; Node 24.22.3 foi ativado pelo NVM.
 
-### [ ] C2.b — Providers e fábricas de teste
+### [x] C2.b — Providers e fábricas de teste
 **Ref.:** architecture §9 e §10.1.
 **Depende de:** C2.a.
 **Fazer:** criar `renderWithProviders`, fábricas de DTO e reset compartilhado, sem estado global.
@@ -182,6 +185,17 @@ defaults determinísticos.
 **Pronto quando:** componentes podem ser renderizados com router, auth e socket configuráveis.
 **Arquivos:** `apps/web/test/utils/`, `apps/web/test/setup.ts`.
 **Commit sugerido:** `test(web): adiciona providers e fábricas de dados`
+**Notas do agente:**
+- Feito: `renderWithProviders` compõe `MemoryRouter` com providers de auth/socket injetáveis;
+  factories determinísticas cobrem os DTOs usados pelo frontend.
+- Arquivos: `apps/web/test/utils/render-with-providers.tsx`, `apps/web/test/utils/factories.ts`,
+  `apps/web/test/utils.test.tsx`.
+- Como usar: `renderWithProviders(ui, { initialEntries, authProvider, socketProvider })`;
+  factories `makeAdminElectionDTO`, `makeVoterStateDTO`, `makeElectionSummaryDTO`,
+  `makeRoundView`, `makeRoundResultDTO` e `makeErrorDTO` aceitam overrides.
+- Testes: `apps/web/test/utils.test.tsx` (6: composição, isolamento e overrides nos DTOs).
+- Decisões: não adicionei Faker: a dependência ainda precisa de autorização, então os defaults
+  são literais e determinísticos. A limpeza de RTL já ocorre em `test/setup.ts`.
 
 ### [ ] C3.a — Núcleo tipado do cliente REST
 **Ref.:** architecture §6.1–§6.3.
