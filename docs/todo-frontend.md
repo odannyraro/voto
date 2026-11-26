@@ -104,7 +104,7 @@ agrupadas em um único commit.
 | C7 | Divide-se: entrada e integração da sessão são dois comportamentos fechados | `[x] C7.a` formulário e criação de sessão; `[x] C7.b` persistência, navegação e erros da sessão |
 | C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[x] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[x] C8.b` cédula e voto candidato/branco |
 | C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[x] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[x] C9.b` reconexão e ordenação de estado |
-| C10 | Divide-se: login em si não exige a proteção de toda a árvore de rotas | `[ ] C10.a` login, token e `/admin/me`; `[ ] C10.b` rotas protegidas e logout |
+| C10 | Login, identidade, proteção de rotas e logout fecham a autenticação do admin | `[x] C10.a` login, token e `/admin/me`; `[x] C10.b` rotas protegidas e logout |
 | C11 | Divide-se: leitura da lista e mutação/criação têm UI e testes distintos | `[ ] C11.a` lista de eleições; `[ ] C11.b` criação e navegação |
 | C12 | Divide-se: adicionar/editar cargos não inclui remover e confirmar | `[ ] C12.a` criar e editar cargos; `[ ] C12.b` remover cargo e confirmar estado permitido |
 | C13 | Divide-se: cadastro/validação e edição/removal têm casos próprios | `[ ] C13.a` criar candidato e validações; `[ ] C13.b` editar/remover candidato |
@@ -140,6 +140,10 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/api/admin-api.ts` → métodos REST tipados de autenticação, configuração e controle do admin.
 - `apps/web/src/api/voter-api.ts` → criação de sessão, leitura de estado e envio de voto.
 - `apps/web/src/api/public-api.ts` → consulta pública de saúde da API.
+- `apps/web/src/features/admin/auth/admin-auth-context.tsx` → restaura token da aba, valida `/admin/me` e expõe login/logout.
+- `apps/web/src/features/admin/auth/AdminLoginPage.tsx` → formulário acessível para login e erros de credenciais.
+- `apps/web/src/features/admin/auth/RequireAdmin.tsx` → protege as rotas administrativas após validar a identidade.
+- `apps/web/src/features/admin/auth/AdminDashboardPage.tsx` → exibe a identidade autenticada e oferece logout.
 - `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado, listeners removíveis e reconexão após entrada no namespace.
 - `apps/web/src/api/socket-provider.tsx` → contexto realtime com criação/limpeza do cliente por sessão e inscrição em snapshots e reconexão.
 - `apps/web/src/components/ConfirmDialog.tsx` e `DoubleConfirmDialog.tsx` → diálogos acessíveis de confirmação simples e por título exato.
@@ -162,6 +166,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/confirmation-dialogs.test.tsx` → comportamento, acessibilidade, cancelamento e título exato dos diálogos.
 - `apps/web/test/reusable-status-components.test.tsx` → atualização/expiração do timer e anúncio do código/mensagem de erro.
 - `apps/web/test/voter-entry-page.test.tsx` → validação local, normalização do código, início de sessão e erros da API.
+- `apps/web/test/admin-auth.test.tsx` → login, identidade, restauração, rotas protegidas, credenciais inválidas e logout.
 - `apps/web/test/voter-session.test.tsx` → carregamento inicial e remontagem, ordenação de socket/REST, reconexão, erros e credenciais persistidas.
 - `apps/web/test/voter-vote-page.test.tsx` → voto candidato/branco, cliques duplicados, erros de rodada e countdown.
 - `apps/web/test/voter-final-state.test.tsx` → fases finais, desfechos do resultado e contagens sem cálculo local.
@@ -456,7 +461,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/voter-session.test.tsx` (4 novos casos) e `apps/web/test/socket-client.integration.test.ts` (1 novo caso).
 - Decisões: eventos são ordenados no recebimento, não no efeito React; respostas iniciadas antes de evento posterior ou de outra consulta são descartadas.
 
-### [ ] C10.a — Login e identidade do admin
+### [x] C10.a — Login e identidade do admin
 **Ref.:** architecture §6.1.
 **Depende de:** C3.b.
 **Fazer:** criar `/admin/login`, armazenar token e consultar `/admin/me`.
@@ -464,15 +469,28 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** um admin autenticado pode manter sua identidade na sessão.
 **Arquivos:** `apps/web/src/features/admin/auth/`.
 **Commit sugerido:** `feat(web): adiciona login e identidade do admin`
+**Notas do agente:**
+- Feito: login envia credenciais à API, valida a identidade por `/admin/me` e persiste o token somente após a validação.
+- Arquivos: `apps/web/src/features/admin/auth/admin-auth-context.tsx`, `AdminLoginPage.tsx`, `apps/web/test/admin-auth.test.tsx`.
+- Como usar: `/admin/login` autentica e direciona o administrador para `/admin`; a identidade exibida vem de `/admin/me`.
+- Testes: parte da suíte `apps/web/test/admin-auth.test.tsx` (login válido, inválido, erro de serviço e restauração da identidade).
+- Decisões: o token fica em `sessionStorage` e credenciais só são aceitas quando tanto login quanto `/admin/me` concluem com sucesso.
 
-### [ ] C10.b — Rotas protegidas e logout
+### [x] C10.b — Rotas protegidas e logout
 **Ref.:** architecture §9.
 **Depende de:** C10.a.
 **Fazer:** proteger `/admin` e rotas de eleição; rejeitar token ausente, inválido ou de outro papel.
 **Testes (escrever antes):** sem token redireciona; papel errado bloqueia; logout limpa acesso.
 **Pronto quando:** todas as áreas administrativas usam uma proteção única.
-**Arquivos:** `apps/web/src/features/admin/auth/`, `App.tsx`.
+**Arquivos:** `apps/web/src/features/admin/auth/`, `apps/web/src/App.tsx`,
+`apps/web/test/admin-auth.test.tsx`.
 **Commit sugerido:** `feat(web): protege as rotas administrativas`
+**Notas do agente:**
+- Feito: todas as rotas sob `/admin` exigem uma identidade validada; tokens inválidos/de eleitor são descartados, e logout limpa a sessão e redireciona ao login.
+- Arquivos: `apps/web/src/features/admin/auth/RequireAdmin.tsx`, `AdminDashboardPage.tsx`, `admin-auth-context.tsx`, `apps/web/src/App.tsx`, `apps/web/test/admin-auth.test.tsx`.
+- Como usar: adicione futuras telas administrativas como filhas da rota protegida `/admin`; o botão de logout encerra o acesso.
+- Testes: `apps/web/test/admin-auth.test.tsx` (8 casos C10: credenciais válidas/inválidas, resposta de serviço indisponível, acesso sem token, restauração, token inválido, token de eleitor e logout) e `apps/web/test/App.test.tsx` (2).
+- Decisões: token expirado ou papel inadequado causa redirecionamento ao login; falha de rede ao restaurar a identidade não é apresentada como autenticação bem-sucedida e mantém mensagem visível.
 
 ### [ ] C11.a — Lista de eleições
 **Ref.:** architecture §6.1.
