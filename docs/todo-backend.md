@@ -69,6 +69,8 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/test/doubles/pg-mem-pool.ts` → Postgres em memória com rollback (`createPgMemPool`, `createMigratedPgMemPool`); `spy-sql-pool.ts` → anota comandos e liberações de conexão.
 - `apps/server/test/doubles/held-save-election-repository.ts` → segura (e libera ou faz falhar) a próxima gravação, para o teste agir enquanto ela está em andamento.
 - `apps/server/test/doubles/gated-reads-election-repository.ts` → segura as próximas leituras até todas chegarem, para forçar disputa de versão entre requisições.
+- `apps/server/test/doubles/failing-save-election-repository.ts` → `FailingSaveElectionRepository`: as próximas gravações falham com os erros de `pendingFailures` (e rodam `onFailure`), para testar as novas tentativas do serviço.
+- `apps/server/test/support/pending-work.ts` → `flushPendingWork()`: deixa as promessas pendentes andarem (próxima volta do event loop), sem espera por tempo.
 - `apps/server/src/http/errors.ts` → `HttpError(status, code, message)`.
 - `apps/server/src/app.ts` → `AppDeps` e `buildApp(deps)` (Fastify sem `listen`; health e tratadores de erro).
 - `apps/server/src/http/error-handler.ts` → `toErrorResponse(error)` e `registerErrorHandling(app)`: `HttpError`/`DomainError`/`ZodError`/erro do Fastify → `ErrorDTO`.

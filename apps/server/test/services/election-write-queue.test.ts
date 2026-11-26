@@ -7,6 +7,7 @@ import { SpyLogger } from '../doubles/spy-logger';
 import { SpyNotifier } from '../doubles/spy-notifier';
 import { StubCodeGenerator } from '../doubles/stub-code-generator';
 import { openElectionWithVoters } from '../support/election-fixtures';
+import { flushPendingWork } from '../support/pending-work';
 
 const START = new Date('2026-01-01T12:00:00.000Z');
 const OWNER = 'admin-1';
@@ -62,16 +63,6 @@ async function adminWriteInProgress(test: Awaited<ReturnType<typeof serviceWithO
   return { held, write };
 }
 
-/**
- * Deixa rodar tudo o que já pode rodar sem esperar tempo nenhum (aqui tudo é em memória): quem
- * não precisa da vez da eleição termina, e quem precisa fica parado na fila.
- *
- * @returns Promessa resolvida na próxima volta do event loop.
- */
-function othersHadTheirChance(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
-}
-
 describe('ElectionService writes of the same election', () => {
   it('accepts and counts 100 simultaneous votes', async () => {
     const voterCodes = Array.from({ length: 100 }, (_, index) => `VOTER-${index}`);
@@ -116,7 +107,7 @@ describe('ElectionService writes of the same election', () => {
       const vote = test.service.castVote(FIRST_VOTER, 'e1', VOTE);
       test.clock.advance(FROM_INSIDE_TO_PAST_THE_GRACE_MS);
       const closing = close(test.service);
-      await othersHadTheirChance();
+      await flushPendingWork();
 
       held.release();
 
@@ -144,7 +135,7 @@ describe('ElectionService writes of the same election', () => {
       test.clock.advance(INSIDE_THE_GRACE_MS);
       const waiting = adminWrite(test.service);
       const vote = test.service.castVote(FIRST_VOTER, 'e1', VOTE);
-      await othersHadTheirChance();
+      await flushPendingWork();
       // A vez dos dois só chega depois de a tolerância acabar.
       test.clock.advance(FROM_INSIDE_TO_PAST_THE_GRACE_MS);
 
@@ -161,7 +152,7 @@ describe('ElectionService writes of the same election', () => {
     const test = await serviceWithOpenRound();
     const { held, write } = await adminWriteInProgress(test);
     const vote = test.service.castVote(FIRST_VOTER, 'e1', VOTE);
-    await othersHadTheirChance();
+    await flushPendingWork();
     test.clock.advance(PAST_THE_GRACE_MS);
 
     held.release();
@@ -207,7 +198,7 @@ describe('ElectionService writes of the same election', () => {
     const test = await serviceWithOpenRound();
     const { held, write } = await adminWriteInProgress(test);
     const vote = test.service.castVote(FIRST_VOTER, 'e1', VOTE);
-    await othersHadTheirChance();
+    await flushPendingWork();
 
     held.fail(new Error('database down'));
 

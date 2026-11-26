@@ -2,8 +2,9 @@ import { revokeVoter } from '@voto/domain';
 import { describe, expect, it } from 'vitest';
 import { InMemoryElectionRepository } from '../../src/adapters/in-memory-election-repository';
 import { versionConflict } from '../../src/adapters/repository-errors';
-import type { ElectionRecord, ElectionRepository } from '../../src/ports';
+import type { ElectionRepository } from '../../src/ports';
 import { ElectionService } from '../../src/services/election-service';
+import { FailingSaveElectionRepository } from '../doubles/failing-save-election-repository';
 import { FakeClock } from '../doubles/fake-clock';
 import { FakeScheduler } from '../doubles/fake-scheduler';
 import { SpyLogger } from '../doubles/spy-logger';
@@ -54,21 +55,6 @@ function makeService(
     historyLimit: options.historyLimit ?? HISTORY_LIMIT,
   });
   return { service, repository, clock, scheduler, notifier, logger };
-}
-
-/** Repositório cujas próximas gravações falham com os erros enfileirados pelo teste. */
-class FailingSaveRepository extends InMemoryElectionRepository {
-  /** Erros que as próximas gravações lançam, um por gravação, em ordem. */
-  pendingFailures: Error[] = [];
-  /** Roda a cada falha, para simular o que acontece enquanto quem grava espera. */
-  onFailure: () => void = () => undefined;
-
-  override save(record: ElectionRecord, expectedVersion: number): Promise<void> {
-    const failure = this.pendingFailures.shift();
-    if (!failure) return super.save(record, expectedVersion);
-    this.onFailure();
-    return Promise.reject(failure);
-  }
 }
 
 describe('ElectionService command flow', () => {
@@ -635,7 +621,7 @@ describe('ElectionService when saves of an overdue round compete', () => {
    * @returns O serviço, os doubles e o repositório que pode ser programado para falhar.
    */
   async function serviceWithUnclosedOverdueRound() {
-    const repository = new FailingSaveRepository();
+    const repository = new FailingSaveElectionRepository();
     const election = openElectionWithVoters({
       id: 'e1',
       adminId: OWNER,
@@ -1052,7 +1038,7 @@ describe('ElectionService.castVote', () => {
    * @returns O serviço, os doubles e o repositório que pode ser programado para falhar.
    */
   async function serviceWithTwoVoters() {
-    const repository = new FailingSaveRepository();
+    const repository = new FailingSaveElectionRepository();
     const election = openElectionWithVoters({
       id: 'e1',
       adminId: OWNER,

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { anElectionRecord } from '../support/election-records';
+import { flushPendingWork } from '../support/pending-work';
 import { GatedReadsElectionRepository } from './gated-reads-election-repository';
 
 /**
@@ -13,15 +14,6 @@ async function repositoryWithElection() {
   return repository;
 }
 
-/**
- * Deixa o event loop esvaziar as promessas pendentes, sem esperar tempo nenhum.
- *
- * @returns Promessa resolvida na próxima volta do event loop.
- */
-function pendingPromisesSettled(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
-}
-
 describe('GatedReadsElectionRepository', () => {
   it('holds a read while the others have not arrived', async () => {
     const repository = await repositoryWithElection();
@@ -29,7 +21,7 @@ describe('GatedReadsElectionRepository', () => {
     repository.holdNextReads(2);
 
     void repository.get('e1').then(delivered);
-    await pendingPromisesSettled();
+    await flushPendingWork();
 
     expect(delivered).not.toHaveBeenCalled();
   });
