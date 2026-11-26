@@ -162,8 +162,9 @@ export class ElectionService {
    *
    * @param electionId - Eleição alvo.
    * @returns O registro atual já com o prazo vencido aplicado, ou `null` se a eleição não existir.
-   * @throws {HttpError} 409 `VERSION_CONFLICT` se o fechamento perder a disputa pela
-   *   gravação em todas as tentativas.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` se a eleição sumir enquanto o fechamento espera
+   *   a vez na fila; 409 `VERSION_CONFLICT` se o fechamento perder a disputa pela gravação em
+   *   todas as tentativas.
    */
   async settleDueRound(electionId: string): Promise<ElectionRecord | null> {
     return this.settleStored(electionId, this.deps.voteGraceMs);
@@ -686,7 +687,8 @@ export class ElectionService {
    * @param electionId - Eleição alvo.
    * @param toleranceMs - Quanto depois do prazo a rodada ainda é considerada aberta.
    * @returns O registro com o prazo aplicado, ou `null` se a eleição não existir.
-   * @throws {HttpError} 409 `VERSION_CONFLICT` se todas as tentativas perderem a disputa.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` se a eleição sumir enquanto se espera a vez;
+   *   409 `VERSION_CONFLICT` se todas as tentativas perderem a disputa.
    */
   private async settleStored(
     electionId: string,

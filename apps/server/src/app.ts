@@ -50,10 +50,10 @@ export interface AppDeps {
  * abertas, porque os timers não sobrevivem a um reinício.
  *
  * @param deps - Configuração e portas da aplicação.
- * @returns A instância Fastify com health check, tratamento de erros, limite de tentativas no
- *   login e na entrada do eleitor, login do admin e as
- *   rotas de eleição, cargos, fila, candidatos, eleitores, rodadas e o desfecho delas (2º turno,
- *   liberação, desfazer...) e a entrada do eleitor (sessão por código e estado); com
+ * @returns A instância Fastify com health check, tratamento de erros, corpo JSON vazio aceito
+ *   como ausente, limite de tentativas no login e na entrada do eleitor (se ligado), login do
+ *   admin, as rotas de eleição, cargos, fila, candidatos, eleitores, rodadas e o desfecho delas
+ *   (2º turno, liberação, desfazer...) e as do eleitor (sessão por código, estado e voto); com
  *   `deps.realtime`, também o gateway Socket.IO no mesmo servidor HTTP.
  */
 export function buildApp(deps: AppDeps): FastifyInstance {
