@@ -40,7 +40,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - Decisões: <escolhas não óbvias; "nenhuma" se não houver>
 ```
 
-**Git.** O agente **não** roda `git commit`, `git push` nem cria branches: o usuário cuida disso. Para referência: as tarefas do Sprint 0 vão direto na `main`; a partir da B1, o usuário usa uma branch por tarefa (`feat/server-<id>-<slug>`) e abre PR. Na S0.1, o agente pode rodar `git init` só se o repositório ainda não existir.
+**Git.** O agente **não** roda `git commit`, `git push` nem cria branches: o usuário cuida disso. Para referência: as tarefas do Sprint 0 vão direto na `main`; a partir da B1, o usuário usa uma branch por bloco de tarefas (ex.: `feat/server-fundacoes`, `feat/server-votacao`), com um commit por tarefa, e abre um PR por bloco. Na S0.1, o agente pode rodar `git init` só se o repositório ainda não existir.
 
 ---
 
@@ -771,7 +771,7 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 ### [ ] B18 — Composição, arquivos estáticos e retomada após reinício
 **Ref.:** architecture §8.3, §13.
 **Fazer:**
-- `src/compose.ts`: `createServer(config)` monta os adaptadores reais conforme `REPOSITORY`, roda `migrate` (se for pg), executa `seedAdmin`, chama `buildApp` e `attachRealtime`, e reagenda as rodadas abertas (`rescheduleOpenRounds`, usando `repo.listAll()`).
+- `src/compose.ts`: `createServer(config)` monta os adaptadores reais conforme `REPOSITORY`, roda `migrate` (se for pg), executa `seedAdmin`, cria o `io` com `createRealtimeServer()` e chama `buildApp` com `notifier: new SocketNotifier(io)` e `realtime: io` (é o `buildApp` que liga o `io` ao servidor HTTP; ver as notas da B15), e reagenda as rodadas abertas (`rescheduleOpenRounds`, usando `repo.listAll()`).
 - `src/main.ts` (humilde, fora da cobertura): `loadConfig(process.env)` → `createServer` → `listen`, com encerramento gracioso em `SIGTERM`/`SIGINT`.
 - `http/static.ts`: `registerStatic(app, distDir)` com `@fastify/static`. Fallback para `index.html` em rotas que não são `/api` nem `/socket.io`; `/api/*` inexistente continua sendo 404 JSON.
 - **Proxy reverso e rate limit:** o rate limit da A25 conta por `request.ip`. Atrás do proxy do Render, sem `trustProxy` todos os clientes aparecem com o IP do proxy e o limite pega todo mundo junto. Configure o `trustProxy` do Fastify pelo **número de proxies** na frente do servidor (variável nova no `config.ts`, padrão desligado). **Não use `trustProxy: true`**: com `true`, o Fastify usa o primeiro IP do `X-Forwarded-For`, que o próprio cliente pode forjar, e o limite vira enfeite. O valor de produção é definido na B21.
@@ -790,7 +790,7 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 **Fazer:**
 - Build do servidor com `tsup`: entrada `src/main.ts`, saída `apps/server/dist/main.js`, `target node24`, empacotando os workspaces `@voto/*` (`noExternal`).
 - Scripts raiz: `build` (web e depois server) e `start` (`node apps/server/dist/main.js`). O servidor serve `apps/web/dist` por padrão.
-- Adicionar `npm run build` ao `ci.yml`, depois dos testes.
+- Adicionar `npm run build` ao `ci.yml`, depois dos testes e **antes** do passo "Upload Playwright report" (A26), que precisa continuar sendo o último.
 
 **Testes (escrever antes):** é uma tarefa de configuração. Verifique localmente que `npm run build` e `npm start` sobem o servidor e que `GET /api/health` e `GET /` respondem. Descreva nas notas o comando usado para conferir.
 **Pronto quando:** o build passa no CI dos 3 SOs.
