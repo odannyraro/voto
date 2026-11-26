@@ -19,6 +19,8 @@ const PAST_THE_GRACE_MS = 61_001;
 // A primeira rodada aberta pelo serviço recebe o primeiro id gerado.
 const VOTE = { roundId: 'id-1', choice: 'president-candidate' };
 const FIRST_VOTER = 'e1:VOTERAAA';
+// Uma sala cheia votando no mesmo segundo.
+const SIMULTANEOUS_VOTES = 100;
 
 /**
  * Serviço com a eleição `e1` do dono e a rodada de `president` aberta pelo admin (versão 1,
@@ -64,15 +66,15 @@ async function adminWriteInProgress(test: Awaited<ReturnType<typeof serviceWithO
 }
 
 describe('ElectionService writes of the same election', () => {
-  it('accepts and counts 100 simultaneous votes', async () => {
-    const voterCodes = Array.from({ length: 100 }, (_, index) => `VOTER-${index}`);
+  it('accepts and counts a burst of simultaneous votes', async () => {
+    const voterCodes = Array.from({ length: SIMULTANEOUS_VOTES }, (_, index) => `VOTER-${index}`);
     const { service, repository } = await serviceWithOpenRound(voterCodes);
 
     const votes = Promise.all(voterCodes.map((code) => service.castVote(`e1:${code}`, 'e1', VOTE)));
 
-    await expect(votes).resolves.toHaveLength(100);
+    await expect(votes).resolves.toHaveLength(SIMULTANEOUS_VOTES);
     expect((await repository.get('e1'))?.current.rounds[0]?.tally).toEqual({
-      'president-candidate': 100,
+      'president-candidate': SIMULTANEOUS_VOTES,
     });
   });
 

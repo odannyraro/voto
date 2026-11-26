@@ -10,6 +10,9 @@ type RecordRow = { record: ElectionRecord };
 /** Linha da tabela `voter_codes` com o dono do código. */
 type VoterCodeRow = { election_id: string; voter_id: string };
 
+/** Código guardado de uma eleição e o eleitor que o tem. */
+type StoredCodeRow = { code: string; voter_id: string };
+
 /** Parâmetros de cada eleitor no `INSERT` de códigos: código, eleição e eleitor. */
 const PARAMS_PER_CODE = 3;
 
@@ -80,7 +83,7 @@ export class PgElectionRepository implements ElectionRepository {
         [version, JSON.stringify(record), id, expectedVersion],
       );
       if (rowCount === 0) throw await rejectedSaveError(tx, id);
-      await replaceVoterCodes(tx, record.current);
+      await syncVoterCodes(tx, record.current);
     });
   }
 
@@ -147,6 +150,39 @@ export class PgElectionRepository implements ElectionRepository {
 async function rejectedSaveError(tx: SqlExecutor, id: string): Promise<Error> {
   const { rows } = await tx.query('SELECT id FROM elections WHERE id = $1', [id]);
   return rows.length === 0 ? electionNotFound() : versionConflict();
+}
+
+/**
+ * Deixa a tabela de códigos igual aos eleitores da eleição gravada. Só reescreve quando algo
+ * mudou: quase toda gravação (votos, rodadas) mantém os mesmos eleitores, e reescrever os
+ * códigos a cada voto custaria milhares de linhas numa eleição grande.
+ *
+ * @param tx - Transação que está gravando a eleição.
+ * @param election - Estado atual da eleição.
+ */
+async function syncVoterCodes(tx: SqlExecutor, election: Election): Promise<void> {
+  const { rows } = await tx.query<StoredCodeRow>(
+    'SELECT code, voter_id FROM voter_codes WHERE election_id = $1',
+    [election.id],
+  );
+  if (holdSameCodes(rows, election.voters)) return;
+  await replaceVoterCodes(tx, election);
+}
+
+/**
+ * Diz se os códigos guardados são exatamente os dos eleitores, cada um com o mesmo dono.
+ *
+ * @param stored - Linhas de `voter_codes` da eleição.
+ * @param voters - Eleitores da eleição gravada (códigos únicos entre eles).
+ * @returns `true` se não há código a mais, a menos ou com outro eleitor.
+ */
+function holdSameCodes(stored: readonly StoredCodeRow[], voters: Election['voters']): boolean {
+  // Um código liberado (credenciamento desfeito) pode voltar sorteado para outro eleitor.
+  const ownerByCode = new Map(stored.map((row) => [row.code, row.voter_id]));
+  return (
+    stored.length === voters.length &&
+    voters.every((voter) => ownerByCode.get(voter.code) === voter.id)
+  );
 }
 
 /**
