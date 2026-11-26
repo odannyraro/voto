@@ -1,18 +1,17 @@
-import { APP_NAME } from '@voto/shared';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 
 describe('App', () => {
-  it('shows the app name as the heading of the home route', () => {
+  it('shows the voter entry form on the home route', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <App />
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading')).toHaveTextContent(APP_NAME);
+    expect(screen.getByRole('textbox', { name: 'Voter code' })).toBeInTheDocument();
   });
 
   it('does not show the home heading on an unknown route', () => {
@@ -22,6 +21,6 @@ describe('App', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.queryByRole('heading', { name: APP_NAME })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Voter code' })).not.toBeInTheDocument();
   });
 });
