@@ -23,7 +23,7 @@ _a preencher_
 - **Persistência:** PostgreSQL com o driver [pg](https://node-postgres.com) (uma linha por eleição em `JSONB`, com o histórico do desfazer). Em desenvolvimento e nos testes, repositórios em memória.
 - **Build de produção:** [tsup](https://tsup.egoist.dev) gera um único `apps/server/dist/main.js`, que também serve o build do front.
 - **Testes do backend:** [Vitest](https://vitest.dev) 5 com cobertura v8; `app.inject` do Fastify para as rotas, cliente Socket.IO real em porta efêmera para o tempo real e [pg-mem](https://github.com/oguimbal/pg-mem) (Postgres em memória) para os adaptadores SQL. *Test doubles* próprios só nas fronteiras: `FakeClock`, `FakeScheduler`, `StubCodeGenerator`, `SpyNotifier`, `SpyLogger`, além de repositórios que seguram ou fazem falhar gravações para testar concorrência.
-- **CI/CD:** GitHub Actions em Ubuntu, macOS e Windows (lint, formatação, typecheck, testes com cobertura mínima de 80% por pacote e build), cobertura publicada no [Codecov](https://codecov.io) por pacote e deploy no [Render](https://render.com) com banco no [Neon](https://neon.tech), disparado só depois do CI verde na `main`. Produção: https://voto-jn8l.onrender.com.
+- **CI/CD:** GitHub Actions em Ubuntu, macOS e Windows (lint, formatação, typecheck, testes com cobertura mínima de 80% por pacote e build), cobertura publicada no [Codecov](https://codecov.io) por pacote e deploy no [Render](https://render.com) com banco no [Neon](https://neon.tech), disparado só depois do CI verde na `main`. Produção: https://vota-ae.onrender.com.
 
 A referência da API (rotas e eventos, com exemplos) está em [docs/api.md](docs/api.md) e o desenho completo em [docs/architecture.md](docs/architecture.md).
 
