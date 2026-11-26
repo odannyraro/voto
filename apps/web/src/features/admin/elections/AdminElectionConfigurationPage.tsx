@@ -5,6 +5,7 @@ import { Navigate, useParams } from 'react-router';
 import { adminApi } from '../../../api/admin-api';
 import { ApiError } from '../../../api/api-client';
 import { useAdminAuth } from '../auth/admin-auth-context';
+import { CandidatesTab } from '../config/CandidatesTab';
 import { PositionsTab } from '../config/PositionsTab';
 
 /**
@@ -82,6 +83,12 @@ export function AdminElectionConfigurationPage(): ReactElement {
       <p>Election ID: {electionId}</p>
       <p>Election: {election.election.name}</p>
       <PositionsTab
+        token={token}
+        electionId={electionId}
+        state={election}
+        onElectionChange={setElection}
+      />
+      <CandidatesTab
         token={token}
         electionId={electionId}
         state={election}

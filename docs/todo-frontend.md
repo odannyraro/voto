@@ -107,7 +107,7 @@ agrupadas em um único commit.
 | C10 | Login, identidade, proteção de rotas e logout fecham a autenticação do admin | `[x] C10.a` login, token e `/admin/me`; `[x] C10.b` rotas protegidas e logout |
 | C11 | Divide-se: leitura da lista e mutação/criação têm UI e testes distintos | `[x] C11.a` lista de eleições; `[x] C11.b` criação e navegação |
 | C12 | Divide-se: adicionar/editar cargos não inclui remover e confirmar | `[x] C12.a` criar e editar cargos; `[x] C12.b` remover cargo e confirmar estado permitido |
-| C13 | Divide-se: cadastro/validação e edição/removal têm casos próprios | `[ ] C13.a` criar candidato e validações; `[ ] C13.b` editar/remover candidato |
+| C13 | Divide-se: cadastro/validação e edição/removal têm casos próprios | `[x] C13.a` criar candidato e validações; `[x] C13.b` editar/remover candidato |
 | C14 | Divide-se: eleitores e fila são abas independentes com contratos próprios | `[ ] C14.a` gerar, listar, copiar e revogar códigos; `[ ] C14.b` ordem, sugestão e confirmação |
 | C15 | Divide-se: sincronização via socket e controles ao vivo podem ser validados separadamente | `[ ] C15.a` `useAdminElection` e ressincronização; `[ ] C15.b` abrir rodada, prazo e fechar antes |
 | C16 | Divide-se: resolução de rodada e ações de cargo insuficiente são fluxos distintos | `[ ] C16.a` resultado, 2º turno, liberar, desfazer e anular; `[ ] C16.b` anexar, adiar e cancelar |
@@ -147,6 +147,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/features/admin/elections/AdminElectionsPage.tsx` → carrega resumos, apresenta estados/contagens e cria eleições com validação compartilhada.
 - `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx` → carrega o agregado completo da eleição e integra sua configuração.
 - `apps/web/src/features/admin/config/PositionsTab.tsx` → lista, cria, edita e remove cargos respeitando fila, confirmação e estado devolvido pela API.
+- `apps/web/src/features/admin/config/CandidatesTab.tsx` → cadastra e edita candidatos/candidaturas, mantém primeira opção válida e respeita erros do servidor na remoção.
 - `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado, listeners removíveis e reconexão após entrada no namespace.
 - `apps/web/src/api/socket-provider.tsx` → contexto realtime com criação/limpeza do cliente por sessão e inscrição em snapshots e reconexão.
 - `apps/web/src/components/ConfirmDialog.tsx` e `DoubleConfirmDialog.tsx` → diálogos acessíveis de confirmação simples e por título exato.
@@ -172,6 +173,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/admin-auth.test.tsx` → login, identidade, restauração, rotas protegidas, credenciais inválidas e logout.
 - `apps/web/test/admin-elections.test.tsx` → lista vazia e preenchida, falhas de API, validação de prazo e criação/navegação.
 - `apps/web/test/admin-position-config.test.tsx` → criação no fim da fila, validação, edição, cancelamento e remoção confirmada ou rejeitada.
+- `apps/web/test/admin-candidate-config.test.tsx` → limites de idade, candidaturas, primeira opção, edição e remoção aceita/cancelada/rejeitada para candidato eleito.
 - `apps/web/test/voter-session.test.tsx` → carregamento inicial e remontagem, ordenação de socket/REST, reconexão, erros e credenciais persistidas.
 - `apps/web/test/voter-vote-page.test.tsx` → voto candidato/branco, cliques duplicados, erros de rodada e countdown.
 - `apps/web/test/voter-final-state.test.tsx` → fases finais, desfechos do resultado e contagens sem cálculo local.
@@ -557,7 +559,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/admin-position-config.test.tsx` (3 casos: cancelar, remover com sucesso e rejeição da API sem remoção local).
 - Decisões: a elegibilidade da remoção fica sob autoridade do servidor; a interface não faz remoção otimista.
 
-### [ ] C13.a — Criar candidato
+### [x] C13.a — Criar candidato
 **Ref.:** architecture §6.1 e §5.4.
 **Depende de:** C12.b.
 **Fazer:** criar formulário de candidato com candidaturas e primeira opção.
@@ -565,8 +567,14 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** candidato válido é criado e aparece nas opções dos cargos.
 **Arquivos:** `apps/web/src/features/admin/config/`.
 **Commit sugerido:** `feat(web): cria candidatos e suas candidaturas`
+**Notas do agente:**
+- Feito: formulário cadastra nome, idade, meses restantes, cargos concorridos e primeira opção; aplica validação do schema compartilhado e explica falhas de campo.
+- Arquivos: `apps/web/src/features/admin/config/CandidatesTab.tsx`, `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx`, `apps/web/test/admin-candidate-config.test.tsx`.
+- Como usar: na configuração da eleição, escolha pelo menos um cargo e defina a primeira opção entre as candidaturas.
+- Testes: `apps/web/test/admin-candidate-config.test.tsx` (7 casos C13.a: cadastro válido, idades 15/16/120/121, candidaturas vazias e atualização da primeira opção ao remover a aplicação selecionada).
+- Decisões: nome, idade, candidaturas e primeira opção são validados pelo contrato compartilhado; a primeira opção é ajustada para permanecer entre as candidaturas selecionadas.
 
-### [ ] C13.b — Editar e remover candidato
+### [x] C13.b — Editar e remover candidato
 **Ref.:** architecture §6.1.
 **Depende de:** C13.a.
 **Fazer:** permitir edição/removal e bloquear candidato eleito pela resposta da API.
@@ -574,6 +582,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** ações de candidato usam o agregado completo recebido do servidor.
 **Arquivos:** `apps/web/src/features/admin/config/`.
 **Commit sugerido:** `feat(web): edita e remove candidatos`
+**Notas do agente:**
+- Feito: edição atualiza primeira opção e demais campos; remoção exige confirmação e só substitui o estado local após resposta da API.
+- Arquivos: `apps/web/src/features/admin/config/CandidatesTab.tsx`, `apps/web/test/admin-candidate-config.test.tsx`.
+- Como usar: use Edit para alterar candidato ou Remove para confirmar remoção; se o servidor bloquear candidato eleito, o erro fica visível e o candidato permanece.
+- Testes: `apps/web/test/admin-candidate-config.test.tsx` (4 casos C13.b: editar primeira opção, cancelar remoção, remover e preservar candidato eleito após erro da API).
+- Decisões: o servidor é autoridade sobre elegibilidade para remoção; a tela sinaliza candidatos já eleitos e não aplica mutações otimistas.
 
 ### [ ] C14.a — Gestão de eleitores
 **Ref.:** architecture §6.1.
