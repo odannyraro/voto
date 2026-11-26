@@ -1,7 +1,8 @@
 import { revokeVoter } from '@voto/domain';
 import { describe, expect, it } from 'vitest';
 import { InMemoryElectionRepository } from '../../src/adapters/in-memory-election-repository';
-import type { ElectionRepository } from '../../src/ports';
+import { versionConflict } from '../../src/adapters/repository-errors';
+import type { ElectionRecord, ElectionRepository } from '../../src/ports';
 import { ElectionService } from '../../src/services/election-service';
 import { FakeClock } from '../doubles/fake-clock';
 import { FakeScheduler } from '../doubles/fake-scheduler';
@@ -9,7 +10,7 @@ import { SpyLogger } from '../doubles/spy-logger';
 import { SpyNotifier } from '../doubles/spy-notifier';
 import { StubCodeGenerator } from '../doubles/stub-code-generator';
 import { anElectionRecord, unwrap } from '../support/election-records';
-import { openElectionWithVoters } from '../support/election-fixtures';
+import { openElectionWithVoters, withOpenRound } from '../support/election-fixtures';
 
 const START = new Date('2026-01-01T12:00:00.000Z');
 const VOTE_GRACE_MS = 1000;
@@ -774,5 +775,127 @@ describe('ElectionService.handleDeadline', () => {
         { context: { electionId: 'e1', err: new Error('database down') }, message: LOG_MESSAGE },
       ]);
     });
+  });
+});
+
+describe('ElectionService.castVote', () => {
+  const FIRST_VOTER = 'e1:VOTERAAA';
+  const SECOND_VOTER = 'e1:VOTERBBB';
+  const VOTE = { roundId: 'r1', choice: 'president-candidate' };
+  const MAX_VOTE_ATTEMPTS = 50;
+  const LONG_AFTER_THE_DEADLINE_MS = 10 * ONE_MINUTE_MS;
+
+  /** Repositório cujas próximas gravações falham com os erros enfileirados pelo teste. */
+  class FailingSaveRepository extends InMemoryElectionRepository {
+    /** Erros que as próximas gravações lançam, um por gravação, em ordem. */
+    pendingFailures: Error[] = [];
+    /** Roda a cada falha, para simular o que acontece enquanto o voto espera. */
+    onFailure: () => void = () => undefined;
+
+    override save(record: ElectionRecord, expectedVersion: number): Promise<void> {
+      const failure = this.pendingFailures.shift();
+      if (!failure) return super.save(record, expectedVersion);
+      this.onFailure();
+      return Promise.reject(failure);
+    }
+  }
+
+  /**
+   * Serviço com a eleição `e1`, dois eleitores e a rodada `r1` (1 min) aberta em `START`.
+   *
+   * @returns O serviço, os doubles e o repositório que pode ser programado para falhar.
+   */
+  async function serviceWithTwoVoters() {
+    const repository = new FailingSaveRepository();
+    const election = openElectionWithVoters({
+      id: 'e1',
+      adminId: OWNER,
+      positionIds: ['president'],
+      voterCodes: ['VOTERAAA', 'VOTERBBB'],
+    });
+    await repository.create(
+      withOpenRound(election, { positionId: 'president', roundId: 'r1', openedAt: START }),
+    );
+    return { ...makeService({ repository }), repository };
+  }
+
+  describe('when votes arrive at the same time', () => {
+    it('accepts and counts the votes of two different voters', async () => {
+      const { service, repository } = await serviceWithTwoVoters();
+
+      const votes = Promise.all([
+        service.castVote(FIRST_VOTER, 'e1', VOTE),
+        service.castVote(SECOND_VOTER, 'e1', VOTE),
+      ]);
+
+      await expect(votes).resolves.toHaveLength(2);
+      expect((await repository.get('e1'))?.current.rounds[0]).toMatchObject({
+        votedVoterIds: [FIRST_VOTER, SECOND_VOTER],
+        tally: { 'president-candidate': 2 },
+      });
+    });
+
+    it('refuses the repeated vote of the same voter and counts only one', async () => {
+      const { service, repository } = await serviceWithTwoVoters();
+
+      const first = service.castVote(FIRST_VOTER, 'e1', VOTE);
+      const repeated = service.castVote(FIRST_VOTER, 'e1', VOTE);
+
+      await Promise.all([
+        first,
+        expect(repeated).rejects.toMatchObject({ code: 'VOTER_ALREADY_VOTED' }),
+      ]);
+      expect((await repository.get('e1'))?.current.rounds[0]?.tally).toEqual({
+        'president-candidate': 1,
+      });
+    });
+  });
+
+  describe('when saving the vote keeps conflicting', () => {
+    it('accepts the vote when only the last allowed attempt can save it', async () => {
+      const { service, repository } = await serviceWithTwoVoters();
+      repository.pendingFailures = Array.from({ length: MAX_VOTE_ATTEMPTS - 1 }, versionConflict);
+
+      await service.castVote(FIRST_VOTER, 'e1', VOTE);
+
+      expect((await repository.get('e1'))?.current.rounds[0]?.votedVoterIds).toEqual([FIRST_VOTER]);
+    });
+
+    it('gives up with VERSION_CONFLICT after the maximum number of attempts', async () => {
+      const { service, repository } = await serviceWithTwoVoters();
+      repository.pendingFailures = Array.from({ length: MAX_VOTE_ATTEMPTS }, versionConflict);
+
+      const vote = service.castVote(FIRST_VOTER, 'e1', VOTE);
+
+      await expect(vote).rejects.toMatchObject({ status: 409, code: 'VERSION_CONFLICT' });
+    });
+
+    it('judges the deadline by when the vote arrived, not by when it is retried', async () => {
+      const { service, repository, clock } = await serviceWithTwoVoters();
+      repository.pendingFailures = [versionConflict()];
+      repository.onFailure = () => clock.advance(LONG_AFTER_THE_DEADLINE_MS);
+
+      await service.castVote(FIRST_VOTER, 'e1', VOTE);
+
+      expect((await repository.get('e1'))?.current.rounds[0]?.votedVoterIds).toEqual([FIRST_VOTER]);
+    });
+  });
+
+  it('does not retry a failure other than a version conflict', async () => {
+    const { service, repository } = await serviceWithTwoVoters();
+    repository.pendingFailures = [new Error('database down')];
+
+    const vote = service.castVote(FIRST_VOTER, 'e1', VOTE);
+
+    await expect(vote).rejects.toThrow('database down');
+  });
+
+  it('does not extend the retry to admin commands', async () => {
+    const { service, repository } = await serviceWithTwoVoters();
+    repository.pendingFailures = [versionConflict()];
+
+    const command = service.closeRound(OWNER, 'e1', 'r1');
+
+    await expect(command).rejects.toMatchObject({ status: 409, code: 'VERSION_CONFLICT' });
   });
 });

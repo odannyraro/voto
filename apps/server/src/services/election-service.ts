@@ -41,7 +41,7 @@ import {
   type UpdatePositionInput,
 } from '@voto/domain';
 import type { Election, ElectionSummaryDTO, NextPositionDTO } from '@voto/shared';
-import { httpErrorFor } from '../http/errors';
+import { HttpError, httpErrorFor } from '../http/errors';
 import type {
   Clock,
   CodeGenerator,
@@ -70,6 +70,14 @@ export interface ElectionServiceDeps {
   /** Quantos estados anteriores o desfazer guarda. */
   readonly historyLimit: number;
 }
+
+/**
+ * Quantas vezes um voto tenta ser gravado antes de o `VERSION_CONFLICT` subir. Cada conflito
+ * quer dizer que outra gravação da mesma eleição entrou na frente; como cada voto grava uma
+ * vez só, uma rajada de até este tanto de votos simultâneos é aceita inteira. O custo cresce
+ * com o quadrado da rajada, então o teto não deve ser muito maior que isso.
+ */
+const MAX_VOTE_ATTEMPTS = 50;
 
 /** Comando do domínio sobre a eleição, já com a entrada da rota embutida. */
 type ElectionCommand = (election: Election, ctx: DomainContext) => Result<Election>;
@@ -168,12 +176,16 @@ export class ElectionService {
    * admin, mas quem autoriza é o token do eleitor (não há dono a conferir) e o prazo ganha a
    * tolerância `voteGraceMs`, que compensa a latência de rede.
    *
+   * Vários eleitores votam ao mesmo tempo na mesma eleição, então um voto que perde a disputa
+   * pela gravação é reaplicado sobre a eleição relida (o domínio volta a conferir as regras),
+   * até `MAX_VOTE_ATTEMPTS` tentativas. Os comandos do admin não repetem: o 409 volta na hora.
+   *
    * @param voterId - Eleitor autenticado (do token).
    * @param electionId - Eleição do token.
    * @param input - Rodada e escolha (id do candidato ou `BLANK`).
    * @returns O registro salvo (já fechado, se este foi o último voto), ou `null` se a eleição
    *   não existir mais.
-   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se todas as tentativas perderem a disputa.
    * @throws {DomainError} `ROUND_NOT_FOUND`, `ROUND_NOT_OPEN`, `ROUND_EXPIRED`,
    *   `VOTER_NOT_ELIGIBLE`, `VOTER_REVOKED`, `VOTER_ALREADY_VOTED` ou `INVALID_CHOICE`.
    */
@@ -182,15 +194,12 @@ export class ElectionService {
     electionId: string,
     input: Omit<CastVoteInput, 'voterId'>,
   ): Promise<ElectionRecord | null> {
-    const record = await this.deps.electionRepository.get(electionId);
-    if (!record) return null;
-
-    const ctx = this.newContext();
-    // Sem `closeRoundIfDue` antes: com ele, um voto atrasado acharia a rodada já fechada e
-    // viraria `ROUND_NOT_OPEN` (409) em vez de `ROUND_EXPIRED` (410). O domínio compara o prazo.
-    const lenientNow = new Date(ctx.now.getTime() - this.deps.voteGraceMs);
-    const result = castVote(record.current, { ...input, voterId }, { ...ctx, now: lenientNow });
-    return this.save(record, result, ctx);
+    // Fixado uma vez só: disputar a gravação não pode transformar em atrasado um voto que
+    // chegou no prazo.
+    const judgedAt = new Date(this.deps.clock.now().getTime() - this.deps.voteGraceMs);
+    return retryOnVersionConflict(MAX_VOTE_ATTEMPTS, () =>
+      this.applyVote(electionId, { ...input, voterId }, judgedAt),
+    );
   }
 
   /**
@@ -660,6 +669,31 @@ export class ElectionService {
   }
 
   /**
+   * Faz uma tentativa de voto: relê a eleição, aplica o voto pelo domínio e grava.
+   *
+   * @param electionId - Eleição do eleitor.
+   * @param vote - Rodada, eleitor e escolha.
+   * @param judgedAt - Instante comparado ao prazo (a chegada do voto menos a tolerância).
+   * @returns O registro salvo, ou `null` se a eleição não existir.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se outra gravação entrou entre a leitura e esta.
+   * @throws {DomainError} A regra de votação violada.
+   */
+  private async applyVote(
+    electionId: string,
+    vote: CastVoteInput,
+    judgedAt: Date,
+  ): Promise<ElectionRecord | null> {
+    const record = await this.deps.electionRepository.get(electionId);
+    if (!record) return null;
+
+    const ctx = this.newContext();
+    // Sem `closeRoundIfDue` antes: com ele, um voto atrasado acharia a rodada já fechada e
+    // viraria `ROUND_NOT_OPEN` (409) em vez de `ROUND_EXPIRED` (410). O domínio compara o prazo.
+    const result = castVote(record.current, vote, { ...ctx, now: judgedAt });
+    return this.save(record, result, ctx);
+  }
+
+  /**
    * Grava o resultado de um comando: se o domínio recusou, lança o erro sem salvar nem notificar;
    * se aceitou, incrementa a versão, empilha o snapshot e persiste.
    *
@@ -802,4 +836,39 @@ function fixedCodes(codes: readonly string[]): CodeGenerator {
       return next;
     },
   };
+}
+
+/**
+ * Repete uma operação enquanto ela perder a disputa pela gravação (concorrência otimista).
+ * Só serve para operações que releem o estado a cada tentativa.
+ *
+ * @param maxAttempts - Total de tentativas, contando a primeira (ao menos 1).
+ * @param operation - Operação a executar.
+ * @returns O resultado da primeira tentativa que não conflitar.
+ * @throws {HttpError} 409 `VERSION_CONFLICT` se a última tentativa também conflitar.
+ * @throws {Error} Qualquer outra falha da operação, na hora, sem repetir.
+ */
+async function retryOnVersionConflict<T>(
+  maxAttempts: number,
+  operation: () => Promise<T>,
+): Promise<T> {
+  for (let attempt = 1; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isVersionConflict(error)) throw error;
+    }
+  }
+  // Última tentativa fora do `try`: se conflitar de novo, o erro sobe para quem chamou.
+  return operation();
+}
+
+/**
+ * Diz se a falha é a de uma gravação que perdeu a disputa para outra.
+ *
+ * @param error - Valor lançado.
+ * @returns `true` para o `HttpError` de código `VERSION_CONFLICT`.
+ */
+function isVersionConflict(error: unknown): boolean {
+  return error instanceof HttpError && error.code === 'VERSION_CONFLICT';
 }
