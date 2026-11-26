@@ -19,7 +19,8 @@ const ELECTION_START = new Date('2026-01-01T12:00:00.000Z');
 // Prazo padrão da rodada: 60 s depois de aberta.
 const DEFAULT_ROUND_SECONDS = 60;
 const MILLISECONDS_PER_SECOND = 1000;
-const ONE_SECOND_PAST_DEADLINE_MS = (DEFAULT_ROUND_SECONDS + 1) * MILLISECONDS_PER_SECOND;
+// Prazo mais a tolerância de voto (1 s) e 1 ms: o primeiro instante em que a rodada venceu.
+const JUST_PAST_THE_GRACE_MS = (DEFAULT_ROUND_SECONDS + 1) * MILLISECONDS_PER_SECOND + 1;
 const HALF_OF_DEADLINE_MS = (DEFAULT_ROUND_SECONDS / 2) * MILLISECONDS_PER_SECOND;
 
 /**
@@ -253,7 +254,7 @@ describe('GET /api/voter/state', () => {
     const test = await appWithTwoAdmins();
     await test.deps.electionRepository.create(electionWithOpenMayorRound());
     const headers = await voterSessionHeaders(test, VOTER_CODE);
-    test.clock.advance(ONE_SECOND_PAST_DEADLINE_MS);
+    test.clock.advance(JUST_PAST_THE_GRACE_MS);
 
     const response = await test.app.inject({ method: 'GET', url: '/api/voter/state', headers });
 
@@ -266,7 +267,7 @@ describe('GET /api/voter/state', () => {
     const test = await appWithTwoAdmins();
     await test.deps.electionRepository.create(electionWithOpenMayorRound());
     const headers = await voterSessionHeaders(test, VOTER_CODE);
-    test.clock.advance(ONE_SECOND_PAST_DEADLINE_MS);
+    test.clock.advance(JUST_PAST_THE_GRACE_MS);
 
     await test.app.inject({ method: 'GET', url: '/api/voter/state', headers });
 

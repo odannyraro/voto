@@ -18,7 +18,9 @@ const HISTORY_LIMIT = 50;
 const OWNER = 'admin-1';
 const ONE_MINUTE_SECONDS = 60;
 const ONE_MINUTE_MS = 60_000;
+// Prazo de 1 min mais a tolerância: o último instante tolerado e o horário do timer.
 const ONE_MINUTE_AND_ONE_SECOND_MS = 61_000;
+const JUST_PAST_THE_GRACE_MS = ONE_MINUTE_AND_ONE_SECOND_MS + 1;
 
 /**
  * Cria o serviço com o domínio real, repositório em memória e doubles nas fronteiras.
@@ -293,7 +295,7 @@ describe('ElectionService command flow', () => {
         positionId: 'president',
         durationSeconds: ONE_MINUTE_SECONDS,
       });
-      clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+      clock.advance(JUST_PAST_THE_GRACE_MS);
 
       await service.openRound(OWNER, 'e1', { positionId: 'treasurer' });
 
@@ -432,7 +434,7 @@ describe('ElectionService.getElection', () => {
   describe('when the open round is past its deadline', () => {
     /**
      * Serviço com a eleição `e1` do dono, rodada de 1 min aberta (versão 1) e o relógio
-     * já 1 min e 1 s depois da abertura, ou seja, além do prazo.
+     * 1 ms depois do prazo com a tolerância, ou seja, com a rodada vencida.
      *
      * @returns O serviço e os doubles, como `makeService`.
      */
@@ -445,7 +447,7 @@ describe('ElectionService.getElection', () => {
         positionId: 'president',
         durationSeconds: ONE_MINUTE_SECONDS,
       });
-      test.clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+      test.clock.advance(JUST_PAST_THE_GRACE_MS);
       return test;
     }
 
@@ -488,6 +490,51 @@ describe('ElectionService.getElection', () => {
     const record = await service.getElection(OWNER, 'e1');
 
     expect(record.current).toMatchObject({ version: 1, rounds: [{ status: 'OPEN' }] });
+  });
+});
+
+describe('ElectionService at the last instant of the grace period', () => {
+  /**
+   * Serviço com a eleição `e1`, rodada de 1 min aberta e o relógio no último instante em que
+   * um voto ainda é aceito (prazo mais a tolerância).
+   *
+   * @returns O serviço e os doubles, como `makeService`.
+   */
+  async function serviceAtTheEndOfTheGrace() {
+    const test = makeService();
+    await test.repository.create(
+      openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
+    );
+    await test.service.openRound(OWNER, 'e1', {
+      positionId: 'president',
+      durationSeconds: ONE_MINUTE_SECONDS,
+    });
+    test.clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+    return test;
+  }
+
+  it('keeps the round open when the admin reads the election', async () => {
+    const { service } = await serviceAtTheEndOfTheGrace();
+
+    const record = await service.getElection(OWNER, 'e1');
+
+    expect(record.current).toMatchObject({ version: 1, rounds: [{ status: 'OPEN' }] });
+  });
+
+  it('keeps the round open when the admin runs a command', async () => {
+    const { service } = await serviceAtTheEndOfTheGrace();
+
+    const record = await service.updateElection(OWNER, 'e1', { name: 'Annual vote' });
+
+    expect(record.current.rounds).toMatchObject([{ status: 'OPEN' }]);
+  });
+
+  it('still reports the round in progress as the next step', async () => {
+    const { service } = await serviceAtTheEndOfTheGrace();
+
+    const next = await service.nextPosition(OWNER, 'e1');
+
+    expect(next).toMatchObject({ status: 'ROUND_IN_PROGRESS' });
   });
 });
 
@@ -716,6 +763,16 @@ describe('ElectionService.handleDeadline', () => {
     await service.handleDeadline('e1');
 
     expect(scheduler.pending()).toEqual([]);
+  });
+
+  it('closes the round even if the timer fires a millisecond early', async () => {
+    // O `setTimeout` pode adiantar; se o timer descontasse a tolerância, nada fecharia a rodada.
+    const { service, repository, clock } = await serviceWithOpenRound();
+    clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS - 1);
+
+    await service.handleDeadline('e1');
+
+    expect((await repository.get('e1'))?.current.rounds).toMatchObject([{ status: 'CLOSED' }]);
   });
 
   describe('when the round is not due', () => {

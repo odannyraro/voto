@@ -27,7 +27,8 @@ const ELECTION_START = new Date('2026-01-01T12:00:00.000Z');
 const DEFAULT_DEADLINE = '2026-01-01T12:01:00.000Z';
 const CUSTOM_DEADLINE = '2026-01-01T12:02:00.000Z';
 const DEFAULT_DEADLINE_PLUS_GRACE = new Date('2026-01-01T12:01:01.000Z');
-const SECONDS_PAST_DEFAULT_DEADLINE = 61 * 1000;
+// 1 ms depois do prazo com a tolerância: o primeiro instante em que a rodada venceu.
+const JUST_PAST_THE_GRACE_MS = 61 * 1000 + 1;
 
 const BELOW_MIN_DURATION_SECONDS = 4;
 const TWO_MINUTES_IN_SECONDS = 120;
@@ -120,7 +121,7 @@ describe('GET /api/elections/:id/next', () => {
   it('reports an overdue round as already closed', async () => {
     const test = await appWithTwoAdmins();
     await test.deps.electionRepository.create(electionWithOpenMayorRound());
-    test.clock.advance(SECONDS_PAST_DEFAULT_DEADLINE);
+    test.clock.advance(JUST_PAST_THE_GRACE_MS);
 
     const response = await test.app.inject({
       method: 'GET',
@@ -135,7 +136,7 @@ describe('GET /api/elections/:id/next', () => {
   it('does not save or notify anything, even when a round is overdue', async () => {
     const test = await appWithTwoAdmins();
     await test.deps.electionRepository.create(electionWithOpenMayorRound());
-    test.clock.advance(SECONDS_PAST_DEFAULT_DEADLINE);
+    test.clock.advance(JUST_PAST_THE_GRACE_MS);
 
     await test.app.inject({ method: 'GET', url: '/api/elections/e1/next', headers: test.asAna });
 

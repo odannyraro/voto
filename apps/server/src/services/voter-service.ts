@@ -52,8 +52,8 @@ export class VoterService {
   }
 
   /**
-   * Diz o que a tela do eleitor deve mostrar agora. Se havia um prazo vencido que o timer
-   * não fechou, fecha a rodada antes (salva e notifica).
+   * Diz o que a tela do eleitor deve mostrar agora. Se uma rodada venceu (prazo mais a
+   * tolerância do voto) e o timer não a fechou, fecha antes (salva e notifica).
    *
    * @param voterId - Eleitor autenticado (do token).
    * @param electionId - Eleição do token.

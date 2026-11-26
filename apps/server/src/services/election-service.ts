@@ -79,6 +79,9 @@ export interface ElectionServiceDeps {
  */
 const MAX_VOTE_ATTEMPTS = 50;
 
+/** Tolerância usada pelo timer, que só dispara quando a tolerância do voto já passou. */
+const NO_TOLERANCE_MS = 0;
+
 /** Comando do domínio sobre a eleição, já com a entrada da rota embutida. */
 type ElectionCommand = (election: Election, ctx: DomainContext) => Result<Election>;
 
@@ -130,8 +133,9 @@ export class ElectionService {
   }
 
   /**
-   * Lê a eleição para o painel. Se havia um prazo vencido que o timer não fechou (ex.:
-   * reinício do servidor), fecha a rodada, salva e notifica; senão não grava nada.
+   * Lê a eleição para o painel. Se uma rodada venceu (prazo mais a tolerância do voto) e o
+   * timer não a fechou (ex.: reinício do servidor), fecha, salva e notifica; senão não grava
+   * nada.
    *
    * @param adminId - Admin autenticado; precisa ser o dono da eleição.
    * @param electionId - Eleição alvo.
@@ -139,7 +143,7 @@ export class ElectionService {
    * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
    */
   async getElection(adminId: string, electionId: string): Promise<ElectionRecord> {
-    return this.settle(await this.loadOwned(adminId, electionId));
+    return this.settle(await this.loadOwned(adminId, electionId), this.deps.voteGraceMs);
   }
 
   /**
@@ -151,8 +155,7 @@ export class ElectionService {
    * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou durante o fechamento.
    */
   async settleDueRound(electionId: string): Promise<ElectionRecord | null> {
-    const record = await this.deps.electionRepository.get(electionId);
-    return record && this.settle(record);
+    return this.settleStored(electionId, this.deps.voteGraceMs);
   }
 
   /**
@@ -165,7 +168,9 @@ export class ElectionService {
    */
   async handleDeadline(electionId: string): Promise<void> {
     try {
-      await this.settleDueRound(electionId);
+      // Sem desconto: este é o horário que já inclui a tolerância, e o `setTimeout` pode
+      // adiantar 1 ms, o que com o desconto deixaria a rodada aberta sem outro timer.
+      await this.settleStored(electionId, NO_TOLERANCE_MS);
     } catch (err) {
       this.deps.logger.error({ electionId, err }, 'Failed to close the round at its deadline');
     }
@@ -418,7 +423,8 @@ export class ElectionService {
     const record = await this.loadOwned(adminId, electionId);
     // Fecha em memória o que o prazo já venceu, para a resposta bater com o que a próxima
     // escrita gravaria; a leitura em si não grava nada.
-    return nextPositionStatus(closeRoundIfDue(record.current, this.newContext()));
+    const settled = closeOverdueRound(record.current, this.newContext(), this.deps.voteGraceMs);
+    return nextPositionStatus(settled);
   }
 
   /**
@@ -640,17 +646,35 @@ export class ElectionService {
   }
 
   /**
-   * Aplica o prazo vencido ao registro: se uma rodada passou do prazo, fecha, salva e notifica;
+   * Carrega a eleição, sem conferir dono, e aplica o prazo vencido.
+   *
+   * @param electionId - Eleição alvo.
+   * @param toleranceMs - Quanto depois do prazo a rodada ainda é considerada aberta.
+   * @returns O registro com o prazo aplicado, ou `null` se a eleição não existir.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou durante o fechamento.
+   */
+  private async settleStored(
+    electionId: string,
+    toleranceMs: number,
+  ): Promise<ElectionRecord | null> {
+    const record = await this.deps.electionRepository.get(electionId);
+    return record && this.settle(record, toleranceMs);
+  }
+
+  /**
+   * Aplica o prazo vencido ao registro: se uma rodada venceu, fecha, salva e notifica;
    * senão não grava nada.
    *
    * @param record - Registro lido do repositório.
+   * @param toleranceMs - Quanto depois do prazo a rodada ainda é considerada aberta.
    * @returns O registro salvo, ou o mesmo registro se nenhum prazo venceu.
    * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
    */
-  private async settle(record: ElectionRecord): Promise<ElectionRecord> {
-    // `closeRoundIfDue` devolve a mesma instância quando nada vence: aí não há o que gravar.
-    if (closeRoundIfDue(record.current, this.newContext()) === record.current) return record;
-    return this.commit(record, (election) => ok(election));
+  private async settle(record: ElectionRecord, toleranceMs: number): Promise<ElectionRecord> {
+    // Sem nada vencido, a mesma instância volta e não há o que gravar.
+    const settled = closeOverdueRound(record.current, this.newContext(), toleranceMs);
+    if (settled === record.current) return record;
+    return this.commit(record, (election) => ok(election), toleranceMs);
   }
 
   /**
@@ -659,15 +683,22 @@ export class ElectionService {
    *
    * @param record - Registro lido do repositório.
    * @param command - Comando do domínio a aplicar sobre a eleição atual.
+   * @param toleranceMs - Tolerância do fechamento por prazo que antecede o comando; o padrão é
+   *   a do voto, para um comando do admin não fechar a rodada que ainda aceita votos.
    * @returns O registro salvo, com a versão incrementada e o estado anterior no histórico.
    * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
    * @throws {DomainError} Erro de negócio devolvido pelo comando.
    */
-  private async commit(record: ElectionRecord, command: ElectionCommand): Promise<ElectionRecord> {
+  private async commit(
+    record: ElectionRecord,
+    command: ElectionCommand,
+    toleranceMs: number = this.deps.voteGraceMs,
+  ): Promise<ElectionRecord> {
     const ctx = this.newContext();
 
     // Fechamento preguiçoso (§8.3): um prazo vencido vale mesmo se o timer se perdeu.
-    const next = nextElection(record, command(closeRoundIfDue(record.current, ctx), ctx));
+    const settled = closeOverdueRound(record.current, ctx, toleranceMs);
+    const next = nextElection(record, command(settled, ctx));
     const withSnapshot = pushSnapshot(record, next, this.deps.historyLimit);
     return this.persist(withSnapshot, record.current.version, ctx);
   }
@@ -691,7 +722,7 @@ export class ElectionService {
     if (!record) return null;
 
     const ctx = this.newContext();
-    // Sem `closeRoundIfDue` antes: com ele, um voto atrasado acharia a rodada já fechada e
+    // Sem fechar o prazo vencido antes: um voto atrasado acharia a rodada já fechada e
     // viraria `ROUND_NOT_OPEN` (409) em vez de `ROUND_EXPIRED` (410). O domínio compara o prazo.
     const next = nextElection(record, castVote(record.current, vote, { ...ctx, now: judgedAt }));
     // Sem snapshot: o desfazer é para os passos do admin. Um por voto expulsaria do histórico
@@ -829,6 +860,20 @@ function fixedCodes(codes: readonly string[]): CodeGenerator {
 function nextElection(record: ElectionRecord, result: Result<Election>): Election {
   if (!result.ok) throw result.error;
   return { ...result.value, version: record.current.version + 1 };
+}
+
+/**
+ * Fecha a rodada aberta que venceu há mais que a tolerância (ou em que todos os aptos já
+ * votaram). É a mesma folga dada ao voto: nenhum caminho fecha uma rodada que ainda o aceita.
+ *
+ * @param election - Eleição atual.
+ * @param ctx - Contexto com o instante atual.
+ * @param toleranceMs - Quanto depois do prazo a rodada ainda é considerada aberta.
+ * @returns A eleição com a rodada fechada, ou a **mesma** instância se nada venceu.
+ */
+function closeOverdueRound(election: Election, ctx: DomainContext, toleranceMs: number): Election {
+  const tolerantNow = new Date(ctx.now.getTime() - toleranceMs);
+  return closeRoundIfDue(election, { ...ctx, now: tolerantNow });
 }
 
 /**

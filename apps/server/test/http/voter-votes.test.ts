@@ -13,6 +13,7 @@ import {
 import { openElectionWithVoters, withOpenRound } from '../support/election-fixtures';
 import { unwrap } from '../support/election-records';
 
+const OK = 200;
 const NO_CONTENT = 204;
 const BAD_REQUEST = 400;
 const UNAUTHORIZED = 401;
@@ -32,6 +33,8 @@ const ROUND_DURATION_MS = 60_000;
 const GRACE_MS = 1000;
 const LAST_ACCEPTED_MS = ROUND_DURATION_MS + GRACE_MS;
 const FIRST_REJECTED_MS = LAST_ACCEPTED_MS + 1;
+const INSIDE_THE_GRACE_MS = ROUND_DURATION_MS + GRACE_MS / 2;
+const FROM_INSIDE_TO_PAST_THE_GRACE_MS = FIRST_REJECTED_MS - INSIDE_THE_GRACE_MS;
 
 /**
  * Eleição `e1` da Ana, com os dois eleitores credenciados e a rodada de `mayor` aberta.
@@ -400,5 +403,71 @@ describe('POST /api/voter/votes', () => {
     const state = await test.app.inject({ method: 'GET', url: '/api/voter/state', headers });
 
     expect(state.json<VoterStateDTO>()).toMatchObject({ phase: 'VOTED', roundId: 'r1' });
+  });
+});
+
+describe('POST /api/voter/votes after someone else touched the election during the grace period', () => {
+  /**
+   * Consulta o estado como o segundo eleitor, o que verifica se há prazo vencido.
+   *
+   * @param test - App de teste com a eleição `e1` guardada.
+   * @returns A resposta de `GET /api/voter/state`.
+   */
+  async function readStateAsSecondVoter(test: TwoAdminsTestApp) {
+    const headers = await voterSessionHeaders(test, SECOND_CODE);
+    return test.app.inject({ method: 'GET', url: '/api/voter/state', headers });
+  }
+
+  const TOUCHES = [
+    ['another voter reads the state', readStateAsSecondVoter],
+    [
+      'the admin opens the panel',
+      (test: TwoAdminsTestApp) =>
+        test.app.inject({ method: 'GET', url: '/api/elections/e1', headers: test.asAna }),
+    ],
+    [
+      'the admin runs a command',
+      (test: TwoAdminsTestApp) =>
+        test.app.inject({
+          method: 'PATCH',
+          url: '/api/elections/e1',
+          headers: test.asAna,
+          payload: { name: 'Annual vote' },
+        }),
+    ],
+  ] as const;
+
+  it.each(TOUCHES)('still accepts a tolerated vote after %s', async (_case, touch) => {
+    const test = await appWithTwoAdmins();
+    const headers = await seededFirstVoter(test);
+    test.clock.advance(INSIDE_THE_GRACE_MS);
+    const touched = await touch(test);
+
+    const response = await test.app.inject({
+      method: 'POST',
+      url: '/api/voter/votes',
+      headers,
+      payload: { roundId: 'r1', choice: MAYOR_CANDIDATE },
+    });
+
+    expect([touched.statusCode, response.statusCode]).toEqual([OK, NO_CONTENT]);
+  });
+
+  it('still answers 410 ROUND_EXPIRED to a late vote after such a read', async () => {
+    const test = await appWithTwoAdmins();
+    const headers = await seededFirstVoter(test);
+    test.clock.advance(INSIDE_THE_GRACE_MS);
+    await readStateAsSecondVoter(test);
+    test.clock.advance(FROM_INSIDE_TO_PAST_THE_GRACE_MS);
+
+    const response = await test.app.inject({
+      method: 'POST',
+      url: '/api/voter/votes',
+      headers,
+      payload: { roundId: 'r1', choice: MAYOR_CANDIDATE },
+    });
+
+    expect(response.statusCode).toBe(GONE);
+    expect(response.json()).toMatchObject({ error: { code: 'ROUND_EXPIRED' } });
   });
 });
