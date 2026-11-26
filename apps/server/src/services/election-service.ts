@@ -51,6 +51,7 @@ import type {
   Notifier,
   Scheduler,
 } from '../ports';
+import { KeyedQueue } from './keyed-queue';
 import { toAdminElectionDTO, toElectionSummaryDTO, toVoterStateDTO } from './presenters';
 
 /** Dependências do `ElectionService`: portas e os ajustes da configuração que ele usa. */
@@ -72,18 +73,13 @@ export interface ElectionServiceDeps {
 }
 
 /**
- * Quantas vezes um voto tenta ser gravado antes de o `VERSION_CONFLICT` subir. Cada conflito
- * quer dizer que outra gravação da mesma eleição entrou na frente; como cada voto grava uma
- * vez só, uma rajada de até este tanto de votos simultâneos é aceita inteira. O custo cresce
- * com o quadrado da rajada, então o teto não deve ser muito maior que isso.
+ * Quantas vezes um voto tenta ser gravado antes de o `VERSION_CONFLICT` subir. É uma rede de
+ * segurança: as gravações de uma eleição já passam por uma fila, então só há conflito se
+ * alguém gravar por fora dela (outra instância do servidor, por exemplo).
  */
 const MAX_VOTE_ATTEMPTS = 50;
 
-/**
- * Quantas vezes o fechamento por prazo tenta gravar. Uma leitura concorrente se resolve na
- * segunda (a rodada já aparece fechada); o teto cobre a disputa com votos tolerados que ainda
- * estejam sendo gravados.
- */
+/** Quantas vezes o fechamento por prazo tenta gravar: a mesma rede de segurança do voto. */
 const MAX_SETTLE_ATTEMPTS = MAX_VOTE_ATTEMPTS;
 
 /** Tolerância usada pelo timer, que só dispara quando a tolerância do voto já passou. */
@@ -95,9 +91,14 @@ type ElectionCommand = (election: Election, ctx: DomainContext) => Result<Electi
 /**
  * Casos de uso do admin sobre uma eleição. Todo comando passa pelo mesmo fluxo
  * (architecture.md §8.2): carregar, autorizar, fechar prazo vencido, aplicar, salvar,
- * reagendar e notificar.
+ * reagendar e notificar. As gravações de uma mesma eleição (comandos, votos e fechamento por
+ * prazo) esperam a vez numa fila, para cada uma partir do resultado da anterior. A fila é do
+ * processo, e por isso precisa haver uma única instância deste serviço e do servidor.
  */
 export class ElectionService {
+  /** Uma fila de gravações por eleição, neste processo (o servidor roda em uma instância só). */
+  private readonly writes = new KeyedQueue();
+
   /**
    * Cria o serviço; o domínio não é dependência porque é puro e importado direto.
    *
@@ -151,10 +152,8 @@ export class ElectionService {
    *   a disputa pela gravação em todas as tentativas, 409 `VERSION_CONFLICT`.
    */
   async getElection(adminId: string, electionId: string): Promise<ElectionRecord> {
-    return retryOnVersionConflict(MAX_SETTLE_ATTEMPTS, async () => {
-      const record = await this.loadOwned(adminId, electionId);
-      return this.settle(record, this.deps.voteGraceMs);
-    });
+    const record = await this.loadOwned(adminId, electionId);
+    return this.settleInTurn(record, this.deps.voteGraceMs);
   }
 
   /**
@@ -193,9 +192,11 @@ export class ElectionService {
    * quem autoriza é o token do eleitor (não há dono a conferir), o prazo ganha a tolerância
    * `voteGraceMs`, que compensa a latência de rede, e o voto não é um passo do desfazer.
    *
-   * Vários eleitores votam ao mesmo tempo na mesma eleição, então um voto que perde a disputa
-   * pela gravação é reaplicado sobre a eleição relida (o domínio volta a conferir as regras),
-   * até `MAX_VOTE_ATTEMPTS` tentativas. Os comandos do admin não repetem: o 409 volta na hora.
+   * Vários eleitores votam ao mesmo tempo na mesma eleição, então o voto espera a vez na fila
+   * da eleição. O prazo é julgado pela chegada, não pela vez. Se ainda assim a gravação perder
+   * a disputa (alguém gravou por fora da fila), o voto é reaplicado sobre a eleição relida (o
+   * domínio volta a conferir as regras), até `MAX_VOTE_ATTEMPTS` tentativas. Os comandos do
+   * admin não repetem: o 409 volta na hora.
    *
    * @param voterId - Eleitor autenticado (do token).
    * @param electionId - Eleição do token.
@@ -211,11 +212,13 @@ export class ElectionService {
     electionId: string,
     input: Omit<CastVoteInput, 'voterId'>,
   ): Promise<ElectionRecord | null> {
-    // Fixado uma vez só: disputar a gravação não pode transformar em atrasado um voto que
-    // chegou no prazo.
+    // Fixado antes de entrar na fila: esperar a vez não pode transformar em atrasado um voto
+    // que chegou no prazo.
     const judgedAt = new Date(this.deps.clock.now().getTime() - this.deps.voteGraceMs);
-    return retryOnVersionConflict(MAX_VOTE_ATTEMPTS, () =>
-      this.applyVote(electionId, { ...input, voterId }, judgedAt),
+    return this.writes.run(electionId, () =>
+      retryOnVersionConflict(MAX_VOTE_ATTEMPTS, () =>
+        this.applyVote(electionId, { ...input, voterId }, judgedAt),
+      ),
     );
   }
 
@@ -591,13 +594,16 @@ export class ElectionService {
    * @throws {DomainError} `NOTHING_TO_UNDO` se o histórico estiver vazio.
    */
   async undo(adminId: string, electionId: string): Promise<ElectionRecord> {
-    const record = await this.loadOwned(adminId, electionId);
-    const result = undo(record);
-    if (!result.ok) throw result.error;
+    return this.writes.run(electionId, async () => {
+      const record = await this.loadOwned(adminId, electionId);
+      const result = undo(record);
+      if (!result.ok) throw result.error;
 
-    const expectedVersion = record.current.version;
-    const restored = { ...result.value.current, version: expectedVersion + 1 };
-    return this.persist({ ...result.value, current: restored }, expectedVersion, this.newContext());
+      const expectedVersion = record.current.version;
+      const restored = { ...result.value.current, version: expectedVersion + 1 };
+      const undone = { ...result.value, current: restored };
+      return this.persist(undone, expectedVersion, this.newContext());
+    });
   }
 
   /**
@@ -617,13 +623,17 @@ export class ElectionService {
     electionId: string,
     input: CredentialVotersInput,
   ): Promise<{ record: ElectionRecord; codes: readonly string[] }> {
-    const loaded = await this.loadOwned(adminId, electionId);
-    const codes = await this.generateUniqueCodes(input.count);
-    const record = await this.commit(loaded, (election, ctx) => {
-      const result = credentialVoters(election, input, fixedCodes(codes), ctx);
-      return result.ok ? ok(result.value.election) : result;
+    const arrivedAt = this.deps.clock.now();
+    return this.writes.run(electionId, async () => {
+      const loaded = await this.loadOwned(adminId, electionId);
+      const codes = await this.generateUniqueCodes(input.count);
+      const command: ElectionCommand = (election, ctx) => {
+        const result = credentialVoters(election, input, fixedCodes(codes), ctx);
+        return result.ok ? ok(result.value.election) : result;
+      };
+      const record = await this.commit(loaded, command, arrivedAt);
+      return { record, codes };
     });
-    return { record, codes };
   }
 
   /**
@@ -641,7 +651,7 @@ export class ElectionService {
   }
 
   /**
-   * Fluxo único de todo comando do admin (§8.2): carrega, autoriza e aplica o comando.
+   * Fluxo único de todo comando do admin (§8.2): na vez da eleição, carrega, autoriza e aplica.
    *
    * @param adminId - Admin autenticado.
    * @param electionId - Eleição alvo.
@@ -655,7 +665,11 @@ export class ElectionService {
     electionId: string,
     command: ElectionCommand,
   ): Promise<ElectionRecord> {
-    return this.commit(await this.loadOwned(adminId, electionId), command);
+    const arrivedAt = this.deps.clock.now();
+    return this.writes.run(electionId, async () => {
+      const record = await this.loadOwned(adminId, electionId);
+      return this.commit(record, command, arrivedAt);
+    });
   }
 
   /**
@@ -671,10 +685,33 @@ export class ElectionService {
     electionId: string,
     toleranceMs: number,
   ): Promise<ElectionRecord | null> {
-    return retryOnVersionConflict(MAX_SETTLE_ATTEMPTS, async () => {
-      const record = await this.deps.electionRepository.get(electionId);
-      return record && this.settle(record, toleranceMs);
-    });
+    const seen = await this.deps.electionRepository.get(electionId);
+    return seen && this.settleInTurn(seen, toleranceMs);
+  }
+
+  /**
+   * Aplica o prazo vencido sobre uma eleição já lida. Sem nada vencido, devolve a própria
+   * leitura, sem esperar ninguém. Havendo o que fechar, espera a vez na fila da eleição e relê,
+   * porque quem estava na frente pode ter mudado a rodada (até já tê-la fechado). Se alguém
+   * gravar por fora da fila no meio, relê e tenta de novo.
+   *
+   * @param seen - Registro recém-lido, ainda fora da fila.
+   * @param toleranceMs - Quanto depois do prazo a rodada ainda é considerada aberta.
+   * @returns O registro com o prazo aplicado.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` se a eleição sumir enquanto se espera; 409
+   *   `VERSION_CONFLICT` se todas as tentativas perderem a disputa.
+   */
+  private async settleInTurn(seen: ElectionRecord, toleranceMs: number): Promise<ElectionRecord> {
+    const nothingDue =
+      closeOverdueRound(seen.current, this.newContext(), toleranceMs) === seen.current;
+    if (nothingDue) return seen;
+
+    const electionId = seen.current.id;
+    return this.writes.run(electionId, () =>
+      retryOnVersionConflict(MAX_SETTLE_ATTEMPTS, async () =>
+        this.settle(await this.load(electionId), toleranceMs),
+      ),
+    );
   }
 
   /**
@@ -703,15 +740,23 @@ export class ElectionService {
    *
    * @param record - Registro lido do repositório.
    * @param command - Comando do domínio a aplicar sobre a eleição atual.
+   * @param arrivedAt - Quando o comando chegou, antes de esperar a vez na fila.
    * @returns O registro salvo, com a versão incrementada e o estado anterior no histórico.
-   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se alguém gravou por fora da fila.
    * @throws {DomainError} Erro de negócio devolvido pelo comando.
    */
-  private async commit(record: ElectionRecord, command: ElectionCommand): Promise<ElectionRecord> {
+  private async commit(
+    record: ElectionRecord,
+    command: ElectionCommand,
+    arrivedAt: Date,
+  ): Promise<ElectionRecord> {
     const ctx = this.newContext();
 
-    // Fechamento preguiçoso (§8.3): um prazo vencido vale mesmo se o timer se perdeu.
-    const settled = closeOverdueRound(record.current, ctx, this.deps.voteGraceMs);
+    // Fechamento preguiçoso (§8.3): um prazo vencido vale mesmo se o timer se perdeu. É julgado
+    // pela chegada do comando: pela vez dele, a espera na fila fecharia a rodada na frente de
+    // votos tolerados que chegaram depois e ainda aguardam.
+    const arrival = { ...ctx, now: arrivedAt };
+    const settled = closeOverdueRound(record.current, arrival, this.deps.voteGraceMs);
     const next = nextElection(record, command(settled, ctx));
     const withSnapshot = pushSnapshot(record, next, this.deps.historyLimit);
     return this.persist(withSnapshot, record.current.version, ctx);
@@ -796,6 +841,19 @@ export class ElectionService {
   }
 
   /**
+   * Carrega uma eleição que precisa existir.
+   *
+   * @param electionId - Eleição alvo.
+   * @returns O registro guardado.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` se não existir.
+   */
+  private async load(electionId: string): Promise<ElectionRecord> {
+    const record = await this.deps.electionRepository.get(electionId);
+    if (!record) throw httpErrorFor('ELECTION_NOT_FOUND', `Election ${electionId} does not exist`);
+    return record;
+  }
+
+  /**
    * Carrega a eleição e confere se o admin é o dono.
    *
    * @param adminId - Admin autenticado.
@@ -804,8 +862,7 @@ export class ElectionService {
    * @throws {HttpError} 404 `ELECTION_NOT_FOUND` se não existir; 403 `FORBIDDEN` se for de outro admin.
    */
   private async loadOwned(adminId: string, electionId: string): Promise<ElectionRecord> {
-    const record = await this.deps.electionRepository.get(electionId);
-    if (!record) throw httpErrorFor('ELECTION_NOT_FOUND', `Election ${electionId} does not exist`);
+    const record = await this.load(electionId);
     if (record.current.adminId !== adminId)
       throw httpErrorFor('FORBIDDEN', 'This election belongs to another admin');
     return record;
