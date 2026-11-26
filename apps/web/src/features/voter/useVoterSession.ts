@@ -25,7 +25,7 @@ export interface VoterSessionSnapshot {
  * @returns Snapshot mais recente, indicador de carregamento e eventual erro visível.
  */
 export function useVoterSession(token: string | null): VoterSessionSnapshot {
-  const { voterState, onReconnect } = useSocket();
+  const { onVoterState, onReconnect } = useSocket();
   const [state, setState] = useState<VoterStateDTO | null>(null);
   const [clientNowAtSync, setClientNowAtSync] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(token !== null);
@@ -38,17 +38,15 @@ export function useVoterSession(token: string | null): VoterSessionSnapshot {
   const synchronizeRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
-    if (voterState === null) {
-      return;
-    }
-
-    socketVersion.current += 1;
-    setState(voterState);
-    setClientNowAtSync(new Date().toISOString());
-    setError(null);
-    setErrorMessage(null);
-    setIsLoading(false);
-  }, [voterState]);
+    return onVoterState((nextState) => {
+      socketVersion.current += 1;
+      setState(nextState);
+      setClientNowAtSync(new Date().toISOString());
+      setError(null);
+      setErrorMessage(null);
+      setIsLoading(false);
+    });
+  }, [onVoterState]);
 
   useEffect(() => {
     if (token === null) {

@@ -91,4 +91,41 @@ describe('Socket.IO client integration', () => {
       voterStateReceived: voterState,
     });
   });
+
+  it('notifies reconnect listeners only after the socket has rejoined the namespace', async () => {
+    const httpServer = createServer();
+    socketServer = new SocketIoServer<ClientToServerEvents, ServerToClientEvents>(httpServer);
+    let closeTransport = (): void => {
+      throw new Error('Socket has not connected.');
+    };
+    const firstConnection = new Promise<void>((resolve) => {
+      socketServer?.once('connection', (socket) => {
+        closeTransport = () => socket.conn.close();
+        resolve();
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      httpServer.once('error', reject);
+      httpServer.listen(0, resolve);
+    });
+    const address = httpServer.address();
+    if (address === null || typeof address === 'string') {
+      throw new Error('Expected the Socket.IO test server to listen on a TCP port.');
+    }
+    socketClient = createSocketClient(SESSION_TOKEN, {
+      url: `http://127.0.0.1:${address.port}`,
+    });
+    await firstConnection;
+    let namespaceReady = false;
+    socketServer.once('connection', () => {
+      namespaceReady = true;
+    });
+    const reconnectObserved = new Promise<boolean>((resolve) => {
+      socketClient?.onReconnect(() => resolve(namespaceReady));
+    });
+
+    closeTransport();
+
+    expect(await reconnectObserved).toBe(true);
+  }, 10000);
 });

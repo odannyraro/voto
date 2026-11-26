@@ -129,16 +129,33 @@ function createSocketConnection(url: string, options: SocketConnectionOptions): 
   const socket: TypedSocket = io(url, {
     auth: options.auth,
   });
+  let hasConnected = false;
+  const reconnectListeners = new Set<() => void>();
+  /** Aguarda a reconexão do namespace autenticado antes de solicitar ressincronização. */
+  const handleConnect = (): void => {
+    if (hasConnected) {
+      reconnectListeners.forEach((listener) => listener());
+    }
+    hasConnected = true;
+  };
+  socket.on('connect', handleConnect);
 
   return {
     onAdminState: (listener) => socket.on(SOCKET_EVENTS.ADMIN_STATE, listener),
     offAdminState: (listener) => socket.off(SOCKET_EVENTS.ADMIN_STATE, listener),
     onVoterState: (listener) => socket.on(SOCKET_EVENTS.VOTER_STATE, listener),
     offVoterState: (listener) => socket.off(SOCKET_EVENTS.VOTER_STATE, listener),
-    onReconnect: (listener) => socket.io.on('reconnect', listener),
-    offReconnect: (listener) => socket.io.off('reconnect', listener),
+    onReconnect: (listener) => {
+      reconnectListeners.add(listener);
+    },
+    offReconnect: (listener) => {
+      reconnectListeners.delete(listener);
+    },
     watchAdmin: (payload) => socket.emit(SOCKET_EVENTS.ADMIN_WATCH, payload),
-    disconnect: () => socket.disconnect(),
+    disconnect: () => {
+      socket.off('connect', handleConnect);
+      socket.disconnect();
+    },
   };
 }
 

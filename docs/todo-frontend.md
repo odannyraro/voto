@@ -103,7 +103,7 @@ agrupadas em um único commit.
 | C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[x] C6.a` diálogos de confirmação; `[x] C6.b` `Countdown` e `ErrorMessage` |
 | C7 | Divide-se: entrada e integração da sessão são dois comportamentos fechados | `[x] C7.a` formulário e criação de sessão; `[x] C7.b` persistência, navegação e erros da sessão |
 | C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[x] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[x] C8.b` cédula e voto candidato/branco |
-| C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[x] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[ ] C9.b` reconexão e ordenação de estado |
+| C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[x] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[x] C9.b` reconexão e ordenação de estado |
 | C10 | Divide-se: login em si não exige a proteção de toda a árvore de rotas | `[ ] C10.a` login, token e `/admin/me`; `[ ] C10.b` rotas protegidas e logout |
 | C11 | Divide-se: leitura da lista e mutação/criação têm UI e testes distintos | `[ ] C11.a` lista de eleições; `[ ] C11.b` criação e navegação |
 | C12 | Divide-se: adicionar/editar cargos não inclui remover e confirmar | `[ ] C12.a` criar e editar cargos; `[ ] C12.b` remover cargo e confirmar estado permitido |
@@ -140,13 +140,13 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/api/admin-api.ts` → métodos REST tipados de autenticação, configuração e controle do admin.
 - `apps/web/src/api/voter-api.ts` → criação de sessão, leitura de estado e envio de voto.
 - `apps/web/src/api/public-api.ts` → consulta pública de saúde da API.
-- `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado, listeners removíveis e detecção de reconexão.
-- `apps/web/src/api/socket-provider.tsx` → contexto de estado realtime com criação/limpeza do cliente por sessão e inscrição em reconexão.
+- `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado, listeners removíveis e reconexão após entrada no namespace.
+- `apps/web/src/api/socket-provider.tsx` → contexto realtime com criação/limpeza do cliente por sessão e inscrição em snapshots e reconexão.
 - `apps/web/src/components/ConfirmDialog.tsx` e `DoubleConfirmDialog.tsx` → diálogos acessíveis de confirmação simples e por título exato.
 - `apps/web/src/components/Countdown.tsx` e `ErrorMessage.tsx` → timer acessível sincronizado ao servidor e mensagem acessível de erro da API.
 - `apps/web/src/features/voter/VoterEntryPage.tsx` → entrada acessível do eleitor, validação do código e início de sessão.
 - `apps/web/src/features/voter/voter-session-storage.ts` → persiste e valida token/electionId na sessão da aba.
-- `apps/web/src/features/voter/useVoterSession.ts` → carrega o snapshot REST do eleitor e ressincroniza após eventos realtime/reconexão.
+- `apps/web/src/features/voter/useVoterSession.ts` → carrega o snapshot REST do eleitor, ordena eventos no recebimento e ressincroniza após reconexão.
 - `apps/web/src/features/voter/VoterSessionPage.tsx` → escolhe a tela de espera, cédula ou status conforme a fase recebida.
 - `apps/web/src/features/voter/VoterVotePage.tsx` → exibe candidatos, opção `BLANK`, countdown e envio único do voto.
 - `apps/web/src/features/voter/VoterFinalState.tsx` → apresenta confirmação de voto, resultado liberado e encerramento usando os DTOs recebidos.
@@ -155,14 +155,14 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
 - `apps/web/test/api-methods.test.ts` → contratos MSW de rota, método, token e corpo de cada operação REST.
 - `apps/web/test/socket-client.test.ts` → testes do handshake, `admin:watch`, estados, reconexão e limpeza de listeners.
-- `apps/web/test/socket-client.integration.test.ts` → rodada local efêmera com o cliente e servidor Socket.IO reais.
+- `apps/web/test/socket-client.integration.test.ts` → cliente e servidor Socket.IO reais, incluindo entrada no namespace após reconexão.
 - `apps/web/test/utils/fake-socket.ts` → fake injetável com controle de conexão, reconexão, eventos e eleições observadas.
 - `apps/web/test/socket-provider.test.tsx` e `fake-socket.test.ts` → estado do contexto, descarte e ciclo de vida do fake.
 - `apps/web/test/countdown.test.ts` → prazo futuro, limites, expiração, offset de relógio e datas inválidas.
 - `apps/web/test/confirmation-dialogs.test.tsx` → comportamento, acessibilidade, cancelamento e título exato dos diálogos.
 - `apps/web/test/reusable-status-components.test.tsx` → atualização/expiração do timer e anúncio do código/mensagem de erro.
 - `apps/web/test/voter-entry-page.test.tsx` → validação local, normalização do código, início de sessão e erros da API.
-- `apps/web/test/voter-session.test.tsx` → carregamento inicial, estado `WAITING`, eventos de socket, reconexão, erros e credenciais persistidas.
+- `apps/web/test/voter-session.test.tsx` → carregamento inicial e remontagem, ordenação de socket/REST, reconexão, erros e credenciais persistidas.
 - `apps/web/test/voter-vote-page.test.tsx` → voto candidato/branco, cliques duplicados, erros de rodada e countdown.
 - `apps/web/test/voter-final-state.test.tsx` → fases finais, desfechos do resultado e contagens sem cálculo local.
 - `apps/web/test/format.test.ts` → porcentagens, zero votos válidos, arredondamento e rótulos de desempate.
@@ -441,7 +441,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/voter-final-state.test.tsx` (5 casos: confirmação, três desfechos e encerramento).
 - Decisões: contagens, votos válidos, brancos e desempate são apresentados sem cálculos locais; nomes de eleito/finalistas são associados aos IDs presentes no próprio resultado.
 
-### [ ] C9.b — Reconexão e estado stale
+### [x] C9.b — Reconexão e estado stale
 **Ref.:** architecture §7.
 **Depende de:** C9.a.
 **Fazer:** buscar `GET /voter/state` em remount/reconexão e impedir resultado stale mais antigo.
@@ -449,6 +449,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** reconectar restaura a fase real da votação.
 **Arquivos:** `apps/web/src/features/voter/useVoterSession.ts`.
 **Commit sugerido:** `fix(web): ressincroniza o eleitor após reconexão`
+**Notas do agente:**
+- Feito: a sessão busca o estado na montagem e após reconexão, preservando a ordem de eventos e consultas concorrentes.
+- Arquivos: `apps/web/src/features/voter/useVoterSession.ts`, `apps/web/src/api/socket-provider.tsx`, `apps/web/src/api/socket-client.ts`.
+- Como usar: `/votar` ressincroniza automaticamente depois de a conexão autenticada retornar ao namespace.
+- Testes: `apps/web/test/voter-session.test.tsx` (4 novos casos) e `apps/web/test/socket-client.integration.test.ts` (1 novo caso).
+- Decisões: eventos são ordenados no recebimento, não no efeito React; respostas iniciadas antes de evento posterior ou de outra consulta são descartadas.
 
 ### [ ] C10.a — Login e identidade do admin
 **Ref.:** architecture §6.1.

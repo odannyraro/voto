@@ -8,6 +8,13 @@ export interface SocketContextValue {
   readonly adminState: AdminElectionDTO | null;
   readonly voterState: VoterStateDTO | null;
   /**
+   * Registra um ouvinte chamado no recebimento de cada snapshot do eleitor.
+   *
+   * @param listener - Recebe o snapshot completo do eleitor.
+   * @returns Função que remove o ouvinte.
+   */
+  onVoterState(listener: (state: VoterStateDTO) => void): () => void;
+  /**
    * Registra uma ação para ressincronizar estado após reconexão do transporte.
    *
    * @param listener - Ação executada após uma reconexão bem-sucedida.
@@ -77,9 +84,14 @@ export function SocketProvider({
     (listener: () => void): (() => void) => client?.onReconnect(listener) ?? (() => undefined),
     [client],
   );
+  const onVoterState = useCallback(
+    (listener: (state: VoterStateDTO) => void): (() => void) =>
+      client?.onVoterState(listener) ?? (() => undefined),
+    [client],
+  );
   const contextValue = useMemo(
-    () => ({ adminState, voterState, watchAdmin, onReconnect }),
-    [adminState, voterState, watchAdmin, onReconnect],
+    () => ({ adminState, voterState, watchAdmin, onReconnect, onVoterState }),
+    [adminState, voterState, watchAdmin, onReconnect, onVoterState],
   );
 
   return <SocketContext.Provider value={contextValue}>{children}</SocketContext.Provider>;

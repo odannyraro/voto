@@ -146,6 +146,118 @@ describe('VoterSessionPage', () => {
     expect(screen.getByRole('heading', { name: 'President' })).toBeInTheDocument();
   });
 
+  it('does not replace a socket update with a reconnect response resolved in the same batch', async () => {
+    let resolveReconnect: ((state: VoterStateDTO) => void) | undefined;
+    const reconnectState = new Promise<VoterStateDTO>((resolve) => {
+      resolveReconnect = resolve;
+    });
+    vi.spyOn(voterApi, 'getState')
+      .mockResolvedValueOnce(makeVoterStateDTO({ phase: 'WAITING' }))
+      .mockReturnValueOnce(reconnectState);
+    const socket = createFakeSocket();
+    renderWithProviders(<VoterSessionPage token={SESSION_TOKEN} />, {
+      socketProvider: ({ children }) => (
+        <SocketProvider token={SESSION_TOKEN} createClient={() => socket}>
+          {children}
+        </SocketProvider>
+      ),
+    });
+    await screen.findByRole('heading', { name: 'Waiting for election to start' });
+    act(() => {
+      socket.disconnect();
+      socket.reconnect();
+    });
+
+    await act(async () => {
+      socket.emitVoterState(makeVoterStateDTO({ phase: 'FINISHED' }));
+      resolveReconnect?.(makeVoterStateDTO({ phase: 'WAITING' }));
+      await reconnectState;
+    });
+
+    expect(screen.getByRole('heading', { name: 'Election finished' })).toBeInTheDocument();
+  });
+
+  it('retains the latest reconnect response when an earlier request finishes later', async () => {
+    let resolveFirstReconnect: ((state: VoterStateDTO) => void) | undefined;
+    const firstReconnect = new Promise<VoterStateDTO>((resolve) => {
+      resolveFirstReconnect = resolve;
+    });
+    vi.spyOn(voterApi, 'getState')
+      .mockResolvedValueOnce(makeVoterStateDTO({ phase: 'WAITING' }))
+      .mockReturnValueOnce(firstReconnect)
+      .mockResolvedValueOnce(makeVoterStateDTO({ phase: 'FINISHED' }));
+    const socket = createFakeSocket();
+    renderWithProviders(<VoterSessionPage token={SESSION_TOKEN} />, {
+      socketProvider: ({ children }) => (
+        <SocketProvider token={SESSION_TOKEN} createClient={() => socket}>
+          {children}
+        </SocketProvider>
+      ),
+    });
+    await screen.findByRole('heading', { name: 'Waiting for election to start' });
+
+    act(() => {
+      socket.disconnect();
+      socket.reconnect();
+      socket.disconnect();
+      socket.reconnect();
+    });
+    await screen.findByRole('heading', { name: 'Election finished' });
+    await act(async () => {
+      resolveFirstReconnect?.(makeVoterStateDTO({ phase: 'WAITING' }));
+      await firstReconnect;
+    });
+
+    expect(screen.getByRole('heading', { name: 'Election finished' })).toBeInTheDocument();
+  });
+
+  it('accepts a reconnect response newer than a socket update from before the disconnect', async () => {
+    vi.spyOn(voterApi, 'getState')
+      .mockResolvedValueOnce(makeVoterStateDTO({ phase: 'WAITING' }))
+      .mockResolvedValueOnce(makeVoterStateDTO({ phase: 'FINISHED' }));
+    const socket = createFakeSocket();
+    renderWithProviders(<VoterSessionPage token={SESSION_TOKEN} />, {
+      socketProvider: ({ children }) => (
+        <SocketProvider token={SESSION_TOKEN} createClient={() => socket}>
+          {children}
+        </SocketProvider>
+      ),
+    });
+    await screen.findByRole('heading', { name: 'Waiting for election to start' });
+
+    act(() => {
+      socket.emitVoterState(makeVoterStateDTO({ phase: 'VOTING' }));
+      socket.disconnect();
+      socket.reconnect();
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Election finished' })).toBeInTheDocument();
+  });
+
+  it('reloads the voter state when the session page is remounted', async () => {
+    const getState = vi
+      .spyOn(voterApi, 'getState')
+      .mockResolvedValueOnce(makeVoterStateDTO({ phase: 'WAITING' }))
+      .mockResolvedValueOnce(makeVoterStateDTO({ phase: 'FINISHED' }));
+    const socket = createFakeSocket();
+    const createClient = (): typeof socket => socket;
+    const { rerender } = renderWithProviders(
+      <SocketProvider token={SESSION_TOKEN} createClient={createClient}>
+        <VoterSessionPage token={SESSION_TOKEN} />
+      </SocketProvider>,
+    );
+    await screen.findByRole('heading', { name: 'Waiting for election to start' });
+
+    rerender(
+      <SocketProvider token={SESSION_TOKEN} createClient={createClient}>
+        <VoterSessionPage key="remounted" token={SESSION_TOKEN} />
+      </SocketProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Election finished' })).toBeInTheDocument();
+    expect(getState).toHaveBeenCalledTimes(2);
+  });
+
   it('displays the API error when the initial state cannot be loaded', async () => {
     vi.spyOn(voterApi, 'getState').mockRejectedValue(
       new ApiError(401, { code: 'INVALID_TOKEN', message: 'Session expired' }),
