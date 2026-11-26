@@ -119,9 +119,9 @@ export function describeElectionRepositoryContract(
         const repo = await makeRepo();
         const original = anElectionRecord({ id: 'election-1', version: 3 });
         await repo.create(original);
-        await Promise.allSettled([
+        await expect(
           repo.save(anElectionRecord({ id: 'election-1', version: 4 }), 2),
-        ]);
+        ).rejects.toMatchObject({ code: 'VERSION_CONFLICT' });
 
         const found = await repo.get('election-1');
 
@@ -247,12 +247,12 @@ export function describeElectionRepositoryContract(
         await repo.create(
           anElectionRecord({ id: 'election-1', voterCodes: ['AAAAAAAA'], version: 3 }),
         );
-        await Promise.allSettled([
+        await expect(
           repo.save(
             anElectionRecord({ id: 'election-1', voterCodes: ['BBBBBBBB'], version: 4 }),
             2,
           ),
-        ]);
+        ).rejects.toMatchObject({ code: 'VERSION_CONFLICT' });
 
         const taken = {
           kept: await repo.isCodeTaken('AAAAAAAA'),

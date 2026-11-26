@@ -24,7 +24,9 @@ describe('inTransaction', () => {
   it('rolls back instead of committing when the work fails, and releases the connection', async () => {
     const pool = new SpySqlPool();
 
-    await Promise.allSettled([inTransaction(pool, () => Promise.reject(WORK_FAILURE))]);
+    await expect(inTransaction(pool, () => Promise.reject(WORK_FAILURE))).rejects.toBe(
+      WORK_FAILURE,
+    );
 
     expect(pool.events).toEqual(['BEGIN', 'ROLLBACK', 'release']);
   });
@@ -40,7 +42,9 @@ describe('inTransaction', () => {
   it('discards the connection when the rollback also fails', async () => {
     const pool = new SpySqlPool({ ROLLBACK: new Error('connection lost') });
 
-    await Promise.allSettled([inTransaction(pool, () => Promise.reject(WORK_FAILURE))]);
+    await expect(inTransaction(pool, () => Promise.reject(WORK_FAILURE))).rejects.toBe(
+      WORK_FAILURE,
+    );
 
     expect(pool.events).toEqual(['BEGIN', 'ROLLBACK', 'discard']);
   });

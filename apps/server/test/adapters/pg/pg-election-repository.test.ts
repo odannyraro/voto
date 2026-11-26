@@ -32,9 +32,9 @@ describe('PgElectionRepository', () => {
   it('stores nothing of an election rejected for a duplicate voter code', async () => {
     const repo = new PgElectionRepository(await createMigratedPgMemPool());
     await repo.create(anElectionRecord({ id: 'election-1', voterCodes: ['AAAAAAAA'] }));
-    await Promise.allSettled([
+    await expect(
       repo.create(anElectionRecord({ id: 'election-2', voterCodes: ['AAAAAAAA'] })),
-    ]);
+    ).rejects.toThrow(/duplicate key/);
 
     const rejected = await repo.get('election-2');
 
@@ -59,9 +59,9 @@ describe('PgElectionRepository', () => {
     const original = anElectionRecord({ id: 'election-2', voterCodes: ['BBBBBBBB'] });
     await repo.create(anElectionRecord({ id: 'election-1', voterCodes: ['AAAAAAAA'] }));
     await repo.create(original);
-    await Promise.allSettled([
+    await expect(
       repo.save(anElectionRecord({ id: 'election-2', voterCodes: ['AAAAAAAA'], version: 1 }), 0),
-    ]);
+    ).rejects.toThrow(/duplicate key/);
 
     const found = await repo.get('election-2');
 
@@ -72,9 +72,9 @@ describe('PgElectionRepository', () => {
     const repo = new PgElectionRepository(await createMigratedPgMemPool());
     await repo.create(anElectionRecord({ id: 'election-1', voterCodes: ['AAAAAAAA'] }));
     await repo.create(anElectionRecord({ id: 'election-2', voterCodes: ['BBBBBBBB'] }));
-    await Promise.allSettled([
+    await expect(
       repo.save(anElectionRecord({ id: 'election-2', voterCodes: ['AAAAAAAA'], version: 1 }), 0),
-    ]);
+    ).rejects.toThrow(/duplicate key/);
 
     const owner = await repo.findByVoterCode('BBBBBBBB');
 
