@@ -140,8 +140,11 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/api/admin-api.ts` → métodos REST tipados de autenticação, configuração e controle do admin.
 - `apps/web/src/api/voter-api.ts` → criação de sessão, leitura de estado e envio de voto.
 - `apps/web/src/api/public-api.ts` → consulta pública de saúde da API.
+- `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado e listeners removíveis.
 - `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
 - `apps/web/test/api-methods.test.ts` → contratos MSW de rota, método, token e corpo de cada operação REST.
+- `apps/web/test/socket-client.test.ts` → testes do handshake, `admin:watch`, estados recebidos e limpeza de listeners.
+- `apps/web/test/socket-client.integration.test.ts` → rodada local efêmera com o cliente e servidor Socket.IO reais.
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
 - `apps/web/test/utils/factories.ts` → factories dos DTOs; nomes acessórios são localizados e reproduzíveis.
@@ -244,14 +247,21 @@ defaults determinísticos.
 - Testes: `apps/web/test/api-methods.test.ts` (34 testes cobrindo todas as operações, identificadores de rota, verbos, autenticação e corpos).
 - Decisões: IDs dinâmicos são codificados como segmentos de URL; o voto aceita a resposta `204`, enquanto endpoints com DTO obrigatório rejeitam resposta sem corpo.
 
-### [ ] C4.a — Cliente Socket.IO
+### [x] C4.a — Cliente Socket.IO
 **Ref.:** architecture §7.
 **Depende de:** C2.b.
 **Fazer:** criar interface tipada e cliente com `SOCKET_EVENTS`, token no handshake e listeners seguros.
 **Testes (escrever antes):** conexão usa auth; admin watch envia ID; dois eventos recebem DTOs; desconexão limpa listeners.
 **Pronto quando:** o cliente real conversa com o gateway pelo contrato compartilhado.
-**Arquivos:** `apps/web/src/api/socket-client.ts`.
+**Arquivos:** `apps/web/src/api/socket-client.ts`, `apps/web/test/socket-client.test.ts`,
+`apps/web/test/socket-client.integration.test.ts`, `apps/web/package.json`, `package-lock.json`.
 **Commit sugerido:** `feat(web): cria cliente tipado de Socket.IO`
+**Notas do agente:**
+- Feito: cliente Socket.IO usa os eventos e DTOs de `@voto/shared`, autentica pelo token no handshake, permite `admin:watch` e remove listeners ao desinscrever ou desconectar.
+- Arquivos: `apps/web/src/api/socket-client.ts`, `apps/web/test/socket-client.test.ts`, `apps/web/test/socket-client.integration.test.ts`, `apps/web/package.json`, `package-lock.json`.
+- Como usar: crie `createSocketClient(token)`, registre `onAdminState`/`onVoterState` e use o callback retornado para remover um listener; `disconnect()` limpa os ativos e encerra a conexão.
+- Testes: 5 testes unitários em `apps/web/test/socket-client.test.ts` e 1 integração em `apps/web/test/socket-client.integration.test.ts` com servidor local em porta efêmera.
+- Decisões: URL `'/'` usa a mesma origem e o proxy Socket.IO do Vite; a fábrica injetável permite testes isolados, e a integração confirma o adapter real sem depender de serviço externo.
 
 ### [ ] C4.b — SocketProvider e fake
 **Ref.:** architecture §7 e §9.
