@@ -97,8 +97,8 @@ agrupadas em um único commit.
 | Tarefa | Avaliação | Plano de commits |
 |---|---|---|
 | C2 | Divide-se: rede simulada e testes auxiliares são dependências distintas | `[x] C2.a` handlers MSW; `[x] C2.b` providers/fábricas |
-| C3 | Divide-se: transporte/erro e API pública podem ser validados separadamente | `[x] C3.a` núcleo de `fetch` e `ErrorDTO`; `[ ] C3.b` métodos tipados de cada grupo de rotas |
-| C4 | Divide-se: o cliente real e a injeção por fake têm responsabilidades independentes | `[ ] C4.a` interface e cliente Socket.IO; `[ ] C4.b` `SocketProvider` e `createFakeSocket()` |
+| C3 | Divide-se: transporte/erro e API pública podem ser validados separadamente | `[x] C3.a` núcleo de `fetch` e `ErrorDTO`; `[x] C3.b` métodos tipados de cada grupo de rotas |
+| C4 | Divide-se: o cliente real e a injeção por fake têm responsabilidades independentes | `[x] C4.a` interface e cliente Socket.IO; `[x] C4.b` `SocketProvider` e `createFakeSocket()` |
 | C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[ ] C5.a` countdown corrigido por `serverNow`; `[ ] C5.b` porcentagens e rótulos |
 | C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[ ] C6.a` diálogos de confirmação; `[ ] C6.b` `Countdown` e `ErrorMessage` |
 | C7 | Divide-se: formulário/rota e integração da sessão são dois comportamentos fechados | `[ ] C7.a` formulário e armazenamento do token; `[ ] C7.b` navegação e erros da sessão |
@@ -141,10 +141,13 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/api/voter-api.ts` → criação de sessão, leitura de estado e envio de voto.
 - `apps/web/src/api/public-api.ts` → consulta pública de saúde da API.
 - `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado e listeners removíveis.
+- `apps/web/src/api/socket-provider.tsx` → contexto de estado realtime com criação/limpeza do cliente por sessão.
 - `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
 - `apps/web/test/api-methods.test.ts` → contratos MSW de rota, método, token e corpo de cada operação REST.
 - `apps/web/test/socket-client.test.ts` → testes do handshake, `admin:watch`, estados recebidos e limpeza de listeners.
 - `apps/web/test/socket-client.integration.test.ts` → rodada local efêmera com o cliente e servidor Socket.IO reais.
+- `apps/web/test/utils/fake-socket.ts` → fake injetável com controle de conexão, eventos e eleições observadas.
+- `apps/web/test/socket-provider.test.tsx` e `fake-socket.test.ts` → estado do contexto, descarte e ciclo de vida do fake.
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
 - `apps/web/test/utils/factories.ts` → factories dos DTOs; nomes acessórios são localizados e reproduzíveis.
@@ -263,7 +266,7 @@ defaults determinísticos.
 - Testes: 5 testes unitários em `apps/web/test/socket-client.test.ts` e 1 integração em `apps/web/test/socket-client.integration.test.ts` com servidor local em porta efêmera.
 - Decisões: URL `'/'` usa a mesma origem e o proxy Socket.IO do Vite; a fábrica injetável permite testes isolados, e a integração confirma o adapter real sem depender de serviço externo.
 
-### [ ] C4.b — SocketProvider e fake
+### [x] C4.b — SocketProvider e fake
 **Ref.:** architecture §7 e §9.
 **Depende de:** C4.a.
 **Fazer:** criar provider injetável e `createFakeSocket()` substituível pelos testes.
@@ -271,8 +274,15 @@ Payloads do fake devem usar DTOs válidos; dados gerados com Faker, se houver au
 limitados aos campos não relevantes à asserção e usam seed fixa.
 **Testes (escrever antes):** consumidor recebe estado novo e substitui o anterior; fake conecta/desconecta.
 **Pronto quando:** componentes não importam a implementação concreta do socket.
-**Arquivos:** `apps/web/src/api/socket-client.ts`, `apps/web/test/`.
+**Arquivos:** `apps/web/src/api/socket-provider.tsx`, `apps/web/test/utils/fake-socket.ts`,
+`apps/web/test/socket-provider.test.tsx`, `apps/web/test/fake-socket.test.ts`.
 **Commit sugerido:** `test(web): adiciona socket fake e provider injetável`
+**Notas do agente:**
+- Feito: provider mantém o snapshot mais recente de admin/eleitor, expõe `watchAdmin`, não abre conexão sem token e encerra listeners/conexão no descarte.
+- Arquivos: `apps/web/src/api/socket-provider.tsx`, `apps/web/test/utils/fake-socket.ts`, `apps/web/test/socket-provider.test.tsx`, `apps/web/test/fake-socket.test.ts`.
+- Como usar: envolva componentes com `<SocketProvider token={token}>` e leia `useSocket()`; injete `createClient` para fornecer `createFakeSocket()` nos testes.
+- Testes: 5 testes de provider e 1 teste do fake cobrindo substituição de snapshots, ausência de token, watch, cleanup e conexão/desconexão.
+- Decisões: o fake inicia conectado, como o cliente Socket.IO real; mensagens emitidas enquanto desconectado não chegam aos listeners.
 
 ### [ ] C5.a — Countdown corrigido pelo servidor
 **Ref.:** architecture §8.3.
