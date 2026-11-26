@@ -75,6 +75,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/test/support/election-records.ts` → `anElectionRecord(...)` e `unwrap(result)` para montar registros com o domínio real.
 - `apps/server/src/http/auth-plugin.ts` → `registerAuth(app, auth)` (`requireAdmin`, `requireVoter`, `request.auth`) e `getAdminId(request)`.
 - `apps/server/src/http/auth-routes.ts` → `registerAuthRoutes`: `POST /api/admin/login`, `GET /api/admin/me`.
+- `apps/server/src/http/rate-limit.ts` → `registerRateLimit(app, clock)` (feito pelo A na A25): janela fixa por rota e por `request.ip` (10 logins/min, 60 entradas de eleitor/min); acima disso, 429 `RATE_LIMITED` com `Retry-After`. Ligado no `buildApp` só se `config.rateLimit`.
 - `apps/server/src/services/election-service.ts` → `ElectionService`: fluxo único `execute`/`commit` (§8.2) e comandos do admin (eleição, cargos, fila, candidatos, `credentialVoters`, `revokeVoter`, `openRound`); notifica admin e eleitores via apresentadores.
 - `apps/server/src/http/admin-route-deps.ts` → `AdminRouteDeps` (serviço, relógio e hooks das rotas de admin sobre eleições) e `ElectionParams` (`:id`), compartilhados pelas 4 rotas abaixo.
 - `apps/server/src/http/election-routes.ts` → `registerElectionRoutes`: `GET/POST /api/elections`, `GET/PATCH /api/elections/:id`.
@@ -93,7 +94,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/adapters/socket-notifier.ts` → `SocketNotifier(io)`: `Notifier` que emite `admin:state`/`voter:state` para as salas.
 - `apps/server/test/support/realtime-test-app.ts` → `startRealtimeApp()` (app em porta efêmera com gateway real) e helpers `connected`, `waitForEvent`, `waitForConnectError`, `collectEvents`.
 - `apps/server/test/support/election-fixtures.ts` → `openElectionWithVoters(...)`: eleição aberta montada com o domínio real.
-- `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu).
+- `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu; no fim, upload do `e2e/playwright-report/` quando o job falha, da A26). Os passos de e2e (C22) entram **antes** desse upload.
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
 - `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
 - `packages/domain/tsconfig.stryker.json` → config do TS usada pelo StrykerJS.
@@ -334,6 +335,7 @@ O objetivo do Sprint 0 é que C abra o projeto e só "preencha os vazios", e que
 | `VOTE_GRACE_MS` | padrão 1000 |
 | `HISTORY_LIMIT` | padrão 50 |
 | `WEB_DIST_DIR` | opcional |
+| `RATE_LIMIT` | `on` ou `off`; padrão `on` (acrescentada pelo A na A25; os e2e usam `off`) |
 
 **Testes (escrever antes):**
 - aplica os padrões;
@@ -772,11 +774,13 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - `src/compose.ts`: `createServer(config)` monta os adaptadores reais conforme `REPOSITORY`, roda `migrate` (se for pg), executa `seedAdmin`, chama `buildApp` e `attachRealtime`, e reagenda as rodadas abertas (`rescheduleOpenRounds`, usando `repo.listAll()`).
 - `src/main.ts` (humilde, fora da cobertura): `loadConfig(process.env)` → `createServer` → `listen`, com encerramento gracioso em `SIGTERM`/`SIGINT`.
 - `http/static.ts`: `registerStatic(app, distDir)` com `@fastify/static`. Fallback para `index.html` em rotas que não são `/api` nem `/socket.io`; `/api/*` inexistente continua sendo 404 JSON.
+- **Proxy reverso e rate limit:** o rate limit da A25 conta por `request.ip`. Atrás do proxy do Render, sem `trustProxy` todos os clientes aparecem com o IP do proxy e o limite pega todo mundo junto. Configure o `trustProxy` do Fastify pelo **número de proxies** na frente do servidor (variável nova no `config.ts`, padrão desligado). **Não use `trustProxy: true`**: com `true`, o Fastify usa o primeiro IP do `X-Forwarded-For`, que o próprio cliente pode forjar, e o limite vira enfeite. O valor de produção é definido na B21.
 
 **Testes (escrever antes):**
 - `registerStatic` com diretório temporário: `/` devolve o `index.html`; `/admin/eleicoes/x` também (fallback); `/api/nada` devolve 404 JSON;
 - `rescheduleOpenRounds` agenda só as eleições com rodada aberta;
-- `createServer` com `REPOSITORY=memory` sobe e responde `/api/health` (via `inject`).
+- `createServer` com `REPOSITORY=memory` sobe e responde `/api/health` (via `inject`);
+- com 1 proxy confiável, um `X-Forwarded-For` forjado pelo cliente não muda o IP usado pelo rate limit (o 11º login no mesmo minuto ainda recebe 429).
 
 **Commit sugerido:** `feat(server): compõe aplicação real, serve o frontend e retoma prazos após reinício`
 **Notas do agente:** _pendente_
@@ -796,13 +800,14 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 ### [ ] B21 — Deploy contínuo (Render + Neon)
 **Ref.:** architecture §12, §13.
 **Fazer:**
-- `render.yaml` (Blueprint) com build `npm ci && npm run build`, start `npm start`, health check em `/api/health` e as variáveis da §13 (os valores secretos ficam fora do arquivo).
+- `render.yaml` (Blueprint) com build `npm ci && npm run build`, start `npm start`, health check em `/api/health` e as variáveis da §13 (os valores secretos ficam fora do arquivo). Inclui a variável de proxy da B18 com o número de proxies do Render (confirmar na documentação do Render ou olhando o `X-Forwarded-For` que chega em produção) e `RATE_LIMIT` ligado.
 - `.github/workflows/deploy.yml`: dispara em `workflow_run` do CI com `conclusion == success` na `main` e chama `curl -fsS -X POST "$RENDER_DEPLOY_HOOK"` (secret).
 - `docs/deploy.md`: checklist dos passos manuais **do usuário**:
   1. criar o banco no Neon e copiar a `DATABASE_URL`;
   2. criar o serviço no Render, definir as variáveis e desligar o auto-deploy;
   3. criar o secret `RENDER_DEPLOY_HOOK` no GitHub;
-  4. conferir `/api/health` em produção.
+  4. conferir `/api/health` em produção;
+  5. conferir o rate limit em produção: o 11º login errado no mesmo minuto recebe 429, e um segundo aparelho (outra rede) ainda consegue logar.
 
 **Testes (escrever antes):** não se aplica (infraestrutura). A validação é o usuário seguir o checklist e a URL de produção responder.
 **Pronto quando:** o usuário confirmar a aplicação no ar (marco M2). Registre a URL nas notas.
@@ -828,6 +833,7 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - Garantir cobertura ≥ 85% no `apps/server` e ≥ 80% no `shared`.
 - `docs/api.md`: referência curta das rotas e eventos, com exemplo de requisição e resposta. Atualizar o `architecture.md` onde a implementação divergiu (com aprovação do usuário).
 - Escrever no README as subseções da parte B (Tecnologias do backend/CI; Execução dos testes: comandos).
+- Avaliar o `rate-limit.ts` (A25): o `Map` de contadores ganha uma entrada por rota e IP e nunca apaga as janelas vencidas. Se valer a pena, descartar as vencidas (com teste antes, usando o `FakeClock`) e combinar com o A, autor do arquivo.
 
 **Commit sugerido:** `docs(server): documenta API e refina suíte de testes do servidor`
 **Notas do agente:** _pendente_
@@ -846,3 +852,5 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - 2026-11-23 — S0.1 — `typescript-eslint` 8.73 aborta com TS 7 (peer `<6.1`), mesmo na config sem regras de tipos. Solução do post oficial do TS 7: na raiz, `"typescript": "npm:@typescript/typescript6@^6.0.2"` (API usada pelo ESLint) e `"@typescript/native": "npm:typescript@^7.0.2"` (fornece o `tsc` 7). Sem `legacy-peer-deps`. Remover o alias quando o typescript-eslint suportar TS 7.1 (issue #10940).
 - 2026-11-24 — B15 — `attachRealtime(io, httpServer, deps)` recebe o `io` já criado (`createRealtimeServer`) e `AppDeps` ganhou `realtime?: RealtimeServer`, ligado pelo `buildApp`; quebra o ciclo notificador → io → app. Detalha a §8.1.
 - 2026-11-23 — S0.3a — `ElectionSummaryDTO` (citado na §6.1, mas sem forma na §6.3) é `{ id, name, status, positionCount, voterCount }`; basta para a lista de eleições do admin. `ErrorDTO.error.code` é `ErrorCode` (a §6.3 dizia `string`), para o front checar códigos com o compilador. `RoundResultDTO` não tem `positionId` (como o `RoundResultView` do domínio).
+- 2026-11-25 — A25 (feita pelo A) — o rate limit é um hook próprio (`http/rate-limit.ts`) com a porta `Clock`, e não o `@fastify/rate-limit` da §8.4: a janela fica testável com o `FakeClock` e não entra dependência nova. Veio junto a variável `RATE_LIMIT` (`on`/`off`, padrão `on`) no `config.ts`; os e2e (C17) sobem o servidor com `RATE_LIMIT=off`, porque todos os navegadores do teste saem do mesmo IP. Pendências do lado B: `trustProxy` pelo número de proxies (B18/B21) e avaliar a limpeza dos contadores (B23).
+- 2026-11-25 — A26 (feita pelo A) — o `ci.yml` ganhou, no fim, o upload do `e2e/playwright-report/` quando o job falha (`if-no-files-found: ignore`). Os passos de e2e da C22 entram antes dele.
