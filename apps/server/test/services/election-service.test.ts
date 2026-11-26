@@ -57,6 +57,29 @@ function makeService(
   return { service, repository, clock, scheduler, notifier, logger };
 }
 
+/**
+ * Serviço com a eleição `e1` do dono e a rodada de 1 min de `president` aberta pelo admin
+ * (versão 1, um passo desfazível no histórico). O relógio fica no instante da abertura.
+ *
+ * @param options - Repassadas a `makeService` (ex.: limite do histórico ou outro repositório),
+ *   mais os códigos dos eleitores credenciados (padrão: um eleitor).
+ * @returns O serviço e os doubles, como `makeService`.
+ */
+async function serviceWithOpenRound(
+  options: Parameters<typeof makeService>[0] & { voterCodes?: readonly string[] } = {},
+) {
+  const { voterCodes, ...serviceOptions } = options;
+  const test = makeService(serviceOptions);
+  await test.repository.create(
+    openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'], voterCodes }),
+  );
+  await test.service.openRound(OWNER, 'e1', {
+    positionId: 'president',
+    durationSeconds: ONE_MINUTE_SECONDS,
+  });
+  return test;
+}
+
 describe('ElectionService command flow', () => {
   describe('authorization', () => {
     it('rejects a command on an election that does not exist with 404', async () => {
@@ -440,14 +463,7 @@ describe('ElectionService.getElection', () => {
      * @returns O serviço e os doubles, como `makeService`.
      */
     async function serviceWithOverdueRound() {
-      const test = makeService();
-      await test.repository.create(
-        openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
-      );
-      await test.service.openRound(OWNER, 'e1', {
-        positionId: 'president',
-        durationSeconds: ONE_MINUTE_SECONDS,
-      });
+      const test = await serviceWithOpenRound();
       test.clock.advance(JUST_PAST_THE_GRACE_MS);
       return test;
     }
@@ -502,14 +518,7 @@ describe('ElectionService at the last instant of the grace period', () => {
    * @returns O serviço e os doubles, como `makeService`.
    */
   async function serviceAtTheEndOfTheGrace() {
-    const test = makeService();
-    await test.repository.create(
-      openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
-    );
-    await test.service.openRound(OWNER, 'e1', {
-      positionId: 'president',
-      durationSeconds: ONE_MINUTE_SECONDS,
-    });
+    const test = await serviceWithOpenRound();
     test.clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
     return test;
   }
@@ -551,14 +560,7 @@ describe('ElectionService undo after an automatic closing', () => {
   it.each(AUTOMATIC_CLOSINGS)(
     'goes back to before the round was opened when %s closed it',
     async (_closer, close) => {
-      const test = makeService();
-      await test.repository.create(
-        openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
-      );
-      await test.service.openRound(OWNER, 'e1', {
-        positionId: 'president',
-        durationSeconds: ONE_MINUTE_SECONDS,
-      });
+      const test = await serviceWithOpenRound();
       test.clock.advance(JUST_PAST_THE_GRACE_MS);
       await close(test);
 
@@ -576,14 +578,7 @@ describe('ElectionService undo after an automatic closing', () => {
      * @returns O serviço e os doubles, como `makeService`.
      */
     async function serviceWithRoundClosedByACommand() {
-      const test = makeService();
-      await test.repository.create(
-        openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
-      );
-      await test.service.openRound(OWNER, 'e1', {
-        positionId: 'president',
-        durationSeconds: ONE_MINUTE_SECONDS,
-      });
+      const test = await serviceWithOpenRound();
       test.clock.advance(JUST_PAST_THE_GRACE_MS);
       await test.service.updateElection(OWNER, 'e1', { name: 'Annual vote' });
       return test;
@@ -844,24 +839,6 @@ describe('ElectionService.revokeVoter', () => {
 describe('ElectionService.handleDeadline', () => {
   const LOG_MESSAGE = 'Failed to close the round at its deadline';
 
-  /**
-   * Serviço com a eleição `e1` do dono e uma rodada de 1 min aberta (versão 1).
-   *
-   * @param options - Repassadas a `makeService` (ex.: limite do histórico ou outro repositório).
-   * @returns O serviço e os doubles, como `makeService`.
-   */
-  async function serviceWithOpenRound(options: Parameters<typeof makeService>[0] = {}) {
-    const test = makeService(options);
-    await test.repository.create(
-      openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
-    );
-    await test.service.openRound(OWNER, 'e1', {
-      positionId: 'president',
-      durationSeconds: ONE_MINUTE_SECONDS,
-    });
-    return test;
-  }
-
   it('closes the round once its deadline has passed', async () => {
     const { service, repository, clock } = await serviceWithOpenRound();
     clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
@@ -1054,30 +1031,11 @@ describe('ElectionService.castVote', () => {
   describe('undo history', () => {
     // A primeira rodada aberta pelo serviço recebe o primeiro id gerado.
     const FIRST_VOTE = { roundId: 'id-1', choice: 'president-candidate' };
-
-    /**
-     * Serviço com a eleição `e1`, dois eleitores e a rodada de `president` aberta pelo admin,
-     * ou seja, com um passo desfazível no histórico.
-     *
-     * @param options - Repassadas a `makeService` (ex.: limite do histórico).
-     * @returns O serviço e os doubles, como `makeService`.
-     */
-    async function serviceWithRoundOpenedByAdmin(options: Parameters<typeof makeService>[0] = {}) {
-      const test = makeService(options);
-      await test.repository.create(
-        openElectionWithVoters({
-          id: 'e1',
-          adminId: OWNER,
-          positionIds: ['president'],
-          voterCodes: ['VOTERAAA', 'VOTERBBB'],
-        }),
-      );
-      await test.service.openRound(OWNER, 'e1', { positionId: 'president' });
-      return test;
-    }
+    // Os códigos de FIRST_VOTER e SECOND_VOTER; a rodada é aberta pelo admin (passo desfazível).
+    const VOTER_CODES = ['VOTERAAA', 'VOTERBBB'];
 
     it('undoes the opening of the round, not just the last vote', async () => {
-      const { service } = await serviceWithRoundOpenedByAdmin();
+      const { service } = await serviceWithOpenRound({ voterCodes: VOTER_CODES });
       await service.castVote(FIRST_VOTER, 'e1', FIRST_VOTE);
 
       const restored = await service.undo(OWNER, 'e1');
@@ -1086,7 +1044,10 @@ describe('ElectionService.castVote', () => {
     });
 
     it('does not let votes push the admin steps out of the history', async () => {
-      const { service, repository } = await serviceWithRoundOpenedByAdmin({ historyLimit: 1 });
+      const { service, repository } = await serviceWithOpenRound({
+        voterCodes: VOTER_CODES,
+        historyLimit: 1,
+      });
 
       await service.castVote(FIRST_VOTER, 'e1', FIRST_VOTE);
       await service.castVote(SECOND_VOTER, 'e1', FIRST_VOTE);
@@ -1095,7 +1056,7 @@ describe('ElectionService.castVote', () => {
     });
 
     it('does not turn the vote that closes the round into a step either', async () => {
-      const { service } = await serviceWithRoundOpenedByAdmin();
+      const { service } = await serviceWithOpenRound({ voterCodes: VOTER_CODES });
       await service.castVote(FIRST_VOTER, 'e1', FIRST_VOTE);
       await service.castVote(SECOND_VOTER, 'e1', FIRST_VOTE);
 
@@ -1105,7 +1066,7 @@ describe('ElectionService.castVote', () => {
     });
 
     it('still saves each vote under the next version', async () => {
-      const { service, repository } = await serviceWithRoundOpenedByAdmin();
+      const { service, repository } = await serviceWithOpenRound({ voterCodes: VOTER_CODES });
 
       await service.castVote(FIRST_VOTER, 'e1', FIRST_VOTE);
 
