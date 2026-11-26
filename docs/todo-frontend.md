@@ -105,7 +105,7 @@ agrupadas em um único commit.
 | C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[x] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[x] C8.b` cédula e voto candidato/branco |
 | C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[x] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[x] C9.b` reconexão e ordenação de estado |
 | C10 | Login, identidade, proteção de rotas e logout fecham a autenticação do admin | `[x] C10.a` login, token e `/admin/me`; `[x] C10.b` rotas protegidas e logout |
-| C11 | Divide-se: leitura da lista e mutação/criação têm UI e testes distintos | `[ ] C11.a` lista de eleições; `[ ] C11.b` criação e navegação |
+| C11 | Divide-se: leitura da lista e mutação/criação têm UI e testes distintos | `[x] C11.a` lista de eleições; `[x] C11.b` criação e navegação |
 | C12 | Divide-se: adicionar/editar cargos não inclui remover e confirmar | `[ ] C12.a` criar e editar cargos; `[ ] C12.b` remover cargo e confirmar estado permitido |
 | C13 | Divide-se: cadastro/validação e edição/removal têm casos próprios | `[ ] C13.a` criar candidato e validações; `[ ] C13.b` editar/remover candidato |
 | C14 | Divide-se: eleitores e fila são abas independentes com contratos próprios | `[ ] C14.a` gerar, listar, copiar e revogar códigos; `[ ] C14.b` ordem, sugestão e confirmação |
@@ -143,7 +143,9 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/features/admin/auth/admin-auth-context.tsx` → restaura token da aba, valida `/admin/me` e expõe login/logout.
 - `apps/web/src/features/admin/auth/AdminLoginPage.tsx` → formulário acessível para login e erros de credenciais.
 - `apps/web/src/features/admin/auth/RequireAdmin.tsx` → protege as rotas administrativas após validar a identidade.
-- `apps/web/src/features/admin/auth/AdminDashboardPage.tsx` → exibe a identidade autenticada e oferece logout.
+- `apps/web/src/features/admin/auth/AdminDashboardPage.tsx` → exibe identidade autenticada, lista de eleições e logout.
+- `apps/web/src/features/admin/elections/AdminElectionsPage.tsx` → carrega resumos, apresenta estados/contagens e cria eleições com validação compartilhada.
+- `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx` → destino protegido da navegação para configuração da eleição criada.
 - `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado, listeners removíveis e reconexão após entrada no namespace.
 - `apps/web/src/api/socket-provider.tsx` → contexto realtime com criação/limpeza do cliente por sessão e inscrição em snapshots e reconexão.
 - `apps/web/src/components/ConfirmDialog.tsx` e `DoubleConfirmDialog.tsx` → diálogos acessíveis de confirmação simples e por título exato.
@@ -167,6 +169,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/reusable-status-components.test.tsx` → atualização/expiração do timer e anúncio do código/mensagem de erro.
 - `apps/web/test/voter-entry-page.test.tsx` → validação local, normalização do código, início de sessão e erros da API.
 - `apps/web/test/admin-auth.test.tsx` → login, identidade, restauração, rotas protegidas, credenciais inválidas e logout.
+- `apps/web/test/admin-elections.test.tsx` → lista vazia e preenchida, falhas de API, validação de prazo e criação/navegação.
 - `apps/web/test/voter-session.test.tsx` → carregamento inicial e remontagem, ordenação de socket/REST, reconexão, erros e credenciais persistidas.
 - `apps/web/test/voter-vote-page.test.tsx` → voto candidato/branco, cliques duplicados, erros de rodada e countdown.
 - `apps/web/test/voter-final-state.test.tsx` → fases finais, desfechos do resultado e contagens sem cálculo local.
@@ -492,7 +495,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/admin-auth.test.tsx` (8 casos C10: credenciais válidas/inválidas, resposta de serviço indisponível, acesso sem token, restauração, token inválido, token de eleitor e logout) e `apps/web/test/App.test.tsx` (2).
 - Decisões: token expirado ou papel inadequado causa redirecionamento ao login; falha de rede ao restaurar a identidade não é apresentada como autenticação bem-sucedida e mantém mensagem visível.
 
-### [ ] C11.a — Lista de eleições
+### [x] C11.a — Lista de eleições
 **Ref.:** architecture §6.1.
 **Depende de:** C10.b.
 **Fazer:** criar `/admin` com `ElectionSummaryDTO`, estados e contagens.
@@ -500,8 +503,14 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** admin visualiza suas eleições.
 **Arquivos:** `apps/web/src/features/admin/elections/`.
 **Commit sugerido:** `feat(web): lista eleições do administrador`
+**Notas do agente:**
+- Feito: `/admin` carrega `ElectionSummaryDTO`, mostra estado vazio, nomes, status e contagens de cargos/eleitores, com erro de API acessível.
+- Arquivos: `apps/web/src/features/admin/elections/AdminElectionsPage.tsx`, `apps/web/src/features/admin/auth/AdminDashboardPage.tsx`, `apps/web/test/admin-elections.test.tsx`.
+- Como usar: entre em `/admin` com sessão administrativa válida para consultar as eleições.
+- Testes: `apps/web/test/admin-elections.test.tsx` (3 casos de lista: vazia, resumos e falha de carregamento).
+- Decisões: a lista mostra os dados do DTO do servidor sem recalcular estados ou contagens.
 
-### [ ] C11.b — Criação de eleição
+### [x] C11.b — Criação de eleição
 **Ref.:** architecture §6.1.
 **Depende de:** C11.a.
 **Fazer:** criar formulário com nome e prazo padrão válido; navegar para configuração criada.
@@ -509,6 +518,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** eleição criada aparece no fluxo de configuração.
 **Arquivos:** `apps/web/src/features/admin/elections/`.
 **Commit sugerido:** `feat(web): cria eleições pela interface`
+**Notas do agente:**
+- Feito: formulário valida nome e prazo pelo schema compartilhado, usa 60 segundos como padrão e navega para a configuração após criação bem-sucedida.
+- Arquivos: `apps/web/src/features/admin/elections/AdminElectionsPage.tsx`, `AdminElectionConfigurationPage.tsx`, `apps/web/src/App.tsx`, `apps/web/test/admin-elections.test.tsx`.
+- Como usar: informe o nome e, se necessário, ajuste o prazo entre 5 e 3600 segundos; após criar, a aplicação abre `/admin/eleicoes/:id/configurar`.
+- Testes: `apps/web/test/admin-elections.test.tsx` (8 casos de criação: nome vazio, prazos inválidos, limites válidos, sucesso/navegação e erro da API); `apps/web/test/admin-auth.test.tsx` atualiza a verificação de rota administrativa protegida.
+- Decisões: C12 ainda implementará os controles de configuração; a rota criada confirma o destino e apresenta o identificador da eleição.
 
 ### [ ] C12.a — Criar e editar cargos
 **Ref.:** architecture §6.1 e §5.3.

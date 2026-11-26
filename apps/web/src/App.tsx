@@ -5,6 +5,7 @@ import { AdminDashboardPage } from './features/admin/auth/AdminDashboardPage';
 import { AdminLoginPage } from './features/admin/auth/AdminLoginPage';
 import { AdminAuthProvider } from './features/admin/auth/admin-auth-context';
 import { RequireAdmin } from './features/admin/auth/RequireAdmin';
+import { AdminElectionConfigurationPage } from './features/admin/elections/AdminElectionConfigurationPage';
 import { VoterEntryPage } from './features/voter/VoterEntryPage';
 import { VoterSessionPage } from './features/voter/VoterSessionPage';
 import { getVoterSession } from './features/voter/voter-session-storage';
@@ -25,6 +26,10 @@ export function App(): ReactElement {
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin" element={<RequireAdmin />}>
           <Route index element={<AdminDashboardPage />} />
+          <Route
+            path="eleicoes/:electionId/configurar"
+            element={<AdminElectionConfigurationPage />}
+          />
           <Route path="*" element={<AdminDashboardPage />} />
         </Route>
       </Routes>

@@ -110,7 +110,7 @@ describe('administrator authentication', () => {
     expect(await screen.findByRole('heading', { name: 'Administrator login' })).toBeInTheDocument();
   });
 
-  it('restores a valid stored session by loading the current admin identity', async () => {
+  it('restores a valid stored session before showing the requested admin route', async () => {
     mockApi.use(
       http.get('*/api/admin/me', ({ request }) => {
         expect(request.headers.get('Authorization')).toBe('Bearer mock-admin-token');
@@ -120,7 +120,9 @@ describe('administrator authentication', () => {
     sessionStorage.setItem(ADMIN_TOKEN_KEY, 'mock-admin-token');
     renderWithProviders(<App />, { initialEntries: ['/admin/eleicoes/election-1/configurar'] });
 
-    expect(await screen.findByText('Signed in as admin')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Election configuration' }),
+    ).toBeInTheDocument();
   });
 
   it.each([
