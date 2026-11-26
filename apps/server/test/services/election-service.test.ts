@@ -819,6 +819,69 @@ describe('ElectionService.castVote', () => {
     return { ...makeService({ repository }), repository };
   }
 
+  describe('undo history', () => {
+    // A primeira rodada aberta pelo serviço recebe o primeiro id gerado.
+    const FIRST_VOTE = { roundId: 'id-1', choice: 'president-candidate' };
+
+    /**
+     * Serviço com a eleição `e1`, dois eleitores e a rodada de `president` aberta pelo admin,
+     * ou seja, com um passo desfazível no histórico.
+     *
+     * @param options - Repassadas a `makeService` (ex.: limite do histórico).
+     * @returns O serviço e os doubles, como `makeService`.
+     */
+    async function serviceWithRoundOpenedByAdmin(options: Parameters<typeof makeService>[0] = {}) {
+      const test = makeService(options);
+      await test.repository.create(
+        openElectionWithVoters({
+          id: 'e1',
+          adminId: OWNER,
+          positionIds: ['president'],
+          voterCodes: ['VOTERAAA', 'VOTERBBB'],
+        }),
+      );
+      await test.service.openRound(OWNER, 'e1', { positionId: 'president' });
+      return test;
+    }
+
+    it('undoes the opening of the round, not just the last vote', async () => {
+      const { service } = await serviceWithRoundOpenedByAdmin();
+      await service.castVote(FIRST_VOTER, 'e1', FIRST_VOTE);
+
+      const restored = await service.undo(OWNER, 'e1');
+
+      expect(restored.current).toMatchObject({ rounds: [], positions: [{ status: 'PENDING' }] });
+    });
+
+    it('does not let votes push the admin steps out of the history', async () => {
+      const { service, repository } = await serviceWithRoundOpenedByAdmin({ historyLimit: 1 });
+
+      await service.castVote(FIRST_VOTER, 'e1', FIRST_VOTE);
+      await service.castVote(SECOND_VOTER, 'e1', FIRST_VOTE);
+
+      expect((await repository.get('e1'))?.past).toMatchObject([{ version: 0, rounds: [] }]);
+    });
+
+    it('does not turn the vote that closes the round into a step either', async () => {
+      const { service } = await serviceWithRoundOpenedByAdmin();
+      await service.castVote(FIRST_VOTER, 'e1', FIRST_VOTE);
+      await service.castVote(SECOND_VOTER, 'e1', FIRST_VOTE);
+
+      const restored = await service.undo(OWNER, 'e1');
+
+      expect(restored.current.rounds).toEqual([]);
+    });
+
+    it('still saves each vote under the next version', async () => {
+      const { service, repository } = await serviceWithRoundOpenedByAdmin();
+
+      await service.castVote(FIRST_VOTER, 'e1', FIRST_VOTE);
+
+      // Versão 0 → 1 (rodada aberta) → 2 (voto).
+      expect((await repository.get('e1'))?.current.version).toBe(2);
+    });
+  });
+
   describe('when votes arrive at the same time', () => {
     it('accepts and counts the votes of two different voters', async () => {
       const { service, repository } = await serviceWithTwoVoters();

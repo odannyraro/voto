@@ -172,9 +172,9 @@ export class ElectionService {
   }
 
   /**
-   * Registra o voto de um eleitor. Segue o mesmo caminho de salvar e notificar dos comandos do
-   * admin, mas quem autoriza é o token do eleitor (não há dono a conferir) e o prazo ganha a
-   * tolerância `voteGraceMs`, que compensa a latência de rede.
+   * Registra o voto de um eleitor. Salva, reagenda e notifica como os comandos do admin, mas
+   * quem autoriza é o token do eleitor (não há dono a conferir), o prazo ganha a tolerância
+   * `voteGraceMs`, que compensa a latência de rede, e o voto não é um passo do desfazer.
    *
    * Vários eleitores votam ao mesmo tempo na mesma eleição, então um voto que perde a disputa
    * pela gravação é reaplicado sobre a eleição relida (o domínio volta a conferir as regras),
@@ -559,9 +559,11 @@ export class ElectionService {
   }
 
   /**
-   * Desfaz o último comando, restaurando o estado anterior do histórico. Não empilha um novo
-   * snapshot e grava o estado restaurado com a versão **seguinte** à atual: se a versão
-   * voltasse no tempo, um cliente com dados velhos escreveria sem `VERSION_CONFLICT`.
+   * Desfaz o último passo do histórico, restaurando o estado anterior. Os votos não são
+   * passos: voltar um comando do admin descarta também os votos registrados depois dele.
+   * Não empilha um novo snapshot e grava o estado restaurado com a versão **seguinte** à
+   * atual: se a versão voltasse no tempo, um cliente com dados velhos escreveria sem
+   * `VERSION_CONFLICT`.
    *
    * @param adminId - Admin autenticado; precisa ser o dono da eleição.
    * @param electionId - Eleição alvo.
@@ -665,7 +667,9 @@ export class ElectionService {
     const ctx = this.newContext();
 
     // Fechamento preguiçoso (§8.3): um prazo vencido vale mesmo se o timer se perdeu.
-    return this.save(record, command(closeRoundIfDue(record.current, ctx), ctx), ctx);
+    const next = nextElection(record, command(closeRoundIfDue(record.current, ctx), ctx));
+    const withSnapshot = pushSnapshot(record, next, this.deps.historyLimit);
+    return this.persist(withSnapshot, record.current.version, ctx);
   }
 
   /**
@@ -689,40 +693,15 @@ export class ElectionService {
     const ctx = this.newContext();
     // Sem `closeRoundIfDue` antes: com ele, um voto atrasado acharia a rodada já fechada e
     // viraria `ROUND_NOT_OPEN` (409) em vez de `ROUND_EXPIRED` (410). O domínio compara o prazo.
-    const result = castVote(record.current, vote, { ...ctx, now: judgedAt });
-    return this.save(record, result, ctx);
-  }
-
-  /**
-   * Grava o resultado de um comando: se o domínio recusou, lança o erro sem salvar nem notificar;
-   * se aceitou, incrementa a versão, empilha o snapshot e persiste.
-   *
-   * @param record - Registro lido do repositório, antes do comando.
-   * @param result - Resultado do comando sobre a eleição atual.
-   * @param ctx - Contexto do comando (o instante vira o `serverNow` das notificações).
-   * @returns O registro salvo, com a versão incrementada e o estado anterior no histórico.
-   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
-   * @throws {DomainError} O erro de negócio de `result`, se houver.
-   */
-  private async save(
-    record: ElectionRecord,
-    result: Result<Election>,
-    ctx: DomainContext,
-  ): Promise<ElectionRecord> {
-    if (!result.ok) throw result.error;
-
-    const expectedVersion = record.current.version;
-    const next = pushSnapshot(
-      record,
-      { ...result.value, version: expectedVersion + 1 },
-      this.deps.historyLimit,
-    );
-    return this.persist(next, expectedVersion, ctx);
+    const next = nextElection(record, castVote(record.current, vote, { ...ctx, now: judgedAt }));
+    // Sem snapshot: o desfazer é para os passos do admin. Um por voto expulsaria do histórico
+    // (limitado) as decisões dele e faria cada voto regravar dezenas de cópias da eleição.
+    return this.persist({ current: next, past: record.past }, record.current.version, ctx);
   }
 
   /**
    * Grava o registro novo e deixa o resto do sistema coerente com ele: reagenda o fechamento
-   * e notifica admin e eleitores. Comum a todo comando e ao desfazer.
+   * e notifica admin e eleitores. Comum aos comandos, ao voto e ao desfazer.
    *
    * @param next - Registro a gravar, já com a versão incrementada.
    * @param expectedVersion - Versão lida antes do comando (concorrência otimista).
@@ -836,6 +815,20 @@ function fixedCodes(codes: readonly string[]): CodeGenerator {
       return next;
     },
   };
+}
+
+/**
+ * Prepara para gravação o estado que um comando do domínio produziu: recusa antes de qualquer
+ * escrita o que o domínio recusou e dá ao estado a versão seguinte à lida.
+ *
+ * @param record - Registro lido do repositório, antes do comando.
+ * @param result - Resultado do comando sobre a eleição atual.
+ * @returns A eleição a gravar.
+ * @throws {DomainError} O erro de negócio de `result`, se houver.
+ */
+function nextElection(record: ElectionRecord, result: Result<Election>): Election {
+  if (!result.ok) throw result.error;
+  return { ...result.value, version: record.current.version + 1 };
 }
 
 /**
