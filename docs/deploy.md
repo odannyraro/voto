@@ -59,10 +59,10 @@ O Render lê o `render.yaml` da `main`, e o GitHub só roda o workflow `Deploy` 
    - *Scaling*: **1 instância**;
    - *Logs* do 1º deploy: o build termina, aparece `Server listening at http://...:10000` (o Render define `PORT=10000`) e **nenhum erro de banco**. É o primeiro uso do `new Pool(...)` real: o `Server listening` só aparece depois que o `migrate` rodou sem erro.
 
-Anote a URL pública do serviço (algo como `https://voto-xxxx.onrender.com`). Nos comandos abaixo, ela é `$URL`:
+Anote a URL pública do serviço (hoje, `https://vota-ae.onrender.com`; o nome vem do `name` do `render.yaml`, e o Render acrescenta um sufixo se ele já estiver em uso). Nos comandos abaixo, ela é `$URL`:
 
 ```bash
-URL=https://voto-xxxx.onrender.com
+URL=https://vota-ae.onrender.com
 ```
 
 > Mudou alguma variável no painel e ela também está no `render.yaml`? Atualize o arquivo no repositório: ao sincronizar o Blueprint, o valor do arquivo sobrescreve o do painel.

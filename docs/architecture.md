@@ -645,7 +645,7 @@ Padrão: **um commit por tarefa do TO-DO**, contendo os testes e a implementaç�
 
 | Item | Escolha |
 |---|---|
-| Aplicação | Render, Web Service gratuito, Node 24, Blueprint em `render.yaml` (`numInstances: 1`, auto-deploy desligado). No ar em https://voto-jn8l.onrender.com |
+| Aplicação | Render, Web Service gratuito, Node 24, Blueprint em `render.yaml` (`numInstances: 1`, auto-deploy desligado). No ar em https://vota-ae.onrender.com |
 | Build | `npm ci --include=dev && npm run build` (gera `apps/web/dist` e `apps/server/dist`). O `--include=dev` é necessário porque, com `NODE_ENV=production` também no build, o `npm ci` omitiria `vite`, `tsup` e `cross-env` |
 | Start | `npm start` (define `WEB_DIST_DIR=apps/web/dist` e roda `node apps/server/dist/main.js`). O Fastify serve a API em `/api`, o Socket.IO e o front estático com `@fastify/static` e fallback para `index.html` (exceto caminhos com extensão de arquivo, que dão 404) |
 | Banco | Neon Postgres gratuito (`DATABASE_URL`, conexão direta com `sslmode=verify-full`). A migração (tabelas `admins`, `elections` e `voter_codes`) roda no boot, de forma idempotente, só com `CREATE TABLE IF NOT EXISTS`: o esquema está congelado; uma mudança futura precisa de `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` com teste num banco do esquema anterior |
