@@ -64,13 +64,15 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/error-status.ts` → `statusForErrorCode(code)`: código de erro → status HTTP (§6.3).
 - `apps/server/src/ports/` → portas da aplicação (só tipos): repositórios, `Clock`, `Scheduler`, `CodeGenerator`, `Notifier`, `Logger`; `index.ts` reexporta tudo.
 - `apps/server/test/doubles/` → `FakeClock`, `FakeScheduler`, `SpyNotifier`, `SpyLogger`, `StubCodeGenerator` (cada um com teste próprio).
-- `apps/server/src/adapters/` → `InMemoryElectionRepository` e `InMemoryAdminRepository` (cópias com `structuredClone`, índice de códigos de eleitor).
+- `apps/server/src/adapters/` → `InMemoryElectionRepository` e `InMemoryAdminRepository` (cópias com `structuredClone`, índice de códigos de eleitor); `repository-errors.ts` → erros comuns aos repositórios.
+- `apps/server/src/adapters/pg/` → repositórios PostgreSQL: `migrate(pool)`, `PgElectionRepository`, `PgAdminRepository`, `inTransaction(pool, work)` e a porta `SqlPool` (`sql.ts`).
+- `apps/server/test/doubles/pg-mem-pool.ts` → Postgres em memória com rollback (`createPgMemPool`, `createMigratedPgMemPool`); `spy-sql-pool.ts` → anota comandos e liberações de conexão.
 - `apps/server/src/http/errors.ts` → `HttpError(status, code, message)`.
 - `apps/server/src/app.ts` → `AppDeps` e `buildApp(deps)` (Fastify sem `listen`; health e tratadores de erro).
 - `apps/server/src/http/error-handler.ts` → `toErrorResponse(error)` e `registerErrorHandling(app)`: `HttpError`/`DomainError`/`ZodError`/erro do Fastify → `ErrorDTO`.
 - `apps/server/src/http/validate.ts` → `parse(schema, data)` (lança `ZodError`).
 - `apps/server/test/support/make-test-app.ts` → `makeTestApp(overrides?)`: app com doubles e repositórios em memória.
-- `apps/server/test/contracts/election-repository.contract.ts` → suíte de contrato de `ElectionRepository` (a B17 reutiliza).
+- `apps/server/test/contracts/` → suítes de contrato de `ElectionRepository` e `AdminRepository`, rodadas contra a memória e o Postgres.
 - `apps/server/src/services/auth.ts` → `AuthService` (bcrypt + JWT: `login`, `verifyToken`, `issueAdminToken`, `issueVoterToken`, `seedAdmin`).
 - `apps/server/test/support/election-records.ts` → `anElectionRecord(...)` e `unwrap(result)` para montar registros com o domínio real.
 - `apps/server/src/http/auth-plugin.ts` → `registerAuth(app, auth)` (`requireAdmin`, `requireVoter`, `request.auth`) e `getAdminId(request)`.
@@ -748,7 +750,7 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - Testes: 1 (cenário único, de propósito, como a tarefa pede). Servidor: 421 testes, 99,62% statements / 98,62% branches / 99,79% linhas. Domínio 223, shared 138, web 2. `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
 - Decisões: (1) nenhuma divergência entre servidor e domínio apareceu: o teste já nasceu verde, então a prova de que ele testa algo foi uma mutação manual (`releaseResults` virando no-op no serviço) que o derrubou com `WAITING` no lugar de `RESULTS`; revertida. (2) Os códigos de eleitor vêm de um `StubCodeGenerator`, e o admin é semeado com `auth.seedAdmin` antes do login real por HTTP. (3) Os ids de candidatos vêm do DTO devolvido ao cadastrá-los, sem depender do formato de `newId`.
 
-### [ ] B17 — Repositórios PostgreSQL
+### [x] B17 — Repositórios PostgreSQL
 **Ref.:** architecture §8.1, §13.
 **Fazer:**
 - `adapters/pg/migrate.ts`: `migrate(pool)` idempotente (`CREATE TABLE IF NOT EXISTS`) com:
@@ -766,7 +768,13 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - código duplicado entre eleições é rejeitado pelo banco.
 
 **Commit sugerido:** `feat(server): persiste eleições no PostgreSQL com JSONB e concorrência otimista`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `migrate(pool)` idempotente (3 tabelas), `PgElectionRepository` (registro com histórico em JSONB; `create`/`save` e códigos na mesma transação; `UPDATE ... AND version`) e `PgAdminRepository`.
+- Arquivos: `apps/server/src/adapters/pg/{sql,transaction,migrate,pg-election-repository,pg-admin-repository}.ts`, `src/adapters/repository-errors.ts` (erros comuns à memória e ao Pg), `test/adapters/pg/*`, `test/contracts/admin-repository.contract.ts`, `test/doubles/{pg-mem-pool,spy-sql-pool}.ts`; deps `pg`, `pg-mem` e `@types/pg` (só tipos).
+- Como usar (B18): `const pool = new Pool({ connectionString: config.databaseUrl })` (o `Pool` do `pg` cabe na porta `SqlPool`); `await migrate(pool)`; `new PgElectionRepository(pool)` / `new PgAdminRepository(pool)`. Registrar `pool.on('error', ...)` (sem ouvinte, a queda de uma conexão ociosa, comum no Neon, derruba o processo) e `pool.end()` no encerramento. Testes e B16b: `await createMigratedPgMemPool()`.
+- Testes: 58 novos (contrato de eleições no Pg 24 + 6 só do Pg, contrato de admins no Pg 7 + 1, `migrate` 4, transação 6, doubles 7, 3 casos novos de contrato rodando também na memória). Servidor: 491 testes, 99,83% statements / 99,43% branches / 100% linhas. Domínio 223, shared 138, web 2. 11 mutações manuais, todas pegas.
+- Decisões: (1) o `pg-mem` ignora `ROLLBACK`: o double o emula com `db.backup()` e recusa comandos no pool com transação aberta (senão "gravar fora da transação" passava). (2) Outras limitações dele: `noAstCoverageCheck` para repetir `CREATE TABLE IF NOT EXISTS`; `ON CONFLICT DO NOTHING` sem alvo (com alvo ele conta as linhas errado). (3) Conferência única, fora do repositório: os 2 contratos, rollback, 4 `save` simultâneos (só 1 vence) e 500 eleitores passaram num Postgres 16 real (contêiner temporário, 34 testes).
+- **Pendências:** (a) com o Pg, votos **simultâneos** na mesma eleição disputam a versão: um vence e os outros recebem 409 `VERSION_CONFLICT`, porque `castVote` não tenta de novo; corrigir antes do deploy (reler e reaplicar o voto, com teste primeiro). (b) `listAll`/`listByAdmin` no Pg não garantem ordem (a memória mantém a de criação). (c) cada voto regrava o registro inteiro com o histórico (ver pendência da B13b).
 
 ### [ ] B18 — Composição, arquivos estáticos e retomada após reinício
 **Ref.:** architecture §8.3, §13.

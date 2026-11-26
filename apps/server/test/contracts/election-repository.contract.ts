@@ -1,4 +1,4 @@
-import { revokeVoter } from '@voto/domain';
+import { pushSnapshot, revokeVoter } from '@voto/domain';
 import { describe, expect, it } from 'vitest';
 import type { ElectionRepository } from '../../src/ports';
 import { anElectionRecord, unwrap } from '../support/election-records';
@@ -44,6 +44,23 @@ export function describeElectionRepositoryContract(
         const second = repo.create(anElectionRecord({ id: 'election-1' }));
 
         await expect(second).rejects.toThrow(/already exists/);
+      });
+
+      it('returns the previous snapshots together with the current election', async () => {
+        // O desfazer precisa sobreviver a um reinício, então o histórico é persistido junto.
+        const repo = await makeRepo();
+        const original = anElectionRecord({ id: 'election-1' });
+        const renamed = pushSnapshot(original, {
+          ...original.current,
+          name: 'Renamed election',
+          version: 1,
+        });
+        await repo.create(original);
+        await repo.save(renamed, 0);
+
+        const found = await repo.get('election-1');
+
+        expect(found?.past).toEqual([original.current]);
       });
 
       it('is not affected by changes made to the object that was returned', async () => {
@@ -178,6 +195,36 @@ export function describeElectionRepositoryContract(
         const owner = await repo.findByVoterCode('BBBBBBBB');
 
         expect(owner).toEqual({ electionId: 'election-2', voterId: 'election-2:BBBBBBBB' });
+      });
+
+      it('indexes the code of every voter of an election', async () => {
+        const repo = await makeRepo();
+        const voterCodes = ['AAAAAAAA', 'BBBBBBBB', 'CCCCCCCC'];
+        await repo.create(anElectionRecord({ id: 'election-1', voterCodes }));
+
+        const owner = await repo.findByVoterCode('CCCCCCCC');
+
+        expect(owner).toEqual({ electionId: 'election-1', voterId: 'election-1:CCCCCCCC' });
+      });
+
+      it('keeps the indexed codes when a save is rejected', async () => {
+        const repo = await makeRepo();
+        await repo.create(
+          anElectionRecord({ id: 'election-1', voterCodes: ['AAAAAAAA'], version: 3 }),
+        );
+        await Promise.allSettled([
+          repo.save(
+            anElectionRecord({ id: 'election-1', voterCodes: ['BBBBBBBB'], version: 4 }),
+            2,
+          ),
+        ]);
+
+        const taken = {
+          kept: await repo.isCodeTaken('AAAAAAAA'),
+          rejected: await repo.isCodeTaken('BBBBBBBB'),
+        };
+
+        expect(taken).toEqual({ kept: true, rejected: false });
       });
 
       it('indexes codes of voters added by a later save', async () => {

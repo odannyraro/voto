@@ -1,4 +1,5 @@
 import type { Admin, AdminRepository } from '../ports';
+import { adminIdTaken, adminUsernameTaken } from './repository-errors';
 
 /** Repositório de admins em memória, para desenvolvimento e testes. */
 export class InMemoryAdminRepository implements AdminRepository {
@@ -33,9 +34,8 @@ export class InMemoryAdminRepository implements AdminRepository {
    * @throws {Error} Se o `id` ou o `username` já existirem.
    */
   async create(admin: Admin): Promise<void> {
-    if (this.admins.has(admin.id)) throw new Error(`Admin id ${admin.id} already exists`);
-    if (await this.findByUsername(admin.username))
-      throw new Error(`Admin username ${admin.username} already exists`);
+    if (this.admins.has(admin.id)) throw adminIdTaken(admin.id);
+    if (await this.findByUsername(admin.username)) throw adminUsernameTaken(admin.username);
     this.admins.set(admin.id, { ...admin });
   }
 }
