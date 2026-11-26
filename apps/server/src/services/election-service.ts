@@ -609,10 +609,7 @@ export class ElectionService {
       const result = undo(record);
       if (!result.ok) throw result.error;
 
-      const expectedVersion = record.current.version;
-      const restored = { ...result.value.current, version: expectedVersion + 1 };
-      const undone = { ...result.value, current: restored };
-      return this.persist(undone, expectedVersion, this.newContext());
+      return this.persist(record, result.value, this.newContext());
     });
   }
 
@@ -738,10 +735,9 @@ export class ElectionService {
     const settled = closeOverdueRound(record.current, ctx, toleranceMs);
     // Sem nada vencido, a mesma instância volta e não há o que gravar.
     if (settled === record.current) return record;
-    const next = nextElection(record, ok(settled));
     // Sem snapshot: com um, o desfazer reabriria a rodada vencida, o timer a fecharia de novo
     // e o admin nunca voltaria para antes dela.
-    return this.persist({ ...record, current: next }, record.current.version, ctx);
+    return this.persist(record, { ...record, current: settled }, ctx);
   }
 
   /**
@@ -768,11 +764,11 @@ export class ElectionService {
     // votos tolerados que chegaram depois e ainda aguardam.
     const arrival = { ...ctx, now: arrivedAt };
     const settled = closeOverdueRound(record.current, arrival, this.deps.voteGraceMs);
-    const next = nextElection(record, command(settled, ctx));
+    const next = orThrow(command(settled, ctx));
     // O passo do desfazer é só o comando: o snapshot já leva a rodada vencida fechada.
     const beforeCommand = { ...record, current: settled };
     const withSnapshot = pushSnapshot(beforeCommand, next, this.deps.historyLimit);
-    return this.persist(withSnapshot, record.current.version, ctx);
+    return this.persist(record, withSnapshot, ctx);
   }
 
   /**
@@ -796,33 +792,38 @@ export class ElectionService {
     const ctx = this.newContext();
     // Sem fechar o prazo vencido antes: um voto atrasado acharia a rodada já fechada e
     // viraria `ROUND_NOT_OPEN` (409) em vez de `ROUND_EXPIRED` (410). O domínio compara o prazo.
-    const next = nextElection(record, castVote(record.current, vote, { ...ctx, now: judgedAt }));
+    const next = orThrow(castVote(record.current, vote, { ...ctx, now: judgedAt }));
     // Sem snapshot: o desfazer é para os passos do admin. Um por voto expulsaria do histórico
     // (limitado) as decisões dele e faria cada voto regravar dezenas de cópias da eleição.
-    return this.persist({ ...record, current: next }, record.current.version, ctx);
+    return this.persist(record, { ...record, current: next }, ctx);
   }
 
   /**
    * Grava o registro novo e deixa o resto do sistema coerente com ele: reagenda o fechamento
    * e notifica admin e eleitores. Comum aos comandos, ao voto, ao fechamento por prazo e ao
-   * desfazer.
+   * desfazer, e o único lugar que numera as versões.
    *
-   * @param next - Registro a gravar, já com a versão incrementada.
-   * @param expectedVersion - Versão lida antes do comando (concorrência otimista).
+   * @param read - Registro lido antes da mudança; a versão dele é a conferida na gravação
+   *   (concorrência otimista).
+   * @param next - Registro a gravar (estado atual e histórico); a versão dele é ignorada.
    * @param ctx - Contexto do comando; o instante vira a hora do servidor nas notificações.
-   * @returns O mesmo registro, já salvo.
+   * @returns O registro salvo, com a versão seguinte à lida.
    * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
    */
   private async persist(
+    read: ElectionRecord,
     next: ElectionRecord,
-    expectedVersion: number,
     ctx: DomainContext,
   ): Promise<ElectionRecord> {
-    await this.deps.electionRepository.save(next, expectedVersion);
+    const expectedVersion = read.current.version;
+    // Sempre a seguinte à lida, inclusive no desfazer: se a versão voltasse no tempo, um
+    // cliente com dados velhos escreveria sem `VERSION_CONFLICT`.
+    const saved = { ...next, current: { ...next.current, version: expectedVersion + 1 } };
+    await this.deps.electionRepository.save(saved, expectedVersion);
 
-    this.rescheduleClosing(next.current);
-    this.notifyAll(next, ctx.now);
-    return next;
+    this.rescheduleClosing(saved.current);
+    this.notifyAll(saved, ctx.now);
+    return saved;
   }
 
   /**
@@ -934,17 +935,16 @@ function fixedCodes(codes: readonly string[]): CodeGenerator {
 }
 
 /**
- * Prepara para gravação o estado que um comando do domínio produziu: recusa antes de qualquer
- * escrita o que o domínio recusou e dá ao estado a versão seguinte à lida.
+ * Recusa antes de qualquer escrita o que o domínio recusou: o erro de negócio sobe para a
+ * borda HTTP, que o traduz no status da §6.3.
  *
- * @param record - Registro lido do repositório, antes do comando.
- * @param result - Resultado do comando sobre a eleição atual.
- * @returns A eleição a gravar.
+ * @param result - Resultado de um comando do domínio sobre a eleição atual.
+ * @returns A eleição produzida pelo comando.
  * @throws {DomainError} O erro de negócio de `result`, se houver.
  */
-function nextElection(record: ElectionRecord, result: Result<Election>): Election {
+function orThrow(result: Result<Election>): Election {
   if (!result.ok) throw result.error;
-  return { ...result.value, version: record.current.version + 1 };
+  return result.value;
 }
 
 /**
