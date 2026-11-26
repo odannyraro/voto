@@ -100,7 +100,7 @@ agrupadas em um único commit.
 | C3 | Divide-se: transporte/erro e API pública podem ser validados separadamente | `[x] C3.a` núcleo de `fetch` e `ErrorDTO`; `[x] C3.b` métodos tipados de cada grupo de rotas |
 | C4 | Divide-se: o cliente real e a injeção por fake têm responsabilidades independentes | `[x] C4.a` interface e cliente Socket.IO; `[x] C4.b` `SocketProvider` e `createFakeSocket()` |
 | C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[x] C5.a` countdown corrigido por `serverNow`; `[x] C5.b` porcentagens e rótulos |
-| C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[ ] C6.a` diálogos de confirmação; `[ ] C6.b` `Countdown` e `ErrorMessage` |
+| C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[x] C6.a` diálogos de confirmação; `[ ] C6.b` `Countdown` e `ErrorMessage` |
 | C7 | Divide-se: formulário/rota e integração da sessão são dois comportamentos fechados | `[ ] C7.a` formulário e armazenamento do token; `[ ] C7.b` navegação e erros da sessão |
 | C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[ ] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[ ] C8.b` cédula e voto candidato/branco |
 | C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[ ] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[ ] C9.b` reconexão e ordenação de estado |
@@ -142,6 +142,8 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/api/public-api.ts` → consulta pública de saúde da API.
 - `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado e listeners removíveis.
 - `apps/web/src/api/socket-provider.tsx` → contexto de estado realtime com criação/limpeza do cliente por sessão.
+- `apps/web/src/components/ConfirmDialog.tsx` e `DoubleConfirmDialog.tsx` → diálogos acessíveis de confirmação simples e por título exato.
+- `apps/web/src/components/Countdown.tsx` e `ErrorMessage.tsx` → timer acessível sincronizado ao servidor e mensagem acessível de erro da API.
 - `apps/web/src/lib/countdown.ts` → cálculo puro dos segundos restantes com deslocamento do relógio do servidor.
 - `apps/web/src/lib/format.ts` → percentual de votos válidos e rótulos legíveis das regras de desempate.
 - `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
@@ -151,6 +153,8 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/utils/fake-socket.ts` → fake injetável com controle de conexão, eventos e eleições observadas.
 - `apps/web/test/socket-provider.test.tsx` e `fake-socket.test.ts` → estado do contexto, descarte e ciclo de vida do fake.
 - `apps/web/test/countdown.test.ts` → prazo futuro, limites, expiração, offset de relógio e datas inválidas.
+- `apps/web/test/confirmation-dialogs.test.tsx` → comportamento, acessibilidade, cancelamento e título exato dos diálogos.
+- `apps/web/test/reusable-status-components.test.tsx` → atualização/expiração do timer e anúncio do código/mensagem de erro.
 - `apps/web/test/format.test.ts` → porcentagens, zero votos válidos, arredondamento e rótulos de desempate.
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
@@ -318,23 +322,37 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/format.test.ts` (13 casos de zero, arredondamento, unanimidade, valores inválidos e todos os rótulos).
 - Decisões: percentuais são arredondados ao inteiro mais próximo; somente `0/0` representa legitimamente 0% quando não há votos válidos.
 
-### [ ] C6.a — Diálogos de confirmação
+### [x] C6.a — Diálogos de confirmação
 **Ref.:** architecture §9 e regra de dupla confirmação.
 **Depende de:** C2.b.
 **Fazer:** criar `ConfirmDialog` e `DoubleConfirmDialog` acessíveis; o segundo exige título exato.
 **Testes (escrever antes):** confirmar/cancelar, nome vazio/diferente/exato.
 **Pronto quando:** cancelamento e confirmação são acionados por callbacks explícitos.
-**Arquivos:** `apps/web/src/components/ConfirmDialog.tsx`, `DoubleConfirmDialog.tsx`.
+**Arquivos:** `apps/web/src/components/ConfirmDialog.tsx`, `DoubleConfirmDialog.tsx`,
+`apps/web/test/confirmation-dialogs.test.tsx`.
 **Commit sugerido:** `feat(web): cria diálogos simples e de dupla confirmação`
+**Notas do agente:**
+- Feito: diálogos acessíveis delegam confirmação/cancelamento por callbacks; a confirmação dupla mantém o botão desabilitado até o título digitado corresponder exatamente.
+- Arquivos: `apps/web/src/components/ConfirmDialog.tsx`, `DoubleConfirmDialog.tsx`, `apps/web/test/confirmation-dialogs.test.tsx`.
+- Como usar: renderize com `open`, título/descrição e callbacks; para ação destrutiva, forneça `confirmationTitle` ao `DoubleConfirmDialog`.
+- Testes: `apps/web/test/confirmation-dialogs.test.tsx` (10 casos: semântica acessível, aberto/fechado, confirmação/cancelamento, vazio, diferenças de caixa/espaço, correspondência exata e reset ao trocar o título esperado).
+- Decisões: correspondência é literal e sensível a caixa e espaços, conforme a regra de título exato; ao fechar ou trocar o título esperado, o texto de confirmação é limpo.
 
-### [ ] C6.b — Countdown e mensagem de erro
+### [x] C6.b — Countdown e mensagem de erro
 **Ref.:** architecture §9.
 **Depende de:** C5.b.
 **Fazer:** criar componentes acessíveis `Countdown` e `ErrorMessage`.
 **Testes (escrever antes):** countdown atualiza/vence; erro mostra código e mensagem legível.
 **Pronto quando:** componentes reutilizáveis passam pelos seletores de role/label.
-**Arquivos:** `apps/web/src/components/Countdown.tsx`, `ErrorMessage.tsx`.
+**Arquivos:** `apps/web/src/components/Countdown.tsx`, `ErrorMessage.tsx`,
+`apps/web/test/reusable-status-components.test.tsx`.
 **Commit sugerido:** `feat(web): cria countdown e mensagens de erro reutilizáveis`
+**Notas do agente:**
+- Feito: `Countdown` atualiza a cada segundo com o cálculo sincronizado ao servidor e para em zero; `ErrorMessage` anuncia o código e a mensagem do `ErrorDTO`.
+- Arquivos: `apps/web/src/components/Countdown.tsx`, `ErrorMessage.tsx`, `apps/web/test/reusable-status-components.test.tsx`.
+- Como usar: forneça ao `Countdown` `clock` com prazo, horário do servidor e instante local de sincronização; passe o `ErrorDTO` completo a `ErrorMessage`.
+- Testes: `apps/web/test/reusable-status-components.test.tsx` (3 casos: atualização, expiração e anúncio acessível do erro).
+- Decisões: a contagem usa o helper puro `getRemainingSeconds`; o timer acessível apresenta `MM:SS`, e o erro usa `role="alert"`.
 
 ### [ ] C7.a — Formulário de entrada do eleitor
 **Ref.:** architecture §9 rota `/`.
