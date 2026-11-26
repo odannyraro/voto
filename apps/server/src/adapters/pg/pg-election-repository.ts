@@ -88,11 +88,11 @@ export class PgElectionRepository implements ElectionRepository {
    * Lista as eleições de um admin.
    *
    * @param adminId - Id do admin dono.
-   * @returns Os registros desse admin, sem ordem garantida.
+   * @returns Os registros desse admin, na ordem de criação.
    */
   async listByAdmin(adminId: string): Promise<ElectionRecord[]> {
     const { rows } = await this.pool.query<RecordRow>(
-      'SELECT record FROM elections WHERE admin_id = $1',
+      'SELECT record FROM elections WHERE admin_id = $1 ORDER BY creation_order',
       [adminId],
     );
     return rows.map((row) => row.record);
@@ -101,10 +101,12 @@ export class PgElectionRepository implements ElectionRepository {
   /**
    * Lista todas as eleições.
    *
-   * @returns Todos os registros, sem ordem garantida.
+   * @returns Todos os registros, na ordem de criação.
    */
   async listAll(): Promise<ElectionRecord[]> {
-    const { rows } = await this.pool.query<RecordRow>('SELECT record FROM elections');
+    const { rows } = await this.pool.query<RecordRow>(
+      'SELECT record FROM elections ORDER BY creation_order',
+    );
     return rows.map((row) => row.record);
   }
 

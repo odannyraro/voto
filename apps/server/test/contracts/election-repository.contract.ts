@@ -168,6 +168,41 @@ export function describeElectionRepositoryContract(
       });
     });
 
+    describe.each([
+      ['listByAdmin', (repo: ElectionRepository) => repo.listByAdmin('admin-1')],
+      ['listAll', (repo: ElectionRepository) => repo.listAll()],
+    ])('order of %s', (_listing, list) => {
+      /**
+       * Cria um repositório com três eleições do mesmo admin, em uma ordem que não é a dos ids.
+       *
+       * @returns O repositório com `charlie`, `alpha` e `bravo`, criadas nessa ordem.
+       */
+      async function repositoryWithThreeElections(): Promise<ElectionRepository> {
+        const repo = await makeRepo();
+        await repo.create(anElectionRecord({ id: 'charlie' }));
+        await repo.create(anElectionRecord({ id: 'alpha' }));
+        await repo.create(anElectionRecord({ id: 'bravo' }));
+        return repo;
+      }
+
+      it('is the order in which the elections were created', async () => {
+        const repo = await repositoryWithThreeElections();
+
+        const listed = await list(repo);
+
+        expect(listed.map((record) => record.current.id)).toEqual(['charlie', 'alpha', 'bravo']);
+      });
+
+      it('does not change when an earlier election is saved again', async () => {
+        const repo = await repositoryWithThreeElections();
+        await repo.save(anElectionRecord({ id: 'charlie', version: 1 }), 0);
+
+        const listed = await list(repo);
+
+        expect(listed.map((record) => record.current.id)).toEqual(['charlie', 'alpha', 'bravo']);
+      });
+    });
+
     describe('voter codes', () => {
       it('finds the election and voter that own a code', async () => {
         const repo = await makeRepo();

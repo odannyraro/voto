@@ -132,7 +132,7 @@ export class ElectionService {
    * Lista as eleições do admin, em formato resumido, para a tela inicial dele.
    *
    * @param adminId - Admin autenticado; só as eleições dele aparecem.
-   * @returns Um resumo por eleição (vazio se ele ainda não criou nenhuma).
+   * @returns Um resumo por eleição, na ordem de criação (vazio se ele ainda não criou nenhuma).
    */
   async listElections(adminId: string): Promise<ElectionSummaryDTO[]> {
     const records = await this.deps.electionRepository.listByAdmin(adminId);

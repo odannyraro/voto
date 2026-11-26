@@ -54,7 +54,8 @@ export class InMemoryElectionRepository implements ElectionRepository {
    * Lista as eleições de um admin.
    *
    * @param adminId - Id do admin dono.
-   * @returns Cópias dos registros desse admin.
+   * @returns Cópias dos registros desse admin, na ordem de criação (a do `Map`, que mantém a
+   *   posição de uma chave regravada).
    */
   listByAdmin(adminId: string): Promise<ElectionRecord[]> {
     const mine = [...this.records.values()].filter((record) => record.current.adminId === adminId);
@@ -64,7 +65,7 @@ export class InMemoryElectionRepository implements ElectionRepository {
   /**
    * Lista todas as eleições.
    *
-   * @returns Cópias de todos os registros.
+   * @returns Cópias de todos os registros, na ordem de criação.
    */
   listAll(): Promise<ElectionRecord[]> {
     return Promise.resolve(structuredClone([...this.records.values()]));

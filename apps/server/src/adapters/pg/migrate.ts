@@ -1,15 +1,18 @@
 import type { SqlExecutor } from './sql';
 
 // architecture.md §13: a eleição inteira (com o histórico do desfazer) fica numa coluna
-// JSONB; as demais colunas existem para filtrar e para o controle de concorrência.
+// JSONB; as demais colunas existem para filtrar, ordenar e controlar a concorrência.
 const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS admins (
     id TEXT PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL
   )`,
+  // `creation_order` é preenchida pelo banco no `INSERT` e dá a ordem das listagens: sem
+  // ela, o Postgres devolve as linhas numa ordem que muda a cada `UPDATE`.
   `CREATE TABLE IF NOT EXISTS elections (
     id TEXT PRIMARY KEY,
+    creation_order SERIAL,
     admin_id TEXT NOT NULL,
     version INTEGER NOT NULL,
     record JSONB NOT NULL
