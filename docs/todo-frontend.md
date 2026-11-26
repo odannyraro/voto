@@ -106,7 +106,7 @@ agrupadas em um único commit.
 | C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[x] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[x] C9.b` reconexão e ordenação de estado |
 | C10 | Login, identidade, proteção de rotas e logout fecham a autenticação do admin | `[x] C10.a` login, token e `/admin/me`; `[x] C10.b` rotas protegidas e logout |
 | C11 | Divide-se: leitura da lista e mutação/criação têm UI e testes distintos | `[x] C11.a` lista de eleições; `[x] C11.b` criação e navegação |
-| C12 | Divide-se: adicionar/editar cargos não inclui remover e confirmar | `[ ] C12.a` criar e editar cargos; `[ ] C12.b` remover cargo e confirmar estado permitido |
+| C12 | Divide-se: adicionar/editar cargos não inclui remover e confirmar | `[x] C12.a` criar e editar cargos; `[x] C12.b` remover cargo e confirmar estado permitido |
 | C13 | Divide-se: cadastro/validação e edição/removal têm casos próprios | `[ ] C13.a` criar candidato e validações; `[ ] C13.b` editar/remover candidato |
 | C14 | Divide-se: eleitores e fila são abas independentes com contratos próprios | `[ ] C14.a` gerar, listar, copiar e revogar códigos; `[ ] C14.b` ordem, sugestão e confirmação |
 | C15 | Divide-se: sincronização via socket e controles ao vivo podem ser validados separadamente | `[ ] C15.a` `useAdminElection` e ressincronização; `[ ] C15.b` abrir rodada, prazo e fechar antes |
@@ -145,7 +145,8 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/features/admin/auth/RequireAdmin.tsx` → protege as rotas administrativas após validar a identidade.
 - `apps/web/src/features/admin/auth/AdminDashboardPage.tsx` → exibe identidade autenticada, lista de eleições e logout.
 - `apps/web/src/features/admin/elections/AdminElectionsPage.tsx` → carrega resumos, apresenta estados/contagens e cria eleições com validação compartilhada.
-- `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx` → destino protegido da navegação para configuração da eleição criada.
+- `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx` → carrega o agregado completo da eleição e integra sua configuração.
+- `apps/web/src/features/admin/config/PositionsTab.tsx` → lista, cria, edita e remove cargos respeitando fila, confirmação e estado devolvido pela API.
 - `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado, listeners removíveis e reconexão após entrada no namespace.
 - `apps/web/src/api/socket-provider.tsx` → contexto realtime com criação/limpeza do cliente por sessão e inscrição em snapshots e reconexão.
 - `apps/web/src/components/ConfirmDialog.tsx` e `DoubleConfirmDialog.tsx` → diálogos acessíveis de confirmação simples e por título exato.
@@ -170,6 +171,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/voter-entry-page.test.tsx` → validação local, normalização do código, início de sessão e erros da API.
 - `apps/web/test/admin-auth.test.tsx` → login, identidade, restauração, rotas protegidas, credenciais inválidas e logout.
 - `apps/web/test/admin-elections.test.tsx` → lista vazia e preenchida, falhas de API, validação de prazo e criação/navegação.
+- `apps/web/test/admin-position-config.test.tsx` → criação no fim da fila, validação, edição, cancelamento e remoção confirmada ou rejeitada.
 - `apps/web/test/voter-session.test.tsx` → carregamento inicial e remontagem, ordenação de socket/REST, reconexão, erros e credenciais persistidas.
 - `apps/web/test/voter-vote-page.test.tsx` → voto candidato/branco, cliques duplicados, erros de rodada e countdown.
 - `apps/web/test/voter-final-state.test.tsx` → fases finais, desfechos do resultado e contagens sem cálculo local.
@@ -523,9 +525,9 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Arquivos: `apps/web/src/features/admin/elections/AdminElectionsPage.tsx`, `AdminElectionConfigurationPage.tsx`, `apps/web/src/App.tsx`, `apps/web/test/admin-elections.test.tsx`.
 - Como usar: informe o nome e, se necessário, ajuste o prazo entre 5 e 3600 segundos; após criar, a aplicação abre `/admin/eleicoes/:id/configurar`.
 - Testes: `apps/web/test/admin-elections.test.tsx` (8 casos de criação: nome vazio, prazos inválidos, limites válidos, sucesso/navegação e erro da API); `apps/web/test/admin-auth.test.tsx` atualiza a verificação de rota administrativa protegida.
-- Decisões: C12 ainda implementará os controles de configuração; a rota criada confirma o destino e apresenta o identificador da eleição.
+- Decisões: a rota busca o agregado via REST para manter a configuração vinculada ao estado persistido da eleição.
 
-### [ ] C12.a — Criar e editar cargos
+### [x] C12.a — Criar e editar cargos
 **Ref.:** architecture §6.1 e §5.3.
 **Depende de:** C11.b.
 **Fazer:** criar aba Cargos com título e desempate; atualizar cargo via DTO completo.
@@ -533,8 +535,14 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** cargos são criados/editados sem recarregar estado manualmente.
 **Arquivos:** `apps/web/src/features/admin/config/`.
 **Commit sugerido:** `feat(web): cria e edita cargos da eleição`
+**Notas do agente:**
+- Feito: a configuração carrega cargos na ordem da fila do servidor, cria novos cargos no fim e permite editar título e regra de desempate.
+- Arquivos: `apps/web/src/features/admin/config/PositionsTab.tsx`, `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx`, `apps/web/test/admin-position-config.test.tsx`.
+- Como usar: acesse a configuração de uma eleição e use os formulários de cargos; o estado é substituído pelo agregado completo retornado pela API.
+- Testes: `apps/web/test/admin-position-config.test.tsx` (3 casos: criação no fim da fila, título vazio e edição de título/desempate).
+- Decisões: schema compartilhado valida e normaliza os dados; a ordem exibida segue `election.queue`, sem reordenamento local especulativo.
 
-### [ ] C12.b — Remover cargos
+### [x] C12.b — Remover cargos
 **Ref.:** architecture §6.1.
 **Depende de:** C12.a.
 **Fazer:** confirmar remoção e respeitar estados retornados pela API.
@@ -542,6 +550,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** remoção usa confirmação acessível e estado real do servidor.
 **Arquivos:** `apps/web/src/features/admin/config/`.
 **Commit sugerido:** `feat(web): remove cargos com confirmação`
+**Notas do agente:**
+- Feito: remoção pede confirmação explícita, aplica somente a resposta completa do servidor e preserva o cargo enquanto exibe erros de estado inválido.
+- Arquivos: `apps/web/src/features/admin/config/PositionsTab.tsx`, `apps/web/test/admin-position-config.test.tsx`.
+- Como usar: selecione Remover no cargo e confirme; cancelar não altera o estado, e rejeições da API são apresentadas em alerta acessível.
+- Testes: `apps/web/test/admin-position-config.test.tsx` (3 casos: cancelar, remover com sucesso e rejeição da API sem remoção local).
+- Decisões: a elegibilidade da remoção fica sob autoridade do servidor; a interface não faz remoção otimista.
 
 ### [ ] C13.a — Criar candidato
 **Ref.:** architecture §6.1 e §5.4.

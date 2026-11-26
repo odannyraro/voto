@@ -41,6 +41,16 @@ beforeEach(() => {
   mockApi.use(
     http.get('*/api/admin/me', () => HttpResponse.json({ id: 'admin-1', username: 'admin' })),
     http.get('*/api/elections', () => HttpResponse.json(elections)),
+    http.get('*/api/elections/:id', ({ params }) =>
+      HttpResponse.json(
+        makeAdminElectionDTO({
+          election: {
+            ...makeAdminElectionDTO().election,
+            id: String(params.id),
+          },
+        }),
+      ),
+    ),
     http.post('*/api/elections', async ({ request }) => {
       createdBody = (await request.json()) as CreateElectionBody;
       const createdElection = makeAdminElectionDTO({
