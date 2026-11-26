@@ -7,11 +7,12 @@ import { App } from '../src/App';
 import { renderWithProviders } from './utils/render-with-providers';
 
 afterEach(() => {
+  sessionStorage.clear();
   vi.restoreAllMocks();
 });
 
 describe('VoterEntryPage', () => {
-  it('starts a voter session with the normalized eight-character code', async () => {
+  it('persists the voter session and navigates to its page after the code is accepted', async () => {
     const createSession = vi.spyOn(voterApi, 'createSession').mockResolvedValue({
       token: 'voter-token',
       electionId: 'election-1',
@@ -23,7 +24,15 @@ describe('VoterEntryPage', () => {
     await user.type(screen.getByRole('textbox', { name: 'Voter code' }), 'abc23456');
     await user.click(screen.getByRole('button', { name: 'Enter' }));
 
-    expect(createSession).toHaveBeenCalledWith({ code: 'ABC23456' });
+    expect({
+      request: createSession.mock.calls[0]?.[0],
+      storedSession: sessionStorage.getItem('voto:voter-session'),
+      destination: screen.queryByRole('heading', { name: 'Voter session' }) !== null,
+    }).toEqual({
+      request: { code: 'ABC23456' },
+      storedSession: JSON.stringify({ token: 'voter-token', electionId: 'election-1' }),
+      destination: true,
+    });
   });
 
   it.each(['', 'ABC2345', 'ABC234567'])(
@@ -48,18 +57,40 @@ describe('VoterEntryPage', () => {
     },
   );
 
-  it('announces an API error when the code is rejected', async () => {
-    vi.spyOn(voterApi, 'createSession').mockRejectedValue(
-      new ApiError(404, { code: 'INVALID_CODE', message: 'Invalid voter code' }),
-    );
-    const user = userEvent.setup();
-    renderWithProviders(<App />);
+  it.each([
+    {
+      status: 404,
+      code: 'INVALID_CODE',
+      apiMessage: 'Unknown voter code',
+      message: 'This voter code is invalid or does not exist.',
+    },
+    {
+      status: 403,
+      code: 'VOTER_REVOKED',
+      apiMessage: 'This voter code was revoked',
+      message: 'This voter code has been revoked. Contact the election administrator.',
+    },
+  ] as const)(
+    'shows a distinct message when the API rejects a code with $code',
+    async ({ status, code, apiMessage, message }) => {
+      vi.spyOn(voterApi, 'createSession').mockRejectedValue(
+        new ApiError(status, { code, message: apiMessage }),
+      );
+      const user = userEvent.setup();
+      renderWithProviders(<App />);
 
-    await user.type(screen.getByRole('textbox', { name: 'Voter code' }), 'ABC23456');
-    await user.click(screen.getByRole('button', { name: 'Enter' }));
+      await user.type(screen.getByRole('textbox', { name: 'Voter code' }), 'ABC23456');
+      await user.click(screen.getByRole('button', { name: 'Enter' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/INVALID_CODE.*Invalid voter code/);
-  });
+      expect({
+        alert: screen.getByRole('alert').textContent,
+        storedSession: sessionStorage.getItem('voto:voter-session'),
+      }).toEqual({
+        alert: `${code}${message}`,
+        storedSession: null,
+      });
+    },
+  );
 
   it('shows a readable message when the session request cannot reach the API', async () => {
     vi.spyOn(voterApi, 'createSession').mockRejectedValue(new TypeError('Network unavailable'));

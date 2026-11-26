@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { Route, Routes } from 'react-router';
 import { VoterEntryPage } from './features/voter/VoterEntryPage';
+import { VoterSessionPage } from './features/voter/VoterSessionPage';
 
 /**
  * Raiz da aplicação: declara a tabela de rotas (architecture.md §9). O roteador
@@ -13,6 +14,7 @@ export function App(): ReactElement {
   return (
     <Routes>
       <Route path="/" element={<VoterEntryPage />} />
+      <Route path="/votar" element={<VoterSessionPage />} />
     </Routes>
   );
 }

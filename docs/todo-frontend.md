@@ -101,7 +101,7 @@ agrupadas em um único commit.
 | C4 | Divide-se: o cliente real e a injeção por fake têm responsabilidades independentes | `[x] C4.a` interface e cliente Socket.IO; `[x] C4.b` `SocketProvider` e `createFakeSocket()` |
 | C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[x] C5.a` countdown corrigido por `serverNow`; `[x] C5.b` porcentagens e rótulos |
 | C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[x] C6.a` diálogos de confirmação; `[x] C6.b` `Countdown` e `ErrorMessage` |
-| C7 | Divide-se: entrada e integração da sessão são dois comportamentos fechados | `[x] C7.a` formulário e criação de sessão; `[ ] C7.b` persistência, navegação e erros da sessão |
+| C7 | Divide-se: entrada e integração da sessão são dois comportamentos fechados | `[x] C7.a` formulário e criação de sessão; `[x] C7.b` persistência, navegação e erros da sessão |
 | C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[ ] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[ ] C8.b` cédula e voto candidato/branco |
 | C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[ ] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[ ] C9.b` reconexão e ordenação de estado |
 | C10 | Divide-se: login em si não exige a proteção de toda a árvore de rotas | `[ ] C10.a` login, token e `/admin/me`; `[ ] C10.b` rotas protegidas e logout |
@@ -145,6 +145,8 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/components/ConfirmDialog.tsx` e `DoubleConfirmDialog.tsx` → diálogos acessíveis de confirmação simples e por título exato.
 - `apps/web/src/components/Countdown.tsx` e `ErrorMessage.tsx` → timer acessível sincronizado ao servidor e mensagem acessível de erro da API.
 - `apps/web/src/features/voter/VoterEntryPage.tsx` → entrada acessível do eleitor, validação do código e início de sessão.
+- `apps/web/src/features/voter/voter-session-storage.ts` → persiste somente token e electionId na sessão da aba.
+- `apps/web/src/features/voter/VoterSessionPage.tsx` → destino da navegação após iniciar sessão do eleitor.
 - `apps/web/src/lib/countdown.ts` → cálculo puro dos segundos restantes com deslocamento do relógio do servidor.
 - `apps/web/src/lib/format.ts` → percentual de votos válidos e rótulos legíveis das regras de desempate.
 - `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
@@ -372,14 +374,21 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/voter-entry-page.test.tsx` (6 casos: código válido, vazio, abaixo/acima do limite, rejeição da API e falha de rede); `apps/web/test/App.test.tsx` (2 casos).
 - Decisões: a normalização e o limite seguem `voterSessionBodySchema`; persistência de token/electionId e navegação ficam para C7.b, conforme o escopo detalhado dessa subtarefa.
 
-### [ ] C7.b — Erros e navegação da sessão do eleitor
+### [x] C7.b — Erros e navegação da sessão do eleitor
 **Ref.:** architecture §6.2.
 **Depende de:** C7.a.
 **Fazer:** guardar token/electionId, navegar para `/votar` e mapear `INVALID_CODE`/`VOTER_REVOKED`.
 **Testes (escrever antes):** sucesso navega; inválido e revogado mostram mensagens distintas.
 **Pronto quando:** sessão criada é persistida apenas no que a UI precisa para continuar.
-**Arquivos:** `apps/web/src/features/voter/`.
+**Arquivos:** `apps/web/src/features/voter/`, `apps/web/src/App.tsx`,
+`apps/web/test/voter-entry-page.test.tsx`.
 **Commit sugerido:** `feat(web): integra a sessão do eleitor à tela de voto`
+**Notas do agente:**
+- Feito: após a API aceitar o código, a aplicação persiste token/electionId em `sessionStorage` e navega para `/votar`; códigos inválido e revogado recebem mensagens específicas.
+- Arquivos: `apps/web/src/features/voter/VoterEntryPage.tsx`, `VoterSessionPage.tsx`, `voter-session-storage.ts`, `apps/web/src/App.tsx`, `apps/web/test/voter-entry-page.test.tsx`.
+- Como usar: uma sessão válida abre `/votar`; a credencial da sessão fica restrita à aba e inclui apenas token e electionId.
+- Testes: `apps/web/test/voter-entry-page.test.tsx` (3 casos novos cobrindo persistência/navegação, `INVALID_CODE` e `VOTER_REVOKED`; 7 casos no arquivo).
+- Decisões: `sessionStorage` limita as credenciais à aba atual; somente os campos necessários para retomar o fluxo são persistidos, sem armazenar o nome da eleição.
 
 ### [ ] C8.a — Hook da sessão e fase WAITING
 **Ref.:** architecture §6.2 e §7.

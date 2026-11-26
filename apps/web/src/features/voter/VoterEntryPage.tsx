@@ -4,6 +4,35 @@ import type { ChangeEvent, FormEvent, ReactElement } from 'react';
 import { ApiError } from '../../api/api-client';
 import { voterApi } from '../../api/voter-api';
 import { ErrorMessage } from '../../components/ErrorMessage';
+import { useNavigate } from 'react-router';
+import { saveVoterSession } from './voter-session-storage';
+
+/**
+ * Substitui mensagens técnicas por instruções claras nos erros de entrada conhecidos.
+ *
+ * @param error - Erro validado recebido ao solicitar uma sessão de eleitor.
+ * @returns DTO com mensagem específica para código inválido/revogado ou o erro original.
+ */
+function mapVoterSessionError(error: ApiError): ErrorDTO | undefined {
+  if (error.error === undefined) {
+    return undefined;
+  }
+
+  if (error.error.code === 'INVALID_CODE') {
+    return { error: { ...error.error, message: 'This voter code is invalid or does not exist.' } };
+  }
+
+  if (error.error.code === 'VOTER_REVOKED') {
+    return {
+      error: {
+        ...error.error,
+        message: 'This voter code has been revoked. Contact the election administrator.',
+      },
+    };
+  }
+
+  return { error: error.error };
+}
 
 /**
  * Permite que um eleitor inicie uma sessão usando seu código de acesso.
@@ -11,6 +40,7 @@ import { ErrorMessage } from '../../components/ErrorMessage';
  * @returns Formulário acessível para entrar em uma eleição.
  */
 export function VoterEntryPage(): ReactElement {
+  const navigate = useNavigate();
   const [code, setCode] = useState('');
   const [validationMessage, setValidationMessage] = useState<string>();
   const [requestError, setRequestError] = useState<ErrorDTO>();
@@ -50,11 +80,17 @@ export function VoterEntryPage(): ReactElement {
 
     setIsSubmitting(true);
     try {
-      await voterApi.createSession(parsedBody.data);
-      setRequestMessage('Session created.');
+      const session = await voterApi.createSession(parsedBody.data);
+      saveVoterSession({ token: session.token, electionId: session.electionId });
+      navigate('/votar', { replace: true });
     } catch (error: unknown) {
-      if (error instanceof ApiError && error.error !== undefined) {
-        setRequestError({ error: error.error });
+      if (error instanceof ApiError) {
+        const mappedError = mapVoterSessionError(error);
+        if (mappedError !== undefined) {
+          setRequestError(mappedError);
+        } else {
+          setRequestMessage('Unable to start your session. Please try again.');
+        }
       } else {
         setRequestMessage('Unable to start your session. Please try again.');
       }
