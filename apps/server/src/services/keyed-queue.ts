@@ -28,10 +28,7 @@ export class KeyedQueue {
    */
   async run<T>(key: string, task: () => Promise<T>): Promise<T> {
     const previous = this.tails.get(key);
-    let finish: () => void = () => undefined;
-    const turn = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
+    const { promise: turn, resolve: finish } = Promise.withResolvers<void>();
     // Entra na fila antes de qualquer espera, para a ordem ser a de chegada.
     this.tails.set(key, turn);
 

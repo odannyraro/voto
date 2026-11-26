@@ -6,6 +6,8 @@ const TEN_SECONDS_MS = 10_000;
 // Maior atraso que o `setTimeout` aceita; acima disso o Node dispara na hora.
 const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 const ONE_SECOND_MS = 1000;
+// Um prazo além do limite acorda primeiro no limite, só para rearmar o que falta.
+const FIRST_WAKE_UP_OF_A_FAR_TASK = new Date(START.getTime() + MAX_TIMER_DELAY_MS);
 
 /**
  * Instante `ms` milissegundos depois do relógio simulado.
@@ -120,6 +122,14 @@ describe('TimeoutScheduler', () => {
       vi.advanceTimersByTime(MAX_TIMER_DELAY_MS + ONE_SECOND_MS);
 
       expect(task).toHaveBeenCalledOnce();
+    });
+
+    it('sleeps until the timer limit, instead of waking up every millisecond, for a far moment', () => {
+      scheduler.schedule(inMs(MAX_TIMER_DELAY_MS + ONE_SECOND_MS), 'k', vi.fn());
+
+      vi.advanceTimersToNextTimer();
+
+      expect(new Date()).toEqual(FIRST_WAKE_UP_OF_A_FAR_TASK);
     });
   });
 

@@ -1,7 +1,9 @@
+import type { Voter } from '@voto/shared';
 import { describe, expect, it } from 'vitest';
 import { PgElectionRepository } from '../../../src/adapters/pg/pg-election-repository';
 import { describeElectionRepositoryContract } from '../../contracts/election-repository.contract';
 import { createMigratedPgMemPool } from '../../doubles/pg-mem-pool';
+import { RecordingSqlPool } from '../../doubles/recording-sql-pool';
 import { anElectionRecord } from '../../support/election-records';
 
 describeElectionRepositoryContract(
@@ -79,5 +81,48 @@ describe('PgElectionRepository', () => {
     const owner = await repo.findByVoterCode('BBBBBBBB');
 
     expect(owner).toEqual({ electionId: 'election-2', voterId: 'election-2:BBBBBBBB' });
+  });
+});
+
+describe('PgElectionRepository voter codes on save', () => {
+  // Cada voto regrava a eleição; reescrever todos os códigos junto custaria 2 comandos e
+  // milhares de linhas por voto numa eleição grande.
+  it('does not rewrite the voter codes when a save keeps the same voters', async () => {
+    const database = await createMigratedPgMemPool();
+    await new PgElectionRepository(database).create(
+      anElectionRecord({ id: 'election-1', voterCodes: ['AAAAAAAA', 'BBBBBBBB'] }),
+    );
+    const recorder = new RecordingSqlPool(database);
+
+    await new PgElectionRepository(recorder).save(
+      anElectionRecord({ id: 'election-1', voterCodes: ['AAAAAAAA', 'BBBBBBBB'], version: 1 }),
+      0,
+    );
+
+    expect(recorder.statements).not.toContainEqual(
+      expect.stringMatching(/^(DELETE FROM|INSERT INTO) voter_codes/),
+    );
+  });
+
+  it('moves a code to the voter who now holds it in the same election', async () => {
+    // Um código liberado (credenciamento desfeito) pode ser sorteado de novo para outro eleitor.
+    const repo = new PgElectionRepository(await createMigratedPgMemPool());
+    const original = anElectionRecord({ id: 'election-1', voterCodes: ['AAAAAAAA'] });
+    await repo.create(original);
+    const reissuedVoter: Voter = {
+      id: 'election-1:REISSUED',
+      code: 'AAAAAAAA',
+      status: 'CREDENTIALED',
+    };
+
+    await repo.save(
+      { ...original, current: { ...original.current, voters: [reissuedVoter], version: 1 } },
+      0,
+    );
+
+    expect(await repo.findByVoterCode('AAAAAAAA')).toEqual({
+      electionId: 'election-1',
+      voterId: 'election-1:REISSUED',
+    });
   });
 });

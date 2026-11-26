@@ -98,4 +98,29 @@ describe('registerStatic', () => {
 
     expect(response.body).toBe(INDEX_HTML);
   });
+
+  // Uma aba aberta antes de um deploy pede o arquivo do build antigo: com a página de entrada
+  // no lugar, o navegador tentaria rodar HTML como JavaScript.
+  it.each([
+    ['a build file that no longer exists', '/assets/app-old.js'],
+    ['a missing file asked with a query string', '/assets/app-old.js?v=2'],
+  ])('answers %s with 404 NOT_FOUND in JSON', async (_case, url) => {
+    app = appServingTheFrontend();
+
+    const response = await app.inject({ method: 'GET', url });
+
+    expect(response.statusCode).toBe(NOT_FOUND);
+    expect(response.json()).toMatchObject({ error: { code: 'NOT_FOUND' } });
+  });
+
+  it.each([
+    ['a dot before its last segment', '/results/v1.2/summary'],
+    ['a dot only in the query string', '/voter?from=mail.example'],
+  ])('still falls back for a page with %s', async (_case, url) => {
+    app = appServingTheFrontend();
+
+    const response = await app.inject({ method: 'GET', url });
+
+    expect(response.body).toBe(INDEX_HTML);
+  });
 });

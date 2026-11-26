@@ -361,15 +361,17 @@ Ideia: resolver cedo os cargos que, ao eleger alguém, mais "liberam" ou "bloque
 
 ## 6. Contrato da API REST
 
-Base: `/api`. JSON. Autenticação por `Authorization: Bearer <jwt>`. O token de admin tem `role=admin` e validade de 12h. O token de eleitor tem `role=voter`, `electionId` e `voterId`, válido enquanto a eleição durar. Todos os corpos são validados com os schemas Zod de `packages/shared/src/api-schemas.ts`.
+Base: `/api`. JSON. Autenticação por `Authorization: Bearer <jwt>`. O token de admin tem `role=admin` e validade de 12h. O token de eleitor tem `role=voter`, `electionId` e `voterId`, com validade de 7 dias; se a eleição dele não existir mais, é recusado com `401 INVALID_TOKEN`. Todos os corpos são validados com os schemas Zod de `packages/shared/src/api-schemas.ts`. Um POST com `Content-Type: application/json` e corpo vazio vale como corpo ausente (o front manda esse cabeçalho em todo POST); quem exige corpo o recusa pelo Zod.
+
+A referência com exemplos de requisição e resposta está em [api.md](api.md).
 
 ### 6.1 Admin
 
 | Método | Rota | Corpo | Resposta |
 |---|---|---|---|
-| POST | `/admin/login` | `{ username, password }` | `200 { token }` / `401` |
+| POST | `/admin/login` | `{ username, password }` | `200 { token }` / `401` / `429 RATE_LIMITED` |
 | GET | `/admin/me` | — | `{ id, username }` |
-| GET | `/elections` | — | `ElectionSummaryDTO[]` |
+| GET | `/elections` | — | `ElectionSummaryDTO[]`, na ordem de criação |
 | POST | `/elections` | `{ name, defaultVotingSeconds? }` | `201 AdminElectionDTO` |
 | GET | `/elections/:id` | — | `AdminElectionDTO` |
 | PATCH | `/elections/:id` | `{ name?, defaultVotingSeconds? }` | `AdminElectionDTO` |
@@ -378,7 +380,7 @@ Base: `/api`. JSON. Autenticação por `Authorization: Bearer <jwt>`. O token de
 | DELETE | `/elections/:id/positions/:pid` | — | `AdminElectionDTO` (só em `DRAFT`) |
 | PUT | `/elections/:id/queue` | `{ positionIds }` | `AdminElectionDTO` |
 | GET | `/elections/:id/queue/suggestion` | — | `{ positionIds }` |
-| POST | `/elections/:id/candidates` | `{ name, age, remainingMonths, applications, firstChoicePositionId }` | `201 AdminElectionDTO` |
+| POST | `/elections/:id/candidates` | `{ name, age, remainingMonths, applications: string[], firstChoicePositionId }` | `201 AdminElectionDTO` |
 | PATCH / DELETE | `/elections/:id/candidates/:cid` | parcial / — | `AdminElectionDTO` |
 | POST | `/elections/:id/positions/:pid/candidates/:cid` | — | anexa candidato existente → `AdminElectionDTO` |
 | POST | `/elections/:id/voters` | `{ count, labels? }` | `201 { codes: string[], election: AdminElectionDTO }` |
@@ -389,7 +391,7 @@ Base: `/api`. JSON. Autenticação por `Authorization: Bearer <jwt>`. O token de
 | POST | `/elections/:id/positions/:pid/cancel` | `{ confirmTitle }` | `AdminElectionDTO` |
 | POST | `/elections/:id/rounds` | `{ positionId, durationSeconds? }` | `201 AdminElectionDTO` |
 | POST | `/elections/:id/rounds/:rid/close` | — | `AdminElectionDTO` |
-| POST | `/elections/:id/positions/:pid/runoff` | `{ durationSeconds? }` | `201 AdminElectionDTO` |
+| POST | `/elections/:id/positions/:pid/runoff` | `{ durationSeconds? }` (corpo opcional) | `201 AdminElectionDTO` |
 | POST | `/elections/:id/rounds/:rid/release` | — | `AdminElectionDTO` |
 | POST | `/elections/:id/rounds/:rid/annul` | — | `AdminElectionDTO` |
 | POST | `/elections/:id/undo` | — | `AdminElectionDTO` / `409 NOTHING_TO_UNDO` |
@@ -402,9 +404,9 @@ Quase toda mutação devolve o `AdminElectionDTO` completo. Assim, o front tem *
 | Método | Rota | Corpo | Resposta |
 |---|---|---|---|
 | GET | `/health` | — | `{ status: 'ok' }` |
-| POST | `/voter/session` | `{ code }` | `200 { token, electionId, electionName }` / `404 INVALID_CODE` / `403 VOTER_REVOKED` |
+| POST | `/voter/session` | `{ code }` | `200 { token, electionId, electionName }` / `404 INVALID_CODE` / `403 VOTER_REVOKED` / `429 RATE_LIMITED` |
 | GET | `/voter/state` | — | `VoterStateDTO` |
-| POST | `/voter/votes` | `{ roundId, choice }` (`choice` = id do candidato ou `'BLANK'`) | `204` / `409 VOTER_ALREADY_VOTED` / `410 ROUND_EXPIRED` |
+| POST | `/voter/votes` | `{ roundId, choice }` (`choice` = id do candidato ou `'BLANK'`) | `204` / `409 VOTER_ALREADY_VOTED` / `410 ROUND_EXPIRED` / `404 ROUND_NOT_FOUND` |
 
 ### 6.3 DTOs principais e erros
 
@@ -440,10 +442,14 @@ interface NextPositionDTO {
   attachableCandidates?: { id: string; name: string }[];
 }
 
-interface ErrorDTO { error: { code: string; message: string } }
+interface ElectionSummaryDTO {               // item da lista de eleições do admin
+  id: string; name: string; status: ElectionStatus; positionCount: number; voterCount: number;
+}
+
+interface ErrorDTO { error: { code: ErrorCode; message: string } }   // ErrorCode: error-codes.ts
 ```
 
-Mapeamento de erros: validação Zod → `400 VALIDATION_ERROR`; sem token → `401`; papel errado ou eleição de outro admin → `403`; recurso inexistente → `404`; `DomainError` de estado inválido → `409`; `ROUND_EXPIRED` → `410`.
+Mapeamento de erros (`apps/server/src/http/error-status.ts`): validação Zod ou JSON malformado → `400 VALIDATION_ERROR`; sem token, token inválido ou login errado → `401`; papel errado, eleição de outro admin ou eleitor revogado (`VOTER_REVOKED`) → `403`; recurso inexistente (`*_NOT_FOUND`) ou código de eleitor desconhecido (`INVALID_CODE`) → `404`; `DomainError` de estado inválido e `VERSION_CONFLICT` → `409`; `ROUND_EXPIRED` → `410`; excesso de tentativas → `429 RATE_LIMITED` com `Retry-After`; erro inesperado → `500 INTERNAL_ERROR`, sem a mensagem interna.
 
 ---
 
@@ -451,14 +457,14 @@ Mapeamento de erros: validação Zod → `400 VALIDATION_ERROR`; sem token → `
 
 Princípio: **o servidor é a fonte da verdade e envia o estado inteiro**, não deltas. O cliente só substitui o estado local. Isso elimina a maior parte dos bugs de sincronização e deixa o contrato mínimo.
 
-- Conexão: `io(URL, { auth: { token } })`. O servidor valida o JWT no handshake e coloca o socket na sala certa:
-  - admin → `admin:<electionId>` (depois de emitir `admin:watch { electionId }`, com verificação de dono)
+- Conexão: `io(URL, { auth: { token } })`. O servidor valida o JWT no handshake (token ausente ou inválido → `connect_error` com `INVALID_TOKEN`) e coloca o socket na sala certa:
+  - admin → `admin:<electionId>` (depois de emitir `admin:watch { electionId }`, com verificação de dono; eleição alheia ou inexistente é ignorada sem derrubar a conexão)
   - eleitor → `voters:<electionId>` e `voter:<voterId>`
 
 | Evento (servidor → cliente) | Sala | Payload | Quando |
 |---|---|---|---|
-| `admin:state` | `admin:<id>` | `AdminElectionDTO` | Depois de qualquer mutação e a cada voto recebido |
-| `voter:state` | `voter:<voterId>` | `VoterStateDTO` | Rodada aberta ou fechada, resultado liberado, depois do próprio voto, eleição encerrada |
+| `admin:state` | `admin:<id>` | `AdminElectionDTO` | Depois de toda gravação: comandos do admin, cada voto, fechamento por prazo e desfazer |
+| `voter:state` | `voter:<voterId>` | `VoterStateDTO` | Depois de toda gravação da eleição, um evento para cada eleitor credenciado (rodada aberta ou fechada, resultado liberado, voto, eleição encerrada) |
 
 | Evento (cliente → servidor) | Payload | Efeito |
 |---|---|---|
@@ -476,39 +482,49 @@ Os nomes dos eventos ficam como constantes em `packages/shared/src/socket-events
 
 | Porta | Produção | Testes |
 |---|---|---|
-| `ElectionRepository { get(id), save(e, expectedVersion), listByAdmin(adminId), findByVoterCode(code) }` | `PgElectionRepository` (uma linha por eleição com coluna `JSONB` + índice de códigos) | `InMemoryElectionRepository` (*Fake*); `pg-mem` para testar o adaptador SQL |
-| `AdminRepository` | Pg | InMemory |
-| `Clock { now(): Date }` | `SystemClock` | `FakeClock` (avança manualmente) |
-| `Scheduler { schedule(at, key, fn), cancel(key) }` | `TimeoutScheduler` (`setTimeout`) | `FakeScheduler` (dispara sob comando) |
-| `CodeGenerator { generate(): string }` | `CryptoCodeGenerator` | `StubCodeGenerator` (sequência fixa) |
+| `ElectionRepository { get(id), create(record), save(record, expectedVersion), listByAdmin(adminId), listAll(), findByVoterCode(code), isCodeTaken(code) }` | `PgElectionRepository` (uma linha por eleição com o registro em `JSONB` + tabela `voter_codes`) | `InMemoryElectionRepository` (*Fake*); `pg-mem` para testar o adaptador SQL; os dois passam na mesma suíte de contrato |
+| `AdminRepository { findByUsername, findById, create }` | `PgAdminRepository` | `InMemoryAdminRepository` (mesma suíte de contrato) |
+| `Clock { now(): Date }` | `systemClock` | `FakeClock` (avança manualmente) |
+| `Scheduler { schedule(at, key, fn), cancel(key) }` | `TimeoutScheduler` (`setTimeout`, prazos longos em etapas) | `FakeScheduler` (dispara sob comando) |
+| `CodeGenerator` (do domínio) | `createCryptoCodeGenerator()` (`crypto.randomInt`) | `StubCodeGenerator` (sequência fixa) |
 | `Notifier { adminState(id, dto), voterState(voterId, dto) }` | `SocketNotifier` | `SpyNotifier` (registra chamadas) |
+| `Logger { error(context, message) }` | logger do Fastify | `SpyLogger` |
 
-`buildApp(deps)` recebe todas as portas. Os testes de integração montam o app com fakes, e `main.ts` (humilde, sem lógica) monta com as implementações reais. Isso aplica, nessa ordem, os tipos de *test double* das aulas 17 e 18: Fake, Stub, Spy, Dummy.
+O repositório guarda um `ElectionRecord = History<Election>` (estado atual + snapshots do desfazer), para o desfazer sobreviver a reinícios. Os códigos de eleitor são únicos entre **todas** as eleições (o eleitor entra só com o código): o serviço confere ao gerar, e a chave primária de `voter_codes` garante. As listagens saem na ordem de criação (coluna `creation_order`), sem campo novo na `Election`. O servidor incrementa `election.version` ao salvar.
+
+`buildApp(deps)` recebe todas as portas e não chama `listen`. O Socket.IO entra por `deps.realtime` (`createRealtimeServer()` e depois `attachRealtime(io, httpServer, deps)`), o que quebra o ciclo notificador → io → app. Os testes de integração montam o app com fakes; `createServer(config)` (`compose.ts`) monta com as implementações reais, e `main.ts` (humilde, sem lógica) só chama `loadConfig` → `createServer` → `listen`. Isso aplica, nessa ordem, os tipos de *test double* das aulas 17 e 18: Fake, Stub, Spy, Dummy.
 
 ### 8.2 Fluxo de um comando no `ElectionService`
 
 ```
-1. repo.get(id)                         → agregado atual
+0. fila em memória da eleição           → uma gravação de cada vez por eleição (votos, prazo, admin)
+1. repo.get(id)                         → registro atual (eleição + histórico)
 2. autorização (admin dono)
 3. domínio: closeRoundIfDue(e, ctx)     → aplica prazos vencidos antes de tudo ("fechamento preguiçoso")
 4. domínio: <comando>(e, input, ctx)    → Result
-5. se erro → DomainError → HTTP 409
-6. history.push(snapshot); repo.save(novo, versãoEsperada)
+5. se erro → DomainError → HTTP 409 (ou o status da §6.3)
+6. comando do admin: history.push(snapshot); voto e fechamento por prazo: sem snapshot
+   repo.save(novo com version + 1, versãoEsperada)
 7. scheduler: (re)agenda o fechamento no deadline da rodada aberta
-8. notifier: admin:state + voter:state dos afetados
+8. notifier: admin:state + voter:state de cada eleitor credenciado
 ```
+
+Detalhes que a implementação acrescentou:
+- **Fila por eleição** (`KeyedQueue`): o prazo é julgado pela chegada do pedido, não pela vez na fila. Vale só para **uma instância** do servidor; com mais de uma, sobra apenas a conferência de versão.
+- **`VERSION_CONFLICT`**: o voto é reaplicado sobre a eleição relida (até 50 tentativas); o fechamento por prazo relê e devolve o estado atual; um comando do admin devolve 409 na hora.
+- **Desfazer**: o voto e o fechamento automático por prazo **não** são passos. Desfazer um passo do admin descarta os votos registrados depois dele; desfazer depois de um fechamento por prazo descarta a rodada inteira. O snapshot de um comando guarda a eleição já com o prazo vencido aplicado.
 
 ### 8.3 Prazo e reinício do servidor
 
-- Ao abrir uma rodada, o `Scheduler` agenda `closeRoundIfDue` para o `deadline`.
-- Se o processo reiniciar e perder o timer, o passo 3 do fluxo fecha a rodada na próxima leitura ou escrita. Na inicialização, `main.ts` também reagenda as rodadas abertas.
-- O servidor aceita voto até `deadline + 1s` de tolerância, para compensar a latência de rede. O front mostra a contagem regressiva usando `serverNow` para corrigir a diferença de relógio.
+- Ao abrir uma rodada, o `Scheduler` agenda o fechamento para `deadline + tolerância`.
+- Se o processo reiniciar e perder o timer, o passo 3 do fluxo fecha a rodada na próxima leitura ou escrita. Na inicialização, o `buildApp` reagenda as rodadas abertas num gancho `onReady` (o `createServer` só chama `ready`).
+- O servidor aceita voto até `deadline + 1s` de tolerância (`VOTE_GRACE_MS`), para compensar a latência de rede. O fechamento preguiçoso de leituras e comandos usa a mesma tolerância; só o timer, que já dispara nesse horário, julga sem desconto. O front mostra a contagem regressiva usando `serverNow` para corrigir a diferença de relógio.
 
 ### 8.4 Segurança básica
 
-- A senha do admin é guardada como hash bcrypt. O seed lê `ADMIN_USERNAME`/`ADMIN_PASSWORD` do ambiente no primeiro boot.
-- `JWT_SECRET` vem do ambiente. Em teste, usa um valor fixo.
-- Rate limit simples em `/voter/session` e `/admin/login` (`@fastify/rate-limit`), contra força bruta de códigos.
+- A senha do admin é guardada como hash bcrypt. O seed lê `ADMIN_USERNAME`/`ADMIN_PASSWORD` do ambiente **só no primeiro boot**: se o usuário já existe, a senha guardada é mantida.
+- `JWT_SECRET` vem do ambiente. É obrigatório em produção e sempre que `REPOSITORY=pg` (banco real = ambiente real); só a memória em dev e teste usa o valor fixo de desenvolvimento.
+- Rate limit em `/voter/session` (60/min) e `/admin/login` (10/min), por rota e por IP, contra força bruta: hook próprio (`http/rate-limit.ts`) com a porta `Clock`, em vez do `@fastify/rate-limit`, para a janela ser testável com o `FakeClock` sem dependência nova. Desligável com `RATE_LIMIT=off` (os e2e sobem assim, pois todos os navegadores saem do mesmo IP). Atrás de proxy, o IP do cliente vem de `TRUST_PROXY_HOPS` (número de proxies confiáveis; 3 no Render, medido em produção).
 - O código do eleitor só aparece na resposta da criação e na visão do admin. Ele nunca é enviado a outros eleitores.
 
 ---
@@ -606,18 +622,18 @@ steps:
   - checkout
   - setup-node (node-version-file: .nvmrc, cache: npm)
   - npm ci
-  - npm run lint && npm run typecheck
+  - npm run lint && npm run format:check && npm run typecheck
   - npm run test:coverage            # vitest em cada workspace, com thresholds de 80%
-  - npx playwright install --with-deps chromium
-  - npm run build && npm run e2e
-  - codecov/codecov-action (apenas ubuntu; um upload por flag: domain, server, web)
-      with: token: ${{ secrets.CODECOV_TOKEN }}, files: packages/domain/coverage/lcov.info,...
+  - codecov/codecov-action (apenas ubuntu; um upload por flag: shared, domain, server, web)
+      with: token: ${{ secrets.CODECOV_TOKEN }}, files: packages/shared/coverage/lcov.info,...
+  - npm run build
+  - npx playwright install --with-deps chromium && npm run e2e   # entra com a C22
   - upload-artifact: relatório do Playwright em caso de falha
 ```
 
-**`.github/workflows/deploy.yml`:** dispara em `workflow_run` do CI concluído com sucesso na `main` e chama o Deploy Hook do Render (`secrets.RENDER_DEPLOY_HOOK`). O auto-deploy do Render fica desligado, para que só código com CI verde vá para produção.
+**`.github/workflows/deploy.yml`:** dispara em `workflow_run` do CI concluído com sucesso num `push` na `main` e chama o Deploy Hook do Render (`secrets.RENDER_DEPLOY_HOOK`) com `&ref=<sha>` do commit aprovado (e não o último da `main`). O auto-deploy do Render fica desligado, para que só código com CI verde vá para produção.
 
-**`codecov.yml`:** `coverage.status.project.default.target: 80%`, com flags `domain`, `server` e `web`, e comentários em PR ativados.
+**`codecov.yml`:** `coverage.status.project.default.target: 80%` (e 80% no *patch*), com flags `shared`, `domain`, `server` e `web` (`carryforward`), e comentários em PR ativados.
 
 **Convenção de commits:** [Conventional Commits](https://www.conventionalcommits.org/) em português, com escopo:
 `feat(domain): implementa desempate por idade`, `test(server): cobre rota de abertura de rodada`, `ci: adiciona matriz de SOs`.
@@ -629,12 +645,12 @@ Padrão: **um commit por tarefa do TO-DO**, contendo os testes e a implementaç�
 
 | Item | Escolha |
 |---|---|
-| Aplicação | Render, Web Service gratuito, Node 24 |
-| Build | `npm ci && npm run build` (gera `apps/web/dist` e `apps/server/dist`) |
-| Start | `node apps/server/dist/main.js`. O Fastify serve a API em `/api`, o Socket.IO e o front estático com `@fastify/static` e fallback para `index.html` |
-| Banco | Neon Postgres gratuito (`DATABASE_URL`). A migração (uma tabela `elections` + `admins` + índice de códigos) roda no boot, de forma idempotente |
-| Variáveis | `DATABASE_URL`, `JWT_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `NODE_ENV=production`, `REPOSITORY=pg` |
-| Limitações aceitas | O plano gratuito hiberna após inatividade (o 1º acesso demora). Funciona com uma única instância, já que as salas do Socket.IO ficam em memória. O estado persiste no Postgres e os prazos são recalculados no boot |
+| Aplicação | Render, Web Service gratuito, Node 24, Blueprint em `render.yaml` (`numInstances: 1`, auto-deploy desligado). No ar em https://voto-jn8l.onrender.com |
+| Build | `npm ci --include=dev && npm run build` (gera `apps/web/dist` e `apps/server/dist`). O `--include=dev` é necessário porque, com `NODE_ENV=production` também no build, o `npm ci` omitiria `vite`, `tsup` e `cross-env` |
+| Start | `npm start` (define `WEB_DIST_DIR=apps/web/dist` e roda `node apps/server/dist/main.js`). O Fastify serve a API em `/api`, o Socket.IO e o front estático com `@fastify/static` e fallback para `index.html` (exceto caminhos com extensão de arquivo, que dão 404) |
+| Banco | Neon Postgres gratuito (`DATABASE_URL`, conexão direta com `sslmode=verify-full`). A migração (tabelas `admins`, `elections` e `voter_codes`) roda no boot, de forma idempotente, só com `CREATE TABLE IF NOT EXISTS`: o esquema está congelado; uma mudança futura precisa de `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` com teste num banco do esquema anterior |
+| Variáveis | `DATABASE_URL`, `JWT_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `NODE_ENV=production`, `REPOSITORY=pg`, `RATE_LIMIT=on`, `TRUST_PROXY_HOPS=3` |
+| Limitações aceitas | O plano gratuito hiberna após inatividade (o 1º acesso demora). Funciona com **uma única instância**, já que as salas do Socket.IO e a fila de gravação por eleição ficam em memória. O estado persiste no Postgres e os prazos são recalculados no boot |
 
 ---
 
@@ -642,9 +658,10 @@ Padrão: **um commit por tarefa do TO-DO**, contendo os testes e a implementaç�
 
 | Script | Faz |
 |---|---|
-| `npm run dev` | Servidor (`tsx watch`) + web (`vite`) em paralelo, com proxy do Vite para `/api` e `/socket.io` |
+| `npm run dev` | Servidor (`tsx watch`) + web (`vite`) em paralelo, com proxy do Vite para `/api` e `/socket.io`. **Ainda não existe**: hoje o proxy está no `vite.config.ts`, mas não há script que suba o servidor em modo de desenvolvimento |
 | `npm test` | Vitest em todos os workspaces |
 | `npm run test:coverage` | Igual ao anterior, com cobertura e thresholds |
-| `npm run e2e` | Playwright (sobe o servidor sozinho via `webServer`) |
-| `npm run lint` / `typecheck` / `format` | Qualidade |
-| `npm run build` | Build de produção de `shared`, `domain`, `web` e `server` |
+| `npm run e2e` | Playwright (sobe o servidor sozinho via `webServer`); entra com a C22 |
+| `npm run lint` / `typecheck` / `format` / `format:check` | Qualidade |
+| `npm run build` | Build de produção de `web` (Vite) e `server` (tsup, `dist/main.js`). `shared` e `domain` não têm build próprio: entram nos dois bundles |
+| `npm start` | Sobe o build de produção servindo o front de `apps/web/dist` |
