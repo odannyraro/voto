@@ -565,8 +565,9 @@ export class ElectionService {
   }
 
   /**
-   * Desfaz o último passo do histórico, restaurando o estado anterior. Os votos não são
-   * passos: voltar um comando do admin descarta também os votos registrados depois dele.
+   * Desfaz o último passo do histórico, restaurando o estado anterior. Só os comandos do
+   * admin são passos (votos e fechamentos por prazo não são): voltar um comando descarta
+   * também o que aconteceu depois dele.
    * Não empilha um novo snapshot e grava o estado restaurado com a versão **seguinte** à
    * atual: se a versão voltasse no tempo, um cliente com dados velhos escreveria sem
    * `VERSION_CONFLICT`.
@@ -663,7 +664,7 @@ export class ElectionService {
 
   /**
    * Aplica o prazo vencido ao registro: se uma rodada venceu, fecha, salva e notifica;
-   * senão não grava nada.
+   * senão não grava nada. O fechamento não é um passo do desfazer.
    *
    * @param record - Registro lido do repositório.
    * @param toleranceMs - Quanto depois do prazo a rodada ainda é considerada aberta.
@@ -671,10 +672,14 @@ export class ElectionService {
    * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
    */
   private async settle(record: ElectionRecord, toleranceMs: number): Promise<ElectionRecord> {
+    const ctx = this.newContext();
+    const settled = closeOverdueRound(record.current, ctx, toleranceMs);
     // Sem nada vencido, a mesma instância volta e não há o que gravar.
-    const settled = closeOverdueRound(record.current, this.newContext(), toleranceMs);
     if (settled === record.current) return record;
-    return this.commit(record, (election) => ok(election), toleranceMs);
+    const next = nextElection(record, ok(settled));
+    // Sem snapshot: com um, o desfazer reabriria a rodada vencida, o timer a fecharia de novo
+    // e o admin nunca voltaria para antes dela.
+    return this.persist({ ...record, current: next }, record.current.version, ctx);
   }
 
   /**
@@ -683,21 +688,15 @@ export class ElectionService {
    *
    * @param record - Registro lido do repositório.
    * @param command - Comando do domínio a aplicar sobre a eleição atual.
-   * @param toleranceMs - Tolerância do fechamento por prazo que antecede o comando; o padrão é
-   *   a do voto, para um comando do admin não fechar a rodada que ainda aceita votos.
    * @returns O registro salvo, com a versão incrementada e o estado anterior no histórico.
    * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou antes.
    * @throws {DomainError} Erro de negócio devolvido pelo comando.
    */
-  private async commit(
-    record: ElectionRecord,
-    command: ElectionCommand,
-    toleranceMs: number = this.deps.voteGraceMs,
-  ): Promise<ElectionRecord> {
+  private async commit(record: ElectionRecord, command: ElectionCommand): Promise<ElectionRecord> {
     const ctx = this.newContext();
 
     // Fechamento preguiçoso (§8.3): um prazo vencido vale mesmo se o timer se perdeu.
-    const settled = closeOverdueRound(record.current, ctx, toleranceMs);
+    const settled = closeOverdueRound(record.current, ctx, this.deps.voteGraceMs);
     const next = nextElection(record, command(settled, ctx));
     const withSnapshot = pushSnapshot(record, next, this.deps.historyLimit);
     return this.persist(withSnapshot, record.current.version, ctx);
@@ -727,12 +726,13 @@ export class ElectionService {
     const next = nextElection(record, castVote(record.current, vote, { ...ctx, now: judgedAt }));
     // Sem snapshot: o desfazer é para os passos do admin. Um por voto expulsaria do histórico
     // (limitado) as decisões dele e faria cada voto regravar dezenas de cópias da eleição.
-    return this.persist({ current: next, past: record.past }, record.current.version, ctx);
+    return this.persist({ ...record, current: next }, record.current.version, ctx);
   }
 
   /**
    * Grava o registro novo e deixa o resto do sistema coerente com ele: reagenda o fechamento
-   * e notifica admin e eleitores. Comum aos comandos, ao voto e ao desfazer.
+   * e notifica admin e eleitores. Comum aos comandos, ao voto, ao fechamento por prazo e ao
+   * desfazer.
    *
    * @param next - Registro a gravar, já com a versão incrementada.
    * @param expectedVersion - Versão lida antes do comando (concorrência otimista).

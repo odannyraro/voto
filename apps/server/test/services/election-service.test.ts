@@ -538,6 +538,36 @@ describe('ElectionService at the last instant of the grace period', () => {
   });
 });
 
+describe('ElectionService undo after an automatic closing', () => {
+  type TestService = ReturnType<typeof makeService>;
+
+  const AUTOMATIC_CLOSINGS = [
+    ['the timer', ({ scheduler, clock }: TestService) => scheduler.fireDue(clock.now())],
+    ['an admin read', ({ service }: TestService) => service.getElection(OWNER, 'e1')],
+    ['a voter read', ({ service }: TestService) => service.settleDueRound('e1')],
+  ] as const;
+
+  it.each(AUTOMATIC_CLOSINGS)(
+    'goes back to before the round was opened when %s closed it',
+    async (_closer, close) => {
+      const test = makeService();
+      await test.repository.create(
+        openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
+      );
+      await test.service.openRound(OWNER, 'e1', {
+        positionId: 'president',
+        durationSeconds: ONE_MINUTE_SECONDS,
+      });
+      test.clock.advance(JUST_PAST_THE_GRACE_MS);
+      await close(test);
+
+      const restored = await test.service.undo(OWNER, 'e1');
+
+      expect(restored.current).toMatchObject({ rounds: [], positions: [{ status: 'PENDING' }] });
+    },
+  );
+});
+
 describe('ElectionService.updateElection', () => {
   it('changes the name and the default voting time, incrementing the version', async () => {
     const { service, repository } = makeService();
