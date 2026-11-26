@@ -1,0 +1,39 @@
+name: Deploy
+
+# Publica no Render só o que passou no CI (architecture §12). O auto-deploy do Render fica
+# desligado (render.yaml), então este é o único caminho para produção. O GitHub só roda
+# workflows `workflow_run` a partir do arquivo que está na branch padrão (main).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# Um deploy de cada vez, na ordem dos pushes; não cancela um deploy já pedido ao Render.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+# O job só faz uma chamada HTTP ao Render: não precisa de nenhuma permissão do GITHUB_TOKEN.
+permissions: {}
+
+jobs:
+  deploy:
+    name: Deploy to Render
+    # CI verde nos 3 SOs, e só de push: um PR vindo de uma branch `main` de fork também
+    # dispara o CI com `head_branch == main`, e não pode publicar.
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          # O commit que o CI aprovou, e não o último da main, que pode ainda estar no CI.
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "::error::Secret RENDER_DEPLOY_HOOK is not set (see docs/deploy.md)."
+            exit 1
+          fi
+          # A URL do hook já traz `?key=...`; o `ref` fixa o commit publicado.
+          curl -fsS --retry 3 -X POST "${RENDER_DEPLOY_HOOK}&ref=${COMMIT_SHA}"
