@@ -27,11 +27,12 @@ services:
         value: pg
       - key: RATE_LIMIT
         value: 'on'
-      # Proxies do Render entre o cliente e o servidor. Valor inicial a CONFIRMAR em produção
-      # (docs/deploy.md, passo 6): errado para menos, todo mundo divide o mesmo limite; para mais,
-      # o cliente escolhe o próprio IP pelo X-Forwarded-For e escapa do limite.
+      # Proxies do Render entre o cliente e o servidor, medido em produção em 2026-11-26
+      # (docs/deploy.md, passo 6). Errado para menos, o servidor enxerga o IP de um proxy e o
+      # limite de tentativas não vale por cliente; para mais, o cliente escolhe o próprio IP
+      # pelo X-Forwarded-For e escapa do limite. Se o Render mudar a rede, medir de novo.
       - key: TRUST_PROXY_HOPS
-        value: '1'
+        value: '3'
       # Segredos: nunca no arquivo. `sync: false` faz o Render pedir o valor ao criar o serviço.
       - key: DATABASE_URL
         sync: false
