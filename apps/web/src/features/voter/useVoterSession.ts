@@ -8,6 +8,8 @@ import { voterApi } from '../../api/voter-api';
 export interface VoterSessionSnapshot {
   /** Último snapshot aceito por REST ou Socket.IO. */
   readonly state: VoterStateDTO | null;
+  /** Instante local em que o snapshot do servidor foi recebido. */
+  readonly clientNowAtSync: string | null;
   /** Indica que uma consulta inicial ou ressincronização está em andamento. */
   readonly isLoading: boolean;
   /** Erro REST validado pelo contrato compartilhado, quando disponível. */
@@ -25,6 +27,7 @@ export interface VoterSessionSnapshot {
 export function useVoterSession(token: string | null): VoterSessionSnapshot {
   const { voterState, onReconnect } = useSocket();
   const [state, setState] = useState<VoterStateDTO | null>(null);
+  const [clientNowAtSync, setClientNowAtSync] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(token !== null);
   const [error, setError] = useState<ErrorDTO | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(
@@ -41,6 +44,7 @@ export function useVoterSession(token: string | null): VoterSessionSnapshot {
 
     socketVersion.current += 1;
     setState(voterState);
+    setClientNowAtSync(new Date().toISOString());
     setError(null);
     setErrorMessage(null);
     setIsLoading(false);
@@ -50,6 +54,7 @@ export function useVoterSession(token: string | null): VoterSessionSnapshot {
     if (token === null) {
       synchronizeRef.current = null;
       setState(null);
+      setClientNowAtSync(null);
       setIsLoading(false);
       setError(null);
       setErrorMessage('Voter session not found. Join an election again.');
@@ -58,6 +63,8 @@ export function useVoterSession(token: string | null): VoterSessionSnapshot {
 
     const sessionToken = token;
     let active = true;
+    setState(null);
+    setClientNowAtSync(null);
 
     /**
      * Busca um snapshot sem permitir que respostas antigas sobrescrevam eventos mais novos.
@@ -80,6 +87,7 @@ export function useVoterSession(token: string | null): VoterSessionSnapshot {
         }
 
         setState(nextState);
+        setClientNowAtSync(new Date().toISOString());
         setError(null);
         setErrorMessage(null);
       } catch (requestError: unknown) {
@@ -127,5 +135,5 @@ export function useVoterSession(token: string | null): VoterSessionSnapshot {
     return unsubscribe;
   }, [onReconnect]);
 
-  return { state, isLoading, error, errorMessage };
+  return { state, clientNowAtSync, isLoading, error, errorMessage };
 }

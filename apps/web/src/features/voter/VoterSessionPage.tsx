@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { ErrorMessage } from '../../components/ErrorMessage';
+import { VoterVotePage } from './VoterVotePage';
 import { useVoterSession } from './useVoterSession';
 
 /** Propriedades para apresentar uma sessão do eleitor autenticada. */
@@ -15,7 +16,7 @@ export interface VoterSessionPageProps {
  * @returns Área de sessão que será preenchida pelo fluxo realtime.
  */
 export function VoterSessionPage({ token }: VoterSessionPageProps): ReactElement {
-  const { state, isLoading, error, errorMessage } = useVoterSession(token);
+  const { state, clientNowAtSync, isLoading, error, errorMessage } = useVoterSession(token);
 
   return (
     <main>
@@ -29,7 +30,16 @@ export function VoterSessionPage({ token }: VoterSessionPageProps): ReactElement
           <p>{state.electionName}</p>
         </section>
       )}
-      {state !== null && state.phase !== 'WAITING' && (
+      {state?.phase === 'VOTING' && token !== null && clientNowAtSync !== null && (
+        <VoterVotePage
+          key={state.round.roundId}
+          token={token}
+          round={state.round}
+          serverNow={state.serverNow}
+          clientNowAtSync={clientNowAtSync}
+        />
+      )}
+      {state !== null && state.phase !== 'WAITING' && state.phase !== 'VOTING' && (
         <p role="status">Current phase: {state.phase}</p>
       )}
     </main>

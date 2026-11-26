@@ -92,7 +92,7 @@ describe('VoterSessionPage', () => {
       socket.emitVoterState(makeVoterStateDTO({ phase: 'VOTING' }));
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent('Current phase: VOTING');
+    expect(screen.getByRole('heading', { name: 'President' })).toBeInTheDocument();
   });
 
   it('keeps a newer socket snapshot when the initial REST response arrives late', async () => {
@@ -119,7 +119,7 @@ describe('VoterSessionPage', () => {
       await initialState;
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent('Current phase: VOTING');
+    expect(screen.getByRole('heading', { name: 'President' })).toBeInTheDocument();
   });
 
   it('reloads the voter state after the socket reconnects', async () => {
@@ -143,7 +143,7 @@ describe('VoterSessionPage', () => {
     });
 
     await waitFor(() => expect(getState).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole('status')).toHaveTextContent('Current phase: VOTING');
+    expect(screen.getByRole('heading', { name: 'President' })).toBeInTheDocument();
   });
 
   it('displays the API error when the initial state cannot be loaded', async () => {

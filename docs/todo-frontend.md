@@ -102,7 +102,7 @@ agrupadas em um único commit.
 | C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[x] C5.a` countdown corrigido por `serverNow`; `[x] C5.b` porcentagens e rótulos |
 | C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[x] C6.a` diálogos de confirmação; `[x] C6.b` `Countdown` e `ErrorMessage` |
 | C7 | Divide-se: entrada e integração da sessão são dois comportamentos fechados | `[x] C7.a` formulário e criação de sessão; `[x] C7.b` persistência, navegação e erros da sessão |
-| C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[x] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[ ] C8.b` cédula e voto candidato/branco |
+| C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[x] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[x] C8.b` cédula e voto candidato/branco |
 | C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[ ] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[ ] C9.b` reconexão e ordenação de estado |
 | C10 | Divide-se: login em si não exige a proteção de toda a árvore de rotas | `[ ] C10.a` login, token e `/admin/me`; `[ ] C10.b` rotas protegidas e logout |
 | C11 | Divide-se: leitura da lista e mutação/criação têm UI e testes distintos | `[ ] C11.a` lista de eleições; `[ ] C11.b` criação e navegação |
@@ -147,7 +147,8 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/features/voter/VoterEntryPage.tsx` → entrada acessível do eleitor, validação do código e início de sessão.
 - `apps/web/src/features/voter/voter-session-storage.ts` → persiste e valida token/electionId na sessão da aba.
 - `apps/web/src/features/voter/useVoterSession.ts` → carrega o snapshot REST do eleitor e ressincroniza após eventos realtime/reconexão.
-- `apps/web/src/features/voter/VoterSessionPage.tsx` → mostra a espera `WAITING`, a fase atual e falhas da sessão.
+- `apps/web/src/features/voter/VoterSessionPage.tsx` → escolhe a tela de espera, cédula ou status conforme a fase recebida.
+- `apps/web/src/features/voter/VoterVotePage.tsx` → exibe candidatos, opção `BLANK`, countdown e envio único do voto.
 - `apps/web/src/lib/countdown.ts` → cálculo puro dos segundos restantes com deslocamento do relógio do servidor.
 - `apps/web/src/lib/format.ts` → percentual de votos válidos e rótulos legíveis das regras de desempate.
 - `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
@@ -161,6 +162,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/reusable-status-components.test.tsx` → atualização/expiração do timer e anúncio do código/mensagem de erro.
 - `apps/web/test/voter-entry-page.test.tsx` → validação local, normalização do código, início de sessão e erros da API.
 - `apps/web/test/voter-session.test.tsx` → carregamento inicial, estado `WAITING`, eventos de socket, reconexão, erros e credenciais persistidas.
+- `apps/web/test/voter-vote-page.test.tsx` → voto candidato/branco, cliques duplicados, erros de rodada e countdown.
 - `apps/web/test/format.test.ts` → porcentagens, zero votos válidos, arredondamento e rótulos de desempate.
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
@@ -407,7 +409,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/voter-session.test.tsx` (10 casos), `socket-client.test.ts` (1 caso de reconexão); sessão de entrada também verifica a navegação autenticada.
 - Decisões: eventos realtime vencem respostas REST iniciadas antes deles; reconexão dispara GET de ressincronização e credenciais ausentes/corrompidas não abrem socket.
 
-### [ ] C8.b — Cédula e registro do voto
+### [x] C8.b — Cédula e registro do voto
 **Ref.:** architecture §6.2.
 **Depende de:** C8.a.
 **Fazer:** renderizar candidatos, voto branco e countdown; postar voto por REST.
@@ -415,6 +417,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** `/votar` permite votar uma vez enquanto a fase é VOTING.
 **Arquivos:** `apps/web/src/features/voter/VoterVotePage.tsx`.
 **Commit sugerido:** `feat(web): adiciona cédula e envio do voto`
+**Notas do agente:**
+- Feito: a fase `VOTING` mostra candidatos, voto `BLANK` e countdown sincronizado; voto enviado ou rodada já votada/expirada bloqueiam novos envios.
+- Arquivos: `apps/web/src/features/voter/VoterVotePage.tsx`, `VoterSessionPage.tsx`, `useVoterSession.ts` e testes correspondentes.
+- Como usar: `/votar` envia `roundId` e a escolha para `POST /voter/votes`; cada botão corresponde a um candidato ou ao voto branco.
+- Testes: `apps/web/test/voter-vote-page.test.tsx` (5 casos: voto de candidato com clique duplicado, `BLANK`, `VOTER_ALREADY_VOTED`, `ROUND_EXPIRED` e countdown).
+- Decisões: a API permanece autoritativa para prazo e votos duplicados; erros terminais desabilitam a cédula, enquanto falhas de rede permitem nova tentativa.
 
 ### [ ] C9.a — Fases VOTED, RESULTS e FINISHED
 **Ref.:** architecture §6.2.
