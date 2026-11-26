@@ -789,12 +789,12 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - Correção (2026-11-25): `listByAdmin` e `listAll` devolvem as eleições na **ordem de criação**, mesmo após regravação (contrato). No Pg, coluna `creation_order SERIAL` + `ORDER BY`. Testes: 4 casos de contrato nas duas implementações (8 execuções; as 2 de regravação no Pg falharam antes); 7 mutações manuais, todas pegas; 38 testes temporários passaram num Postgres 16 real. O `migrate` não acrescenta a coluna a uma tabela criada pelo esquema anterior (não há banco implantado). Servidor: 529 testes.
 - Refatoração de testes (2026-11-25): os 5 `await Promise.allSettled([x])` do contrato de eleições (2) e de `pg-election-repository.test.ts` (3) viraram `await expect(x).rejects...` com o motivo esperado. Sob mutação em que a rejeição acontece por outro motivo, os testes antigos passavam e os 5 novos falham. Mesma contagem (servidor 529). Os 2 de `transaction.test.ts` receberam a mesma troca (`.rejects.toBe(WORK_FAILURE)`), sem mudar as asserções de `pool.events`.
 
-### [ ] B17b — Correções pós-revisão
+### [x] B17b — Correções pós-revisão
 **Fazer** (itens achados na revisão da B17, aprovados pelo usuário em 2026-11-25; cada um com teste primeiro e commit próprio, o 3 antes do 1):
 - **Item 3 — fila de gravações por eleição** (✔ feito em 2026-11-25, ver as notas): `MAX_VOTE_ATTEMPTS` = 50 só garante rajadas de até 50 votos; com 100, 22–27 recebem 409, e o custo cresce com o quadrado da rajada e com o tamanho do registro (medição na B13b). Todas as gravações de uma eleição (votos, fechamento por prazo e comandos do admin) passam por uma fila em memória por eleição, uma de cada vez, sem dependência nova. O `retryOnVersionConflict` fica como rede de segurança. A fila de uma eleição é liberada quando esvazia, e uma gravação que falha não trava as seguintes. Registrar em "Decisões e desvios" que vale para uma instância só do servidor. No fim, repetir a medição de 100 votos no Postgres local.
   - Teste: 100 votos simultâneos (`Promise.all`, repositório em memória) são todos aceitos e contados.
   - Commit sugerido: `fix(server): enfileira as gravações de uma mesma eleição`
-- **Item 1 — prazo vencido fechado dentro de um comando do admin:** se o timer se perdeu e um comando fecha a rodada vencida, o snapshot do comando guarda a rodada ainda aberta, e o `undo` a devolve aberta por um instante (confirmado com teste temporário). Em `commit`, empilhar o estado já fechado.
+- **Item 1 — prazo vencido fechado dentro de um comando do admin** (✔ feito em 2026-11-25): se o timer se perdeu e um comando fecha a rodada vencida, o snapshot do comando guarda a rodada ainda aberta, e o `undo` a devolve aberta por um instante (confirmado com teste temporário). Em `commit`, empilhar o estado já fechado.
   - Teste: o `undo` desse comando devolve a rodada fechada, sem o efeito do comando.
   - Commit sugerido: `fix(server): guarda no desfazer a rodada vencida já fechada`
 
@@ -805,13 +805,19 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - Testes: 29 novos (fila 8, serviço 17, double 4). Antes da fila falharam 11, inclusive o de 100 votos simultâneos; os 2 de "comando que chegou na tolerância" falharam com a fila ligada sem julgar pela chegada. 18 mutações manuais, todas pegas. Servidor: 558 testes.
 - Medição (Postgres 16 local, pool padrão, 3 execuções): 100 votos simultâneos **todos aceitos**, 100 gravações, ~0,4 s (histórico 0), ~0,8 s (10), ~2,2 s (50); antes da fila: 22–27 com 409 em ~1,6 / ~4,5 / ~18 s.
 - Decisões: ver "Decisões e desvios". Um comando do admin, ou o credenciamento de muitos códigos, atrás de uma rajada espera a vez (e vice-versa).
-- Item 1: _pendente_
+- Item 1, feito: o snapshot de `commit` leva o estado sobre o qual o comando agiu (rodada vencida já fechada); o `undo` desfaz só o comando, e o seguinte volta para antes da abertura da rodada. Testes: 2 em `election-service.test.ts` (o primeiro falhou antes; o segundo garante que os passos antigos continuam, falha que uma mutação expôs); 3 mutações manuais, todas pegas. Servidor: 560 testes, 100% linhas.
+- Item `allSettled` (aprovado junto): feito à parte, no mesmo commit do item 5 da revisão (ver B17).
 
 ### [ ] B18 — Composição, arquivos estáticos e retomada após reinício
 **Ref.:** architecture §8.3, §13.
 **Fazer:**
 - `src/compose.ts`: `createServer(config)` monta os adaptadores reais conforme `REPOSITORY`, roda `migrate` (se for pg), executa `seedAdmin`, cria o `io` com `createRealtimeServer()` e chama `buildApp` com `notifier: new SocketNotifier(io)` e `realtime: io` (é o `buildApp` que liga o `io` ao servidor HTTP; ver as notas da B15), e reagenda as rodadas abertas (`rescheduleOpenRounds`, usando `repo.listAll()`).
 - `src/main.ts` (humilde, fora da cobertura): `loadConfig(process.env)` → `createServer` → `listen`, com encerramento gracioso em `SIGTERM`/`SIGINT`.
+- **Cuidados reunidos das revisões** (detalhes nas notas da B14, da B17 e da B17b):
+  - Pool do `pg`: registrar `pool.on('error', ...)` (sem ouvinte, a queda de uma conexão ociosa, comum no Neon, derruba o processo) e chamar `pool.end()` no encerramento, junto com `scheduler.cancelAll()` e `app.close()`.
+  - Retomada: reagendar as rodadas abertas com `scheduler.schedule(...)` em `deadline + voteGraceMs` (horário já passado dispara logo); não chamar `handleDeadline` direto, porque ele julga sem tolerância e fecharia a rodada cedo.
+  - Uma única instância do servidor: a fila de gravações por eleição (B17b) é do processo. Registre isso no `render.yaml`/`docs/deploy.md` na B21.
+  - Adaptadores reais em `AppDeps`: `createCryptoCodeGenerator()` em `codeGenerator` (B11), `new TimeoutScheduler()` em `scheduler` (B14) e o logger do Fastify como `Logger` do `ElectionService` (B14).
 - `http/static.ts`: `registerStatic(app, distDir)` com `@fastify/static`. Fallback para `index.html` em rotas que não são `/api` nem `/socket.io`; `/api/*` inexistente continua sendo 404 JSON.
 - **Limite de tempo no banco:** o `Pool` deve ter `query_timeout` (ou `statement_timeout`). As gravações de uma eleição passam por uma fila (B17b), então uma consulta travada seguraria todas as seguintes dessa eleição.
 - **Proxy reverso e rate limit:** o rate limit da A25 conta por `request.ip`. Atrás do proxy do Render, sem `trustProxy` todos os clientes aparecem com o IP do proxy e o limite pega todo mundo junto. Configure o `trustProxy` do Fastify pelo **número de proxies** na frente do servidor (variável nova no `config.ts`, padrão desligado). **Não use `trustProxy: true`**: com `true`, o Fastify usa o primeiro IP do `X-Forwarded-For`, que o próprio cliente pode forjar, e o limite vira enfeite. O valor de produção é definido na B21.
@@ -841,13 +847,16 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 **Ref.:** architecture §12, §13.
 **Fazer:**
 - `render.yaml` (Blueprint) com build `npm ci && npm run build`, start `npm start`, health check em `/api/health` e as variáveis da §13 (os valores secretos ficam fora do arquivo). Inclui a variável de proxy da B18 com o número de proxies do Render (confirmar na documentação do Render ou olhando o `X-Forwarded-For` que chega em produção) e `RATE_LIMIT` ligado.
+- **Uma instância só:** o serviço do Render não pode escalar para mais de uma instância (a fila de gravações por eleição da B17b é do processo). Deixe isso explícito no `render.yaml` e no `docs/deploy.md`.
+- **Esquema do banco congelado após o 1º deploy:** o `migrate` só tem `CREATE TABLE IF NOT EXISTS`, que não altera tabela já existente (ver notas da B17). Qualquer mudança de esquema depois disso precisa de um `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` no `migrate`, com teste de que roda num banco do esquema anterior.
 - `.github/workflows/deploy.yml`: dispara em `workflow_run` do CI com `conclusion == success` na `main` e chama `curl -fsS -X POST "$RENDER_DEPLOY_HOOK"` (secret).
 - `docs/deploy.md`: checklist dos passos manuais **do usuário**:
   1. criar o banco no Neon e copiar a `DATABASE_URL`;
   2. criar o serviço no Render, definir as variáveis e desligar o auto-deploy;
   3. criar o secret `RENDER_DEPLOY_HOOK` no GitHub;
   4. conferir `/api/health` em produção;
-  5. conferir o rate limit em produção: o 11º login errado no mesmo minuto recebe 429, e um segundo aparelho (outra rede) ainda consegue logar.
+  5. conferir o rate limit em produção: o 11º login errado no mesmo minuto recebe 429, e um segundo aparelho (outra rede) ainda consegue logar;
+  6. conferir uma rodada com vários celulares votando ao mesmo tempo (a rajada só foi medida num Postgres local, não no Neon; ver B13b e B17b).
 
 **Testes (escrever antes):** não se aplica (infraestrutura). A validação é o usuário seguir o checklist e a URL de produção responder.
 **Pronto quando:** o usuário confirmar a aplicação no ar (marco M2). Registre a URL nas notas.
@@ -861,7 +870,9 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - exclusão do eleito: eleito no cargo A não aparece na cédula do cargo B;
 - candidatos insuficientes: `next` → `INSUFFICIENT_CANDIDATES` → anexar existente / adiar / cancelar;
 - resiliência: `undo` depois de liberar o resultado; `annul` de uma rodada;
-- persistência: o mesmo fluxo básico com o `PgElectionRepository` sobre `pg-mem`.
+- persistência: o mesmo fluxo básico com o `PgElectionRepository` sobre `pg-mem` (`createMigratedPgMemPool`, ver notas da B17).
+
+Reaproveite os passos nomeados da B16a (`logIn`, `createMayorRace`, `castVote`...), movendo-os para `test/support/` se mais de um arquivo precisar deles. No cenário de resiliência, lembre a regra atual do desfazer (B13b e B17b): voto e fechamento por prazo **não** são passos; desfazer um passo do admin descarta os votos registrados depois dele.
 
 **Commit sugerido:** `test(server): cobre segundo turno, candidatos insuficientes e desfazer com domínio real`
 **Notas do agente:** _pendente_
@@ -874,8 +885,9 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - `docs/api.md`: referência curta das rotas e eventos, com exemplo de requisição e resposta. Atualizar o `architecture.md` onde a implementação divergiu (com aprovação do usuário).
 - Escrever no README as subseções da parte B (Tecnologias do backend/CI; Execução dos testes: comandos).
 - Avaliar o `rate-limit.ts` (A25): o `Map` de contadores ganha uma entrada por rota e IP e nunca apaga as janelas vencidas. Se valer a pena, descartar as vencidas (com teste antes, usando o `FakeClock`) e combinar com o A, autor do arquivo.
-
-**Commit sugerido:** `docs(server): documenta API e refina suíte de testes do servidor`
+- Pontas soltas das revisões (avaliar e, se valer a pena, corrigir com teste antes; senão, registrar o motivo nas notas):
+  - `TimeoutScheduler` (B14, decisão 5): duas mutações sobrevivem, a remoção do `timers.delete` no disparo (vazamento de memória) e a do `Math.min` (laço de timers de 1 ms). Falta um teste que observe isso, por exemplo uma contagem de tarefas pendentes depois do disparo.
+  - Gravação no Postgres (B17, pendência c): cada voto ainda regrava o registro inteiro, e o `save` apaga e reinsere todos os `voter_codes` da eleição mesmo quando os códigos não mudaram. Dá para pular a reescrita dos códigos quando o conjunto for o mesmo.
 **Notas do agente:** _pendente_
 
 ---
@@ -899,5 +911,6 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - 2026-11-25 — correção pós-B17 — um `VERSION_CONFLICT` no fechamento por prazo (leituras e timer) não vira erro: o serviço relê e devolve o estado atual, até 50 tentativas. Detalha a §8.2 e a §8.3.
 - 2026-11-25 — correção pós-B17 (aprovada) — a ordem das listagens é a de criação, garantida pelo repositório (coluna `creation_order` em `elections`), sem `createdAt` em `Election`: não muda o `shared` nem o domínio. Detalha a §8.1 e a §13.
 - 2026-11-25 — B17b (aprovada) — as gravações de uma mesma eleição (votos, fechamento por prazo e comandos do admin) passam por uma **fila em memória por eleição**, uma de cada vez, sem dependência nova; o prazo é julgado pela chegada do pedido. **Vale só para uma instância do servidor** (como as salas do Socket.IO, §13): com mais de uma, volta a haver disputa, coberta apenas pela conferência de versão e pela nova tentativa. Detalha a §8.2.
+- 2026-11-25 — B17b (aprovada) — o passo do desfazer de um comando guarda a eleição já com o prazo vencido aplicado: o fechamento automático não é desfeito junto, mesmo quando é o comando que o grava. Detalha a §5.4.
 - 2026-11-25 — A25 (feita pelo A) — o rate limit é um hook próprio (`http/rate-limit.ts`) com a porta `Clock`, e não o `@fastify/rate-limit` da §8.4: a janela fica testável com o `FakeClock` e não entra dependência nova. Veio junto a variável `RATE_LIMIT` (`on`/`off`, padrão `on`) no `config.ts`; os e2e (C17) sobem o servidor com `RATE_LIMIT=off`, porque todos os navegadores do teste saem do mesmo IP. Pendências do lado B: `trustProxy` pelo número de proxies (B18/B21) e avaliar a limpeza dos contadores (B23).
 - 2026-11-25 — A26 (feita pelo A) — o `ci.yml` ganhou, no fim, o upload do `e2e/playwright-report/` quando o job falha (`if-no-files-found: ignore`). Os passos de e2e da C22 entram antes dele.
