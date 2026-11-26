@@ -1,17 +1,6 @@
-import { APP_NAME } from '@voto/shared';
 import type { ReactElement } from 'react';
 import { Route, Routes } from 'react-router';
-
-/**
- * Página inicial provisória: mostra o nome do sistema vindo de `@voto/shared`, o que
- * prova que o import entre workspaces funciona. O formulário de código do eleitor
- * entra aqui nas tarefas do frontend.
- *
- * @returns O elemento com o título da página.
- */
-function HomePage(): ReactElement {
-  return <h1>{APP_NAME}</h1>;
-}
+import { VoterEntryPage } from './features/voter/VoterEntryPage';
 
 /**
  * Raiz da aplicação: declara a tabela de rotas (architecture.md §9). O roteador
@@ -23,7 +12,7 @@ function HomePage(): ReactElement {
 export function App(): ReactElement {
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route path="/" element={<VoterEntryPage />} />
     </Routes>
   );
 }

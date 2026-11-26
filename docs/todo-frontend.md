@@ -100,8 +100,8 @@ agrupadas em um único commit.
 | C3 | Divide-se: transporte/erro e API pública podem ser validados separadamente | `[x] C3.a` núcleo de `fetch` e `ErrorDTO`; `[x] C3.b` métodos tipados de cada grupo de rotas |
 | C4 | Divide-se: o cliente real e a injeção por fake têm responsabilidades independentes | `[x] C4.a` interface e cliente Socket.IO; `[x] C4.b` `SocketProvider` e `createFakeSocket()` |
 | C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[x] C5.a` countdown corrigido por `serverNow`; `[x] C5.b` porcentagens e rótulos |
-| C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[x] C6.a` diálogos de confirmação; `[ ] C6.b` `Countdown` e `ErrorMessage` |
-| C7 | Divide-se: formulário/rota e integração da sessão são dois comportamentos fechados | `[ ] C7.a` formulário e armazenamento do token; `[ ] C7.b` navegação e erros da sessão |
+| C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[x] C6.a` diálogos de confirmação; `[x] C6.b` `Countdown` e `ErrorMessage` |
+| C7 | Divide-se: entrada e integração da sessão são dois comportamentos fechados | `[x] C7.a` formulário e criação de sessão; `[ ] C7.b` persistência, navegação e erros da sessão |
 | C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[ ] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[ ] C8.b` cédula e voto candidato/branco |
 | C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[ ] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[ ] C9.b` reconexão e ordenação de estado |
 | C10 | Divide-se: login em si não exige a proteção de toda a árvore de rotas | `[ ] C10.a` login, token e `/admin/me`; `[ ] C10.b` rotas protegidas e logout |
@@ -130,12 +130,12 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 
 > Atualizar esta seção quando cada tarefa criar módulos novos.
 
-- `apps/web/src/App.tsx` → tabela atual de rotas do frontend; hoje só contém `/`.
+- `apps/web/src/App.tsx` → tabela atual de rotas do frontend; `/` renderiza a entrada do eleitor.
 - `apps/web/src/main.tsx` → composição do `BrowserRouter` e da árvore React; objeto humilde,
   excluído da cobertura.
 - `apps/web/vite.config.ts` → proxy `/api` e `/socket.io` para `localhost:3000`.
 - `apps/web/test/setup.ts` → jest-dom e cleanup do Testing Library.
-- `apps/web/test/App.test.tsx` → teste de fumaça do esqueleto atual.
+- `apps/web/test/App.test.tsx` → verifica que a rota inicial exibe o formulário do eleitor.
 - `apps/web/src/api/api-client.ts` → transporte REST com prefixo `/api`, Bearer, JSON e `ApiError`.
 - `apps/web/src/api/admin-api.ts` → métodos REST tipados de autenticação, configuração e controle do admin.
 - `apps/web/src/api/voter-api.ts` → criação de sessão, leitura de estado e envio de voto.
@@ -144,6 +144,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/api/socket-provider.tsx` → contexto de estado realtime com criação/limpeza do cliente por sessão.
 - `apps/web/src/components/ConfirmDialog.tsx` e `DoubleConfirmDialog.tsx` → diálogos acessíveis de confirmação simples e por título exato.
 - `apps/web/src/components/Countdown.tsx` e `ErrorMessage.tsx` → timer acessível sincronizado ao servidor e mensagem acessível de erro da API.
+- `apps/web/src/features/voter/VoterEntryPage.tsx` → entrada acessível do eleitor, validação do código e início de sessão.
 - `apps/web/src/lib/countdown.ts` → cálculo puro dos segundos restantes com deslocamento do relógio do servidor.
 - `apps/web/src/lib/format.ts` → percentual de votos válidos e rótulos legíveis das regras de desempate.
 - `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
@@ -155,6 +156,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/countdown.test.ts` → prazo futuro, limites, expiração, offset de relógio e datas inválidas.
 - `apps/web/test/confirmation-dialogs.test.tsx` → comportamento, acessibilidade, cancelamento e título exato dos diálogos.
 - `apps/web/test/reusable-status-components.test.tsx` → atualização/expiração do timer e anúncio do código/mensagem de erro.
+- `apps/web/test/voter-entry-page.test.tsx` → validação local, normalização do código, início de sessão e erros da API.
 - `apps/web/test/format.test.ts` → porcentagens, zero votos válidos, arredondamento e rótulos de desempate.
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
@@ -354,14 +356,21 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/reusable-status-components.test.tsx` (3 casos: atualização, expiração e anúncio acessível do erro).
 - Decisões: a contagem usa o helper puro `getRemainingSeconds`; o timer acessível apresenta `MM:SS`, e o erro usa `role="alert"`.
 
-### [ ] C7.a — Formulário de entrada do eleitor
+### [x] C7.a — Formulário de entrada do eleitor
 **Ref.:** architecture §9 rota `/`.
 **Depende de:** C3.b, C6.b.
 **Fazer:** substituir a página provisória por campo de código, botão Entrar e validação local.
 **Testes (escrever antes):** código válido inicia sessão; vazio não chama API.
 **Pronto quando:** `/` é uma tela mobile, acessível e funcional.
-**Arquivos:** `apps/web/src/features/voter/VoterEntryPage.tsx`.
+**Arquivos:** `apps/web/src/features/voter/VoterEntryPage.tsx`, `apps/web/src/App.tsx`,
+`apps/web/test/App.test.tsx`, `apps/web/test/voter-entry-page.test.tsx`.
 **Commit sugerido:** `feat(web): cria entrada do eleitor por código`
+**Notas do agente:**
+- Feito: a rota `/` apresenta um formulário acessível, valida e normaliza o código pelo schema compartilhado, inicia sessão pela `voterApi` e mostra erros de API/rede.
+- Arquivos: `apps/web/src/features/voter/VoterEntryPage.tsx`, `apps/web/src/App.tsx`, `apps/web/test/App.test.tsx`, `apps/web/test/voter-entry-page.test.tsx`.
+- Como usar: entre com o código de oito caracteres; o formulário envia o código normalizado para `POST /voter/session`.
+- Testes: `apps/web/test/voter-entry-page.test.tsx` (6 casos: código válido, vazio, abaixo/acima do limite, rejeição da API e falha de rede); `apps/web/test/App.test.tsx` (2 casos).
+- Decisões: a normalização e o limite seguem `voterSessionBodySchema`; persistência de token/electionId e navegação ficam para C7.b, conforme o escopo detalhado dessa subtarefa.
 
 ### [ ] C7.b — Erros e navegação da sessão do eleitor
 **Ref.:** architecture §6.2.
