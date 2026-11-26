@@ -5,18 +5,20 @@ import { Navigate, useParams } from 'react-router';
 import { adminApi } from '../../../api/admin-api';
 import { ApiError } from '../../../api/api-client';
 import { useAdminAuth } from '../auth/admin-auth-context';
+import { AdminLivePanel } from '../live/AdminLivePanel';
 import { CandidatesTab } from '../config/CandidatesTab';
 import { QueueTab } from '../config/QueueTab';
 import { PositionsTab } from '../config/PositionsTab';
 import { VotersTab } from '../config/VotersTab';
 
-type ConfigurationTab = 'Positions' | 'Candidates' | 'Voters' | 'Order';
+type ConfigurationTab = 'Positions' | 'Candidates' | 'Voters' | 'Order' | 'Live';
 
 const CONFIGURATION_TABS: readonly ConfigurationTab[] = [
   'Positions',
   'Candidates',
   'Voters',
   'Order',
+  'Live',
 ];
 
 /**
@@ -149,6 +151,9 @@ export function AdminElectionConfigurationPage(): ReactElement {
               state={election}
               onElectionChange={setElection}
             />
+          )}
+          {selectedTab === tab && tab === 'Live' && (
+            <AdminLivePanel token={token} electionId={electionId} />
           )}
         </div>
       ))}

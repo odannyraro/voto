@@ -109,7 +109,7 @@ agrupadas em um único commit.
 | C12 | Divide-se: adicionar/editar cargos não inclui remover e confirmar | `[x] C12.a` criar e editar cargos; `[x] C12.b` remover cargo e confirmar estado permitido |
 | C13 | Divide-se: cadastro/validação e edição/removal têm casos próprios | `[x] C13.a` criar candidato e validações; `[x] C13.b` editar/remover candidato |
 | C14 | Divide-se: eleitores e fila são abas independentes com contratos próprios | `[x] C14.a` gerar, listar, copiar e revogar códigos; `[x] C14.b` ordem, sugestão e confirmação |
-| C15 | Divide-se: sincronização via socket e controles ao vivo podem ser validados separadamente | `[ ] C15.a` `useAdminElection` e ressincronização; `[ ] C15.b` abrir rodada, prazo e fechar antes |
+| C15 | Uma entrega: sincronização e controles ao vivo compõem o mesmo painel administrativo | `[x] C15.a + C15.b` painel ao vivo completo |
 | C16 | Divide-se: resolução de rodada e ações de cargo insuficiente são fluxos distintos | `[ ] C16.a` resultado, 2º turno, liberar, desfazer e anular; `[ ] C16.b` anexar, adiar e cancelar |
 | C17 | Divide-se: configuração do runner e dados de preparação são entregáveis separadas | `[ ] C17.a` `playwright.config.ts` e `webServer`; `[ ] C17.b` fixtures e helpers de API |
 | C18 | Não divide: uma jornada curta e linear de configuração | `[ ] C18` uma spec administrativa completa |
@@ -146,6 +146,8 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/features/admin/auth/AdminDashboardPage.tsx` → exibe identidade autenticada, lista de eleições e logout.
 - `apps/web/src/features/admin/elections/AdminElectionsPage.tsx` → carrega resumos, apresenta estados/contagens e cria eleições com validação compartilhada.
 - `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx` → carrega o agregado completo e navega pelas abas acessíveis de configuração.
+- `apps/web/src/features/admin/live/useAdminElection.ts` → sincroniza o agregado administrativo por REST/Socket.IO e reinscreve/ressincroniza após reconexão.
+- `apps/web/src/features/admin/live/AdminLivePanel.tsx` → mostra a fila ao vivo, abre e fecha rodadas e apresenta progresso e prazo.
 - `apps/web/src/features/admin/config/PositionsTab.tsx` → lista, cria, edita e remove cargos respeitando fila, confirmação e estado devolvido pela API.
 - `apps/web/src/features/admin/config/CandidatesTab.tsx` → cadastra e edita candidatos/candidaturas, mantém primeira opção válida e respeita erros do servidor na remoção.
 - `apps/web/src/features/admin/config/VotersTab.tsx` → gera códigos, mostra rótulos/status, copia credenciais e revoga eleitores após confirmação.
@@ -622,7 +624,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/admin-voter-queue-config.test.tsx` (3 casos: mover sem aplicação, sugestão não aplicada e persistência após confirmação).
 - Decisões: proposta local fica separada de `election.queue`; sugestões e alterações só substituem o estado após confirmação e resposta completa da API.
 
-### [ ] C15.a — Estado ao vivo via socket
+### [x] C15.a — Estado ao vivo via socket
 **Ref.:** architecture §6.1 e §7.
 **Depende de:** C4.b, C11.b.
 **Fazer:** criar `useAdminElection`, obter estado REST e observar `admin:state`.
@@ -630,8 +632,14 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** painel não mantém snapshot próprio divergente do servidor.
 **Arquivos:** `apps/web/src/features/admin/live/useAdminElection.ts`.
 **Commit sugerido:** `feat(web): sincroniza o painel ao vivo do admin`
+**Notas do agente:**
+- Feito: hook carrega o snapshot por REST, acompanha `admin:state`, protege contra respostas antigas e reinscreve/ressincroniza após reconexão.
+- Arquivos: `apps/web/src/features/admin/live/useAdminElection.ts`, `apps/web/src/App.tsx`.
+- Como usar: a rota de configuração administrativa monta `SocketProvider`; a aba Live consome `useAdminElection`.
+- Testes: `apps/web/test/admin-live-election.test.tsx` (4 cenários de sincronização, incluindo estado recebido pelo socket e reconexão).
+- Decisões: REST e Socket.IO substituem o agregado inteiro; versões de requisição e socket impedem snapshots obsoletos de sobrescrever estado atual.
 
-### [ ] C15.b — Controles de abertura e fechamento
+### [x] C15.b — Controles de abertura e fechamento
 **Ref.:** architecture §6.1.
 **Depende de:** C15.a, C14.b.
 **Fazer:** mostrar próximo cargo, abrir rodada, progresso, deadline e fechar antes.
@@ -639,6 +647,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** todas as ações usam as rotas corretas e o DTO atual.
 **Arquivos:** `apps/web/src/features/admin/live/`.
 **Commit sugerido:** `feat(web): adiciona controles da rodada ao vivo`
+**Notas do agente:**
+- Feito: painel exibe o próximo cargo, valida duração entre 5 e 3600 segundos, abre rodada, mostra votos e deadline/countdown e permite fechamento antecipado.
+- Arquivos: `apps/web/src/features/admin/live/AdminLivePanel.tsx`, `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx`, `apps/web/src/features/admin/config/QueueTab.tsx`.
+- Como usar: selecione a aba Live na configuração da eleição; duração vazia usa o padrão da eleição.
+- Testes: `apps/web/test/admin-live-election.test.tsx` (5 cenários de controles, limites inválidos, progresso, deadline/countdown e estado incompleto).
+- Decisões: validação reaproveita `openRoundBodySchema`; o estado devolvido pela API atualiza o snapshot, e um round sem DTO é reportado explicitamente.
 
 ### [ ] C16.a — Resultado e resolução da rodada
 **Ref.:** architecture §5.4 e §6.1.

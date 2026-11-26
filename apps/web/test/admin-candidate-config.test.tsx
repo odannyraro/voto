@@ -11,6 +11,7 @@ import { http, HttpResponse } from 'msw';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { createMockApiServer } from './msw/mock-api-server';
+import { createFakeSocket } from './utils/fake-socket';
 import { makeAdminElectionDTO } from './utils/factories';
 import { renderWithProviders } from './utils/render-with-providers';
 
@@ -130,7 +131,7 @@ afterAll(() => {
  * @returns The rendered application for candidate configuration.
  */
 function renderConfiguration(): void {
-  renderWithProviders(<App />, {
+  renderWithProviders(<App createSocketClient={() => createFakeSocket()} />, {
     initialEntries: [`/admin/eleicoes/${ELECTION_ID}/configurar`],
   });
 }

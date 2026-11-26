@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { createMockApiServer } from './msw/mock-api-server';
+import { createFakeSocket } from './utils/fake-socket';
 import { renderWithProviders } from './utils/render-with-providers';
 
 const ADMIN_TOKEN_KEY = 'voto:admin-token';
@@ -118,7 +119,9 @@ describe('administrator authentication', () => {
       }),
     );
     sessionStorage.setItem(ADMIN_TOKEN_KEY, 'mock-admin-token');
-    renderWithProviders(<App />, { initialEntries: ['/admin/eleicoes/election-1/configurar'] });
+    renderWithProviders(<App createSocketClient={() => createFakeSocket()} />, {
+      initialEntries: ['/admin/eleicoes/election-1/configurar'],
+    });
 
     expect(
       await screen.findByRole('heading', { name: 'Election configuration' }),

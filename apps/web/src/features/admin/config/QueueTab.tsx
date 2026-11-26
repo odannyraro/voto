@@ -58,11 +58,15 @@ export function QueueTab({
       return;
     }
 
+    const movingPosition = proposedOrder[index];
+    const displacedPosition = proposedOrder[destination];
+    if (movingPosition === undefined || displacedPosition === undefined) {
+      return;
+    }
+
     const updatedOrder = [...proposedOrder];
-    [updatedOrder[index], updatedOrder[destination]] = [
-      updatedOrder[destination] ?? '',
-      updatedOrder[index] ?? '',
-    ];
+    updatedOrder[index] = displacedPosition;
+    updatedOrder[destination] = movingPosition;
     setProposedOrder(updatedOrder);
     setErrorMessage(null);
   }
