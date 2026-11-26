@@ -658,7 +658,7 @@ Padrão: **um commit por tarefa do TO-DO**, contendo os testes e a implementaç�
 
 | Script | Faz |
 |---|---|
-| `npm run dev` | Servidor (`tsx watch`) + web (`vite`) em paralelo, com proxy do Vite para `/api` e `/socket.io`. **Ainda não existe**: hoje o proxy está no `vite.config.ts`, mas não há script que suba o servidor em modo de desenvolvimento |
+| `npm run dev` | Servidor (`tsup --watch`, que recompila e reinicia o `dist/main.js` a cada arquivo salvo, na porta 3000) + web (`vite`, porta 5173) em paralelo pelo `scripts/dev.mjs`, com proxy do Vite para `/api` e `/socket.io`. Ctrl+C encerra os dois. O admin só existe com `ADMIN_USERNAME`/`ADMIN_PASSWORD` no ambiente. |
 | `npm test` | Vitest em todos os workspaces |
 | `npm run test:coverage` | Igual ao anterior, com cobertura e thresholds |
 | `npm run e2e` | Playwright (sobe o servidor sozinho via `webServer`); entra com a C22 |

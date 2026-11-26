@@ -69,4 +69,10 @@ npm run build
 ADMIN_USERNAME=admin ADMIN_PASSWORD=admin123 npm start   # http://localhost:3000
 ```
 
+Para desenvolver, com recarga automática ao salvar (servidor na porta 3000 e front no Vite, porta 5173):
+
+```bash
+ADMIN_USERNAME=admin ADMIN_PASSWORD=admin123 npm run dev   # http://localhost:5173
+```
+
 _Domínio (testes de mutação) e frontend/e2e: a preencher._

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "tsup --watch src --watch ../../packages/domain/src --watch ../../packages/shared/src --onSuccess \"node dist/main.js\"",
     "build": "tsup",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
