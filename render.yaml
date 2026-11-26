@@ -2,7 +2,7 @@
 # e as conferências em produção estão em docs/deploy.md.
 services:
   - type: web
-    name: voto
+    name: vota-ae
     runtime: node
     plan: free
     # Perto do banco do Neon (AWS us-east-1), para cada consulta não cruzar o continente.
