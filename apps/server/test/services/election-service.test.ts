@@ -581,6 +581,48 @@ describe('ElectionService undo after an automatic closing', () => {
       expect(restored.current).toMatchObject({ rounds: [], positions: [{ status: 'PENDING' }] });
     },
   );
+
+  describe('when an admin command closed the overdue round', () => {
+    /**
+     * Serviço em que a rodada de `president` venceu sem o timer disparar, e foi o comando de
+     * renomear a eleição que a fechou.
+     *
+     * @returns O serviço e os doubles, como `makeService`.
+     */
+    async function serviceWithRoundClosedByACommand() {
+      const test = makeService();
+      await test.repository.create(
+        openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
+      );
+      await test.service.openRound(OWNER, 'e1', {
+        positionId: 'president',
+        durationSeconds: ONE_MINUTE_SECONDS,
+      });
+      test.clock.advance(JUST_PAST_THE_GRACE_MS);
+      await test.service.updateElection(OWNER, 'e1', { name: 'Annual vote' });
+      return test;
+    }
+
+    it('undoes only the command, restoring the round already closed', async () => {
+      const { service } = await serviceWithRoundClosedByACommand();
+
+      const restored = await service.undo(OWNER, 'e1');
+
+      expect(restored.current).toMatchObject({
+        name: 'Board election',
+        rounds: [{ status: 'CLOSED' }],
+      });
+    });
+
+    it('goes back to before the round was opened on the next undo', async () => {
+      const { service } = await serviceWithRoundClosedByACommand();
+      await service.undo(OWNER, 'e1');
+
+      const restored = await service.undo(OWNER, 'e1');
+
+      expect(restored.current.rounds).toEqual([]);
+    });
+  });
 });
 
 describe('ElectionService when saves of an overdue round compete', () => {

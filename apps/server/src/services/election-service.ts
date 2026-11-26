@@ -741,7 +741,8 @@ export class ElectionService {
    * @param record - Registro lido do repositório.
    * @param command - Comando do domínio a aplicar sobre a eleição atual.
    * @param arrivedAt - Quando o comando chegou, antes de esperar a vez na fila.
-   * @returns O registro salvo, com a versão incrementada e o estado anterior no histórico.
+   * @returns O registro salvo, com a versão incrementada e, no histórico, o estado sobre o
+   *   qual o comando agiu (já com o prazo vencido aplicado).
    * @throws {HttpError} 409 `VERSION_CONFLICT` se alguém gravou por fora da fila.
    * @throws {DomainError} Erro de negócio devolvido pelo comando.
    */
@@ -758,7 +759,9 @@ export class ElectionService {
     const arrival = { ...ctx, now: arrivedAt };
     const settled = closeOverdueRound(record.current, arrival, this.deps.voteGraceMs);
     const next = nextElection(record, command(settled, ctx));
-    const withSnapshot = pushSnapshot(record, next, this.deps.historyLimit);
+    // O passo do desfazer é só o comando: o snapshot já leva a rodada vencida fechada.
+    const beforeCommand = { ...record, current: settled };
+    const withSnapshot = pushSnapshot(beforeCommand, next, this.deps.historyLimit);
     return this.persist(withSnapshot, record.current.version, ctx);
   }
 
