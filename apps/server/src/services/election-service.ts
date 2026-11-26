@@ -79,6 +79,13 @@ export interface ElectionServiceDeps {
  */
 const MAX_VOTE_ATTEMPTS = 50;
 
+/**
+ * Quantas vezes o fechamento por prazo tenta gravar. Uma leitura concorrente se resolve na
+ * segunda (a rodada já aparece fechada); o teto cobre a disputa com votos tolerados que ainda
+ * estejam sendo gravados.
+ */
+const MAX_SETTLE_ATTEMPTS = MAX_VOTE_ATTEMPTS;
+
 /** Tolerância usada pelo timer, que só dispara quando a tolerância do voto já passou. */
 const NO_TOLERANCE_MS = 0;
 
@@ -140,10 +147,14 @@ export class ElectionService {
    * @param adminId - Admin autenticado; precisa ser o dono da eleição.
    * @param electionId - Eleição alvo.
    * @returns O registro atual, já com o prazo vencido aplicado.
-   * @throws {HttpError} 404 `ELECTION_NOT_FOUND` ou 403 `FORBIDDEN`.
+   * @throws {HttpError} 404 `ELECTION_NOT_FOUND`, 403 `FORBIDDEN` ou, se o fechamento perder
+   *   a disputa pela gravação em todas as tentativas, 409 `VERSION_CONFLICT`.
    */
   async getElection(adminId: string, electionId: string): Promise<ElectionRecord> {
-    return this.settle(await this.loadOwned(adminId, electionId), this.deps.voteGraceMs);
+    return retryOnVersionConflict(MAX_SETTLE_ATTEMPTS, async () => {
+      const record = await this.loadOwned(adminId, electionId);
+      return this.settle(record, this.deps.voteGraceMs);
+    });
   }
 
   /**
@@ -152,7 +163,8 @@ export class ElectionService {
    *
    * @param electionId - Eleição alvo.
    * @returns O registro atual já com o prazo vencido aplicado, ou `null` se a eleição não existir.
-   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou durante o fechamento.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se o fechamento perder a disputa pela
+   *   gravação em todas as tentativas.
    */
   async settleDueRound(electionId: string): Promise<ElectionRecord | null> {
     return this.settleStored(electionId, this.deps.voteGraceMs);
@@ -647,19 +659,22 @@ export class ElectionService {
   }
 
   /**
-   * Carrega a eleição, sem conferir dono, e aplica o prazo vencido.
+   * Carrega a eleição, sem conferir dono, e aplica o prazo vencido. Quem fecha por prazo só
+   * precisa que a rodada fique fechada: se outro gravou antes, relê e devolve o estado atual.
    *
    * @param electionId - Eleição alvo.
    * @param toleranceMs - Quanto depois do prazo a rodada ainda é considerada aberta.
    * @returns O registro com o prazo aplicado, ou `null` se a eleição não existir.
-   * @throws {HttpError} 409 `VERSION_CONFLICT` se outro comando salvou durante o fechamento.
+   * @throws {HttpError} 409 `VERSION_CONFLICT` se todas as tentativas perderem a disputa.
    */
   private async settleStored(
     electionId: string,
     toleranceMs: number,
   ): Promise<ElectionRecord | null> {
-    const record = await this.deps.electionRepository.get(electionId);
-    return record && this.settle(record, toleranceMs);
+    return retryOnVersionConflict(MAX_SETTLE_ATTEMPTS, async () => {
+      const record = await this.deps.electionRepository.get(electionId);
+      return record && this.settle(record, toleranceMs);
+    });
   }
 
   /**

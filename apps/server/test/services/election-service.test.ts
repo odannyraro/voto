@@ -56,6 +56,21 @@ function makeService(
   return { service, repository, clock, scheduler, notifier, logger };
 }
 
+/** Repositório cujas próximas gravações falham com os erros enfileirados pelo teste. */
+class FailingSaveRepository extends InMemoryElectionRepository {
+  /** Erros que as próximas gravações lançam, um por gravação, em ordem. */
+  pendingFailures: Error[] = [];
+  /** Roda a cada falha, para simular o que acontece enquanto quem grava espera. */
+  onFailure: () => void = () => undefined;
+
+  override save(record: ElectionRecord, expectedVersion: number): Promise<void> {
+    const failure = this.pendingFailures.shift();
+    if (!failure) return super.save(record, expectedVersion);
+    this.onFailure();
+    return Promise.reject(failure);
+  }
+}
+
 describe('ElectionService command flow', () => {
   describe('authorization', () => {
     it('rejects a command on an election that does not exist with 404', async () => {
@@ -568,6 +583,72 @@ describe('ElectionService undo after an automatic closing', () => {
   );
 });
 
+describe('ElectionService when saves of an overdue round compete', () => {
+  const MAX_SETTLE_ATTEMPTS = 50;
+
+  /**
+   * Serviço com a eleição `e1`, a rodada `r1` (1 min) aberta em `START` (versão 0) e o
+   * relógio já além do prazo com a tolerância.
+   *
+   * @returns O serviço, os doubles e o repositório que pode ser programado para falhar.
+   */
+  async function serviceWithUnclosedOverdueRound() {
+    const repository = new FailingSaveRepository();
+    const election = openElectionWithVoters({
+      id: 'e1',
+      adminId: OWNER,
+      positionIds: ['president'],
+    });
+    await repository.create(
+      withOpenRound(election, { positionId: 'president', roundId: 'r1', openedAt: START }),
+    );
+    const test = makeService({ repository });
+    test.clock.advance(JUST_PAST_THE_GRACE_MS);
+    return { ...test, repository };
+  }
+
+  it('gives every simultaneous read the round closed by a single save', async () => {
+    const { service } = await serviceWithUnclosedOverdueRound();
+
+    const reads = Promise.all([
+      service.getElection(OWNER, 'e1'),
+      service.settleDueRound('e1'),
+      service.settleDueRound('e1'),
+    ]);
+
+    const closedOnce = { current: { version: 1, rounds: [{ status: 'CLOSED' }] } };
+    await expect(reads).resolves.toMatchObject([closedOnce, closedOnce, closedOnce]);
+  });
+
+  it('retries the deadline closing that lost to another save, without logging it', async () => {
+    const { service, repository, logger } = await serviceWithUnclosedOverdueRound();
+    repository.pendingFailures = [versionConflict()];
+
+    await service.handleDeadline('e1');
+
+    expect((await repository.get('e1'))?.current.rounds).toMatchObject([{ status: 'CLOSED' }]);
+    expect(logger.errors).toEqual([]);
+  });
+
+  it('closes the round when only the last allowed attempt can save it', async () => {
+    const { service, repository } = await serviceWithUnclosedOverdueRound();
+    repository.pendingFailures = Array.from({ length: MAX_SETTLE_ATTEMPTS - 1 }, versionConflict);
+
+    const record = await service.getElection(OWNER, 'e1');
+
+    expect(record.current.rounds).toMatchObject([{ status: 'CLOSED' }]);
+  });
+
+  it('gives up with VERSION_CONFLICT after the maximum number of attempts', async () => {
+    const { service, repository } = await serviceWithUnclosedOverdueRound();
+    repository.pendingFailures = Array.from({ length: MAX_SETTLE_ATTEMPTS }, versionConflict);
+
+    const read = service.getElection(OWNER, 'e1');
+
+    await expect(read).rejects.toMatchObject({ status: 409, code: 'VERSION_CONFLICT' });
+  });
+});
+
 describe('ElectionService.updateElection', () => {
   it('changes the name and the default voting time, incrementing the version', async () => {
     const { service, repository } = makeService();
@@ -871,21 +952,6 @@ describe('ElectionService.castVote', () => {
   const VOTE = { roundId: 'r1', choice: 'president-candidate' };
   const MAX_VOTE_ATTEMPTS = 50;
   const LONG_AFTER_THE_DEADLINE_MS = 10 * ONE_MINUTE_MS;
-
-  /** Repositório cujas próximas gravações falham com os erros enfileirados pelo teste. */
-  class FailingSaveRepository extends InMemoryElectionRepository {
-    /** Erros que as próximas gravações lançam, um por gravação, em ordem. */
-    pendingFailures: Error[] = [];
-    /** Roda a cada falha, para simular o que acontece enquanto o voto espera. */
-    onFailure: () => void = () => undefined;
-
-    override save(record: ElectionRecord, expectedVersion: number): Promise<void> {
-      const failure = this.pendingFailures.shift();
-      if (!failure) return super.save(record, expectedVersion);
-      this.onFailure();
-      return Promise.reject(failure);
-    }
-  }
 
   /**
    * Serviço com a eleição `e1`, dois eleitores e a rodada `r1` (1 min) aberta em `START`.

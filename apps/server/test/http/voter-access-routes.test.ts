@@ -1,8 +1,9 @@
 import { revokeVoter } from '@voto/domain';
-import type { VoterStateDTO } from '@voto/shared';
+import type { AdminElectionDTO, VoterStateDTO } from '@voto/shared';
 import { describe, expect, it } from 'vitest';
 import { InMemoryElectionRepository } from '../../src/adapters/in-memory-election-repository';
 import type { ElectionRecord, VoterCodeOwner } from '../../src/ports';
+import { GatedReadsElectionRepository } from '../doubles/gated-reads-election-repository';
 import { ANA, appWithTwoAdmins, voterSessionHeaders } from '../support/admin-test-app';
 import { openElectionWithVoters, withOpenRound } from '../support/election-fixtures';
 import { unwrap } from '../support/election-records';
@@ -272,6 +273,25 @@ describe('GET /api/voter/state', () => {
     await test.app.inject({ method: 'GET', url: '/api/voter/state', headers });
 
     expect(test.notifier.adminStates).toHaveLength(1);
+  });
+
+  it('answers two simultaneous reads of an overdue round with the round closed', async () => {
+    const repository = new GatedReadsElectionRepository();
+    const test = await appWithTwoAdmins({ electionRepository: repository });
+    await repository.create(electionWithOpenMayorRound());
+    const headers = await voterSessionHeaders(test, VOTER_CODE);
+    test.clock.advance(JUST_PAST_THE_GRACE_MS);
+    // As duas requisições leem a rodada ainda aberta antes de qualquer uma gravar.
+    repository.holdNextReads(2);
+
+    const [voter, admin] = await Promise.all([
+      test.app.inject({ method: 'GET', url: '/api/voter/state', headers }),
+      test.app.inject({ method: 'GET', url: '/api/elections/e1', headers: test.asAna }),
+    ]);
+
+    expect([voter.statusCode, admin.statusCode]).toEqual([OK, OK]);
+    expect(voter.json<VoterStateDTO>().phase).toBe('WAITING');
+    expect(admin.json<AdminElectionDTO>().election.rounds).toMatchObject([{ status: 'CLOSED' }]);
   });
 
   it('does not save or notify when no deadline has passed', async () => {
