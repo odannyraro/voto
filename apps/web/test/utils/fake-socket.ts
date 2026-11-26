@@ -12,6 +12,10 @@ export interface FakeSocket extends SocketClient {
    */
   connect(): void;
   /**
+   * Simula a reconexão do socket após uma interrupção.
+   */
+  reconnect(): void;
+  /**
    * Emite um pedido de acompanhamento administrativo.
    *
    * @param electionId - Eleição solicitada para acompanhamento.
@@ -32,6 +36,7 @@ export function createFakeSocket(): FakeSocket {
   let connected = true;
   const adminListeners = new Set<(state: AdminElectionDTO) => void>();
   const voterListeners = new Set<(state: VoterStateDTO) => void>();
+  const reconnectListeners = new Set<() => void>();
   const watchedElections: string[] = [];
 
   return {
@@ -44,6 +49,10 @@ export function createFakeSocket(): FakeSocket {
     connect() {
       connected = true;
     },
+    reconnect() {
+      connected = true;
+      reconnectListeners.forEach((listener) => listener());
+    },
     watchAdmin(electionId) {
       watchedElections.push(electionId);
     },
@@ -54,6 +63,10 @@ export function createFakeSocket(): FakeSocket {
     onVoterState(listener) {
       voterListeners.add(listener);
       return () => voterListeners.delete(listener);
+    },
+    onReconnect(listener) {
+      reconnectListeners.add(listener);
+      return () => reconnectListeners.delete(listener);
     },
     emitAdminState(state) {
       if (connected) {

@@ -2,8 +2,11 @@ import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../src/api/api-client';
+import * as socketClient from '../src/api/socket-client';
 import { voterApi } from '../src/api/voter-api';
 import { App } from '../src/App';
+import { createFakeSocket } from './utils/fake-socket';
+import { makeVoterStateDTO } from './utils/factories';
 import { renderWithProviders } from './utils/render-with-providers';
 
 afterEach(() => {
@@ -18,11 +21,16 @@ describe('VoterEntryPage', () => {
       electionId: 'election-1',
       electionName: 'Student Council',
     });
+    vi.spyOn(voterApi, 'getState').mockResolvedValue(
+      makeVoterStateDTO({ phase: 'WAITING', electionName: 'Student Council' }),
+    );
+    vi.spyOn(socketClient, 'createSocketClient').mockReturnValue(createFakeSocket());
     const user = userEvent.setup();
     renderWithProviders(<App />);
 
     await user.type(screen.getByRole('textbox', { name: 'Voter code' }), 'abc23456');
     await user.click(screen.getByRole('button', { name: 'Enter' }));
+    await screen.findByRole('heading', { name: 'Waiting for election to start' });
 
     expect({
       request: createSession.mock.calls[0]?.[0],

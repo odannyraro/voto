@@ -102,7 +102,7 @@ agrupadas em um único commit.
 | C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[x] C5.a` countdown corrigido por `serverNow`; `[x] C5.b` porcentagens e rótulos |
 | C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[x] C6.a` diálogos de confirmação; `[x] C6.b` `Countdown` e `ErrorMessage` |
 | C7 | Divide-se: entrada e integração da sessão são dois comportamentos fechados | `[x] C7.a` formulário e criação de sessão; `[x] C7.b` persistência, navegação e erros da sessão |
-| C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[ ] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[ ] C8.b` cédula e voto candidato/branco |
+| C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[x] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[ ] C8.b` cédula e voto candidato/branco |
 | C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[ ] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[ ] C9.b` reconexão e ordenação de estado |
 | C10 | Divide-se: login em si não exige a proteção de toda a árvore de rotas | `[ ] C10.a` login, token e `/admin/me`; `[ ] C10.b` rotas protegidas e logout |
 | C11 | Divide-se: leitura da lista e mutação/criação têm UI e testes distintos | `[ ] C11.a` lista de eleições; `[ ] C11.b` criação e navegação |
@@ -130,7 +130,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 
 > Atualizar esta seção quando cada tarefa criar módulos novos.
 
-- `apps/web/src/App.tsx` → tabela atual de rotas do frontend; `/` renderiza a entrada do eleitor.
+- `apps/web/src/App.tsx` → tabela de rotas do frontend; `/` inicia entrada e `/votar` restaura a sessão do eleitor.
 - `apps/web/src/main.tsx` → composição do `BrowserRouter` e da árvore React; objeto humilde,
   excluído da cobertura.
 - `apps/web/vite.config.ts` → proxy `/api` e `/socket.io` para `localhost:3000`.
@@ -140,25 +140,27 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/api/admin-api.ts` → métodos REST tipados de autenticação, configuração e controle do admin.
 - `apps/web/src/api/voter-api.ts` → criação de sessão, leitura de estado e envio de voto.
 - `apps/web/src/api/public-api.ts` → consulta pública de saúde da API.
-- `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado e listeners removíveis.
-- `apps/web/src/api/socket-provider.tsx` → contexto de estado realtime com criação/limpeza do cliente por sessão.
+- `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado, listeners removíveis e detecção de reconexão.
+- `apps/web/src/api/socket-provider.tsx` → contexto de estado realtime com criação/limpeza do cliente por sessão e inscrição em reconexão.
 - `apps/web/src/components/ConfirmDialog.tsx` e `DoubleConfirmDialog.tsx` → diálogos acessíveis de confirmação simples e por título exato.
 - `apps/web/src/components/Countdown.tsx` e `ErrorMessage.tsx` → timer acessível sincronizado ao servidor e mensagem acessível de erro da API.
 - `apps/web/src/features/voter/VoterEntryPage.tsx` → entrada acessível do eleitor, validação do código e início de sessão.
-- `apps/web/src/features/voter/voter-session-storage.ts` → persiste somente token e electionId na sessão da aba.
-- `apps/web/src/features/voter/VoterSessionPage.tsx` → destino da navegação após iniciar sessão do eleitor.
+- `apps/web/src/features/voter/voter-session-storage.ts` → persiste e valida token/electionId na sessão da aba.
+- `apps/web/src/features/voter/useVoterSession.ts` → carrega o snapshot REST do eleitor e ressincroniza após eventos realtime/reconexão.
+- `apps/web/src/features/voter/VoterSessionPage.tsx` → mostra a espera `WAITING`, a fase atual e falhas da sessão.
 - `apps/web/src/lib/countdown.ts` → cálculo puro dos segundos restantes com deslocamento do relógio do servidor.
 - `apps/web/src/lib/format.ts` → percentual de votos válidos e rótulos legíveis das regras de desempate.
 - `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
 - `apps/web/test/api-methods.test.ts` → contratos MSW de rota, método, token e corpo de cada operação REST.
-- `apps/web/test/socket-client.test.ts` → testes do handshake, `admin:watch`, estados recebidos e limpeza de listeners.
+- `apps/web/test/socket-client.test.ts` → testes do handshake, `admin:watch`, estados, reconexão e limpeza de listeners.
 - `apps/web/test/socket-client.integration.test.ts` → rodada local efêmera com o cliente e servidor Socket.IO reais.
-- `apps/web/test/utils/fake-socket.ts` → fake injetável com controle de conexão, eventos e eleições observadas.
+- `apps/web/test/utils/fake-socket.ts` → fake injetável com controle de conexão, reconexão, eventos e eleições observadas.
 - `apps/web/test/socket-provider.test.tsx` e `fake-socket.test.ts` → estado do contexto, descarte e ciclo de vida do fake.
 - `apps/web/test/countdown.test.ts` → prazo futuro, limites, expiração, offset de relógio e datas inválidas.
 - `apps/web/test/confirmation-dialogs.test.tsx` → comportamento, acessibilidade, cancelamento e título exato dos diálogos.
 - `apps/web/test/reusable-status-components.test.tsx` → atualização/expiração do timer e anúncio do código/mensagem de erro.
 - `apps/web/test/voter-entry-page.test.tsx` → validação local, normalização do código, início de sessão e erros da API.
+- `apps/web/test/voter-session.test.tsx` → carregamento inicial, estado `WAITING`, eventos de socket, reconexão, erros e credenciais persistidas.
 - `apps/web/test/format.test.ts` → porcentagens, zero votos válidos, arredondamento e rótulos de desempate.
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
@@ -390,7 +392,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/voter-entry-page.test.tsx` (3 casos novos cobrindo persistência/navegação, `INVALID_CODE` e `VOTER_REVOKED`; 7 casos no arquivo).
 - Decisões: `sessionStorage` limita as credenciais à aba atual; somente os campos necessários para retomar o fluxo são persistidos, sem armazenar o nome da eleição.
 
-### [ ] C8.a — Hook da sessão e fase WAITING
+### [x] C8.a — Hook da sessão e fase WAITING
 **Ref.:** architecture §6.2 e §7.
 **Depende de:** C4.b, C5.b, C7.b.
 **Fazer:** criar `useVoterSession`, consulta inicial e assinatura de `voter:state`.
@@ -398,6 +400,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** hook substitui o estado local pelo estado recebido do servidor.
 **Arquivos:** `apps/web/src/features/voter/useVoterSession.ts`.
 **Commit sugerido:** `feat(web): adiciona hook da sessão do eleitor`
+**Notas do agente:**
+- Feito: `useVoterSession` consulta o estado inicial, substitui snapshots com `voter:state` e busca novamente após reconexão; a sessão `WAITING` informa eleição e estado de espera.
+- Arquivos: `apps/web/src/features/voter/useVoterSession.ts`, `VoterSessionPage.tsx`, `voter-session-storage.ts`, `App.tsx`, `api/socket-client.ts`, `api/socket-provider.tsx`, testes correspondentes.
+- Como usar: `/votar` valida as credenciais salvas na aba, conecta o provider com o token e apresenta a fase mais recente do servidor.
+- Testes: `apps/web/test/voter-session.test.tsx` (10 casos), `socket-client.test.ts` (1 caso de reconexão); sessão de entrada também verifica a navegação autenticada.
+- Decisões: eventos realtime vencem respostas REST iniciadas antes deles; reconexão dispara GET de ressincronização e credenciais ausentes/corrompidas não abrem socket.
 
 ### [ ] C8.b — Cédula e registro do voto
 **Ref.:** architecture §6.2.

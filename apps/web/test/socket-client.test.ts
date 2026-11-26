@@ -14,6 +14,7 @@ const ELECTION_ID = 'election-1';
 class FakeSocketConnection implements SocketConnection {
   public readonly adminListeners = new Set<(state: AdminElectionDTO) => void>();
   public readonly voterListeners = new Set<(state: VoterStateDTO) => void>();
+  public readonly reconnectListeners = new Set<() => void>();
   public readonly emittedEvents: Array<{ event: string; payload: unknown }> = [];
   public disconnected = false;
 
@@ -37,6 +38,16 @@ class FakeSocketConnection implements SocketConnection {
     this.voterListeners.delete(listener);
   }
 
+  /** @param listener - Ouvinte chamado após a reconexão simulada. */
+  public onReconnect(listener: () => void): void {
+    this.reconnectListeners.add(listener);
+  }
+
+  /** @param listener - Ouvinte removido da conexão simulada. */
+  public offReconnect(listener: () => void): void {
+    this.reconnectListeners.delete(listener);
+  }
+
   /** @param payload - Conteúdo do evento a registrar. */
   public watchAdmin(payload: { readonly electionId: string }): void {
     this.emittedEvents.push({ event: SOCKET_EVENTS.ADMIN_WATCH, payload });
@@ -55,6 +66,11 @@ class FakeSocketConnection implements SocketConnection {
   /** @param state - Estado do eleitor enviado pelo servidor simulado. */
   public emitVoterState(state: VoterStateDTO): void {
     this.voterListeners.forEach((listener) => listener(state));
+  }
+
+  /** Simula uma reconexão Socket.IO concluída. */
+  public emitReconnect(): void {
+    this.reconnectListeners.forEach((listener) => listener());
   }
 }
 
@@ -131,6 +147,19 @@ describe('createSocketClient', () => {
     expect(receivedStates).toEqual([state]);
   });
 
+  it('notifies reconnect listeners and removes them when unsubscribed', () => {
+    const connection = new FakeSocketConnection();
+    const { client } = createTestClient(connection);
+    const reconnects: string[] = [];
+    const unsubscribe = client.onReconnect(() => reconnects.push('reconnected'));
+
+    connection.emitReconnect();
+    unsubscribe();
+    connection.emitReconnect();
+
+    expect(reconnects).toEqual(['reconnected']);
+  });
+
   it('removes all event listeners and closes the connection on disconnect', () => {
     const connection = new FakeSocketConnection();
     const { client } = createTestClient(connection);
@@ -142,7 +171,13 @@ describe('createSocketClient', () => {
     expect({
       adminListeners: connection.adminListeners.size,
       voterListeners: connection.voterListeners.size,
+      reconnectListeners: connection.reconnectListeners.size,
       disconnected: connection.disconnected,
-    }).toEqual({ adminListeners: 0, voterListeners: 0, disconnected: true });
+    }).toEqual({
+      adminListeners: 0,
+      voterListeners: 0,
+      reconnectListeners: 0,
+      disconnected: true,
+    });
   });
 });

@@ -36,6 +36,18 @@ export interface SocketConnection {
    */
   offVoterState(listener: (state: VoterStateDTO) => void): void;
   /**
+   * Inscreve um ouvinte chamado após uma reconexão bem-sucedida.
+   *
+   * @param listener - Ação executada quando o transporte retoma a conexão.
+   */
+  onReconnect(listener: () => void): void;
+  /**
+   * Remove um ouvinte de reconexão previamente registrado.
+   *
+   * @param listener - O mesmo ouvinte previamente registrado.
+   */
+  offReconnect(listener: () => void): void;
+  /**
    * Pede ao servidor para observar uma eleição como admin.
    *
    * @param payload - Identificador da eleição a observar.
@@ -93,6 +105,13 @@ export interface SocketClient {
    * @returns Função que remove somente este ouvinte.
    */
   onVoterState(listener: (state: VoterStateDTO) => void): () => void;
+  /**
+   * Escuta reconexões para permitir que a tela recarregue o estado atual do servidor.
+   *
+   * @param listener - Ação executada após uma reconexão bem-sucedida.
+   * @returns Função que remove somente este ouvinte.
+   */
+  onReconnect(listener: () => void): () => void;
   /** Remove os ouvintes ativos e encerra a conexão. */
   disconnect(): void;
 }
@@ -116,17 +135,19 @@ function createSocketConnection(url: string, options: SocketConnectionOptions): 
     offAdminState: (listener) => socket.off(SOCKET_EVENTS.ADMIN_STATE, listener),
     onVoterState: (listener) => socket.on(SOCKET_EVENTS.VOTER_STATE, listener),
     offVoterState: (listener) => socket.off(SOCKET_EVENTS.VOTER_STATE, listener),
+    onReconnect: (listener) => socket.io.on('reconnect', listener),
+    offReconnect: (listener) => socket.io.off('reconnect', listener),
     watchAdmin: (payload) => socket.emit(SOCKET_EVENTS.ADMIN_WATCH, payload),
     disconnect: () => socket.disconnect(),
   };
 }
 
 /**
- * Cria um cliente Socket.IO tipado para a sessão autenticada.
+ * Cria um cliente Socket.IO tipado para estado realtime e detecção de reconexões.
  *
  * @param token - Token de admin ou eleitor usado no handshake.
  * @param options - URL e fábrica opcional da conexão realtime.
- * @returns Cliente para observar estados e assistir uma eleição como admin.
+ * @returns Cliente para observar estados, assistir eleições e detectar reconexões.
  */
 export function createSocketClient(token: string, options: SocketClientOptions = {}): SocketClient {
   const connectionFactory = options.connectionFactory ?? createSocketConnection;
@@ -163,6 +184,30 @@ export function createSocketClient(token: string, options: SocketClientOptions =
     return unsubscribe;
   }
 
+  /**
+   * Registra e acompanha um ouvinte de reconexão junto à vida do cliente.
+   *
+   * @param listener - Ação executada pelo cliente após a reconexão.
+   * @returns Função idempotente que remove o ouvinte.
+   */
+  function subscribeToReconnect(listener: () => void): () => void {
+    connection.onReconnect(listener);
+    let active = true;
+
+    const unsubscribe = (): void => {
+      if (!active) {
+        return;
+      }
+
+      active = false;
+      connection.offReconnect(listener);
+      subscriptions.delete(unsubscribe);
+    };
+
+    subscriptions.add(unsubscribe);
+    return unsubscribe;
+  }
+
   return {
     watchAdmin: (electionId) => connection.watchAdmin({ electionId }),
     onAdminState: (listener) =>
@@ -177,6 +222,7 @@ export function createSocketClient(token: string, options: SocketClientOptions =
         (handler) => connection.onVoterState(handler),
         (handler) => connection.offVoterState(handler),
       ),
+    onReconnect: subscribeToReconnect,
     disconnect: () => {
       subscriptions.forEach((unsubscribe) => unsubscribe());
       connection.disconnect();

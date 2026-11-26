@@ -8,6 +8,13 @@ export interface SocketContextValue {
   readonly adminState: AdminElectionDTO | null;
   readonly voterState: VoterStateDTO | null;
   /**
+   * Registra uma ação para ressincronizar estado após reconexão do transporte.
+   *
+   * @param listener - Ação executada após uma reconexão bem-sucedida.
+   * @returns Função que remove o ouvinte.
+   */
+  onReconnect(listener: () => void): () => void;
+  /**
    * Solicita ao servidor acompanhar uma eleição como admin.
    *
    * @param electionId - Identificador da eleição observada pelo admin.
@@ -66,9 +73,13 @@ export function SocketProvider({
     },
     [client],
   );
+  const onReconnect = useCallback(
+    (listener: () => void): (() => void) => client?.onReconnect(listener) ?? (() => undefined),
+    [client],
+  );
   const contextValue = useMemo(
-    () => ({ adminState, voterState, watchAdmin }),
-    [adminState, voterState, watchAdmin],
+    () => ({ adminState, voterState, watchAdmin, onReconnect }),
+    [adminState, voterState, watchAdmin, onReconnect],
   );
 
   return <SocketContext.Provider value={contextValue}>{children}</SocketContext.Provider>;
