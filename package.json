@@ -16,12 +16,15 @@
     "format:check": "prettier --check .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "test:coverage": "npm run test:coverage --workspaces --if-present"
+    "test:coverage": "npm run test:coverage --workspaces --if-present",
+    "build": "npm run build -w apps/web && npm run build -w apps/server",
+    "start": "cross-env WEB_DIST_DIR=apps/web/dist node apps/server/dist/main.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@typescript/native": "npm:typescript@^7.0.2",
     "@vitest/coverage-v8": "^5.1.1",
+    "cross-env": "^10.1.0",
     "eslint": "^10.15.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.14.0",

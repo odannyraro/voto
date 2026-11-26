@@ -1,4 +1,4 @@
-import { revokeVoter } from '@voto/domain';
+import { pushSnapshot, revokeVoter } from '@voto/domain';
 import { describe, expect, it } from 'vitest';
 import type { ElectionRepository } from '../../src/ports';
 import { anElectionRecord, unwrap } from '../support/election-records';
@@ -44,6 +44,23 @@ export function describeElectionRepositoryContract(
         const second = repo.create(anElectionRecord({ id: 'election-1' }));
 
         await expect(second).rejects.toThrow(/already exists/);
+      });
+
+      it('returns the previous snapshots together with the current election', async () => {
+        // O desfazer precisa sobreviver a um reinício, então o histórico é persistido junto.
+        const repo = await makeRepo();
+        const original = anElectionRecord({ id: 'election-1' });
+        const renamed = pushSnapshot(original, {
+          ...original.current,
+          name: 'Renamed election',
+          version: 1,
+        });
+        await repo.create(original);
+        await repo.save(renamed, 0);
+
+        const found = await repo.get('election-1');
+
+        expect(found?.past).toEqual([original.current]);
       });
 
       it('is not affected by changes made to the object that was returned', async () => {
@@ -102,9 +119,9 @@ export function describeElectionRepositoryContract(
         const repo = await makeRepo();
         const original = anElectionRecord({ id: 'election-1', version: 3 });
         await repo.create(original);
-        await Promise.allSettled([
+        await expect(
           repo.save(anElectionRecord({ id: 'election-1', version: 4 }), 2),
-        ]);
+        ).rejects.toMatchObject({ code: 'VERSION_CONFLICT' });
 
         const found = await repo.get('election-1');
 
@@ -151,6 +168,41 @@ export function describeElectionRepositoryContract(
       });
     });
 
+    describe.each([
+      ['listByAdmin', (repo: ElectionRepository) => repo.listByAdmin('admin-1')],
+      ['listAll', (repo: ElectionRepository) => repo.listAll()],
+    ])('order of %s', (_listing, list) => {
+      /**
+       * Cria um repositório com três eleições do mesmo admin, em uma ordem que não é a dos ids.
+       *
+       * @returns O repositório com `charlie`, `alpha` e `bravo`, criadas nessa ordem.
+       */
+      async function repositoryWithThreeElections(): Promise<ElectionRepository> {
+        const repo = await makeRepo();
+        await repo.create(anElectionRecord({ id: 'charlie' }));
+        await repo.create(anElectionRecord({ id: 'alpha' }));
+        await repo.create(anElectionRecord({ id: 'bravo' }));
+        return repo;
+      }
+
+      it('is the order in which the elections were created', async () => {
+        const repo = await repositoryWithThreeElections();
+
+        const listed = await list(repo);
+
+        expect(listed.map((record) => record.current.id)).toEqual(['charlie', 'alpha', 'bravo']);
+      });
+
+      it('does not change when an earlier election is saved again', async () => {
+        const repo = await repositoryWithThreeElections();
+        await repo.save(anElectionRecord({ id: 'charlie', version: 1 }), 0);
+
+        const listed = await list(repo);
+
+        expect(listed.map((record) => record.current.id)).toEqual(['charlie', 'alpha', 'bravo']);
+      });
+    });
+
     describe('voter codes', () => {
       it('finds the election and voter that own a code', async () => {
         const repo = await makeRepo();
@@ -178,6 +230,36 @@ export function describeElectionRepositoryContract(
         const owner = await repo.findByVoterCode('BBBBBBBB');
 
         expect(owner).toEqual({ electionId: 'election-2', voterId: 'election-2:BBBBBBBB' });
+      });
+
+      it('indexes the code of every voter of an election', async () => {
+        const repo = await makeRepo();
+        const voterCodes = ['AAAAAAAA', 'BBBBBBBB', 'CCCCCCCC'];
+        await repo.create(anElectionRecord({ id: 'election-1', voterCodes }));
+
+        const owner = await repo.findByVoterCode('CCCCCCCC');
+
+        expect(owner).toEqual({ electionId: 'election-1', voterId: 'election-1:CCCCCCCC' });
+      });
+
+      it('keeps the indexed codes when a save is rejected', async () => {
+        const repo = await makeRepo();
+        await repo.create(
+          anElectionRecord({ id: 'election-1', voterCodes: ['AAAAAAAA'], version: 3 }),
+        );
+        await expect(
+          repo.save(
+            anElectionRecord({ id: 'election-1', voterCodes: ['BBBBBBBB'], version: 4 }),
+            2,
+          ),
+        ).rejects.toMatchObject({ code: 'VERSION_CONFLICT' });
+
+        const taken = {
+          kept: await repo.isCodeTaken('AAAAAAAA'),
+          rejected: await repo.isCodeTaken('BBBBBBBB'),
+        };
+
+        expect(taken).toEqual({ kept: true, rejected: false });
       });
 
       it('indexes codes of voters added by a later save', async () => {

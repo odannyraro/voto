@@ -49,14 +49,15 @@ export interface ElectionRepository {
    * Lista as eleições de um admin.
    *
    * @param adminId - Id do admin dono.
-   * @returns Os registros desse admin; vazio se não tiver nenhum.
+   * @returns Os registros desse admin, na ordem em que foram criados (salvar de novo não
+   *   muda a posição); vazio se não tiver nenhum.
    */
   listByAdmin(adminId: string): Promise<ElectionRecord[]>;
 
   /**
    * Lista todas as eleições (usado ao reiniciar o servidor para reagendar prazos).
    *
-   * @returns Todos os registros guardados.
+   * @returns Todos os registros guardados, na ordem em que foram criados.
    */
   listAll(): Promise<ElectionRecord[]>;
 

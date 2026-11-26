@@ -1,15 +1,17 @@
 import { revokeVoter } from '@voto/domain';
 import { describe, expect, it } from 'vitest';
 import { InMemoryElectionRepository } from '../../src/adapters/in-memory-election-repository';
+import { versionConflict } from '../../src/adapters/repository-errors';
 import type { ElectionRepository } from '../../src/ports';
 import { ElectionService } from '../../src/services/election-service';
+import { FailingSaveElectionRepository } from '../doubles/failing-save-election-repository';
 import { FakeClock } from '../doubles/fake-clock';
 import { FakeScheduler } from '../doubles/fake-scheduler';
 import { SpyLogger } from '../doubles/spy-logger';
 import { SpyNotifier } from '../doubles/spy-notifier';
 import { StubCodeGenerator } from '../doubles/stub-code-generator';
 import { anElectionRecord, unwrap } from '../support/election-records';
-import { openElectionWithVoters } from '../support/election-fixtures';
+import { openElectionWithVoters, withOpenRound } from '../support/election-fixtures';
 
 const START = new Date('2026-01-01T12:00:00.000Z');
 const VOTE_GRACE_MS = 1000;
@@ -17,7 +19,9 @@ const HISTORY_LIMIT = 50;
 const OWNER = 'admin-1';
 const ONE_MINUTE_SECONDS = 60;
 const ONE_MINUTE_MS = 60_000;
+// Prazo de 1 min mais a tolerância: o último instante tolerado e o horário do timer.
 const ONE_MINUTE_AND_ONE_SECOND_MS = 61_000;
+const JUST_PAST_THE_GRACE_MS = ONE_MINUTE_AND_ONE_SECOND_MS + 1;
 
 /**
  * Cria o serviço com o domínio real, repositório em memória e doubles nas fronteiras.
@@ -51,6 +55,29 @@ function makeService(
     historyLimit: options.historyLimit ?? HISTORY_LIMIT,
   });
   return { service, repository, clock, scheduler, notifier, logger };
+}
+
+/**
+ * Serviço com a eleição `e1` do dono e a rodada de 1 min de `president` aberta pelo admin
+ * (versão 1, um passo desfazível no histórico). O relógio fica no instante da abertura.
+ *
+ * @param options - Repassadas a `makeService` (ex.: limite do histórico ou outro repositório),
+ *   mais os códigos dos eleitores credenciados (padrão: um eleitor).
+ * @returns O serviço e os doubles, como `makeService`.
+ */
+async function serviceWithOpenRound(
+  options: Parameters<typeof makeService>[0] & { voterCodes?: readonly string[] } = {},
+) {
+  const { voterCodes, ...serviceOptions } = options;
+  const test = makeService(serviceOptions);
+  await test.repository.create(
+    openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'], voterCodes }),
+  );
+  await test.service.openRound(OWNER, 'e1', {
+    positionId: 'president',
+    durationSeconds: ONE_MINUTE_SECONDS,
+  });
+  return test;
 }
 
 describe('ElectionService command flow', () => {
@@ -292,7 +319,7 @@ describe('ElectionService command flow', () => {
         positionId: 'president',
         durationSeconds: ONE_MINUTE_SECONDS,
       });
-      clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+      clock.advance(JUST_PAST_THE_GRACE_MS);
 
       await service.openRound(OWNER, 'e1', { positionId: 'treasurer' });
 
@@ -431,20 +458,13 @@ describe('ElectionService.getElection', () => {
   describe('when the open round is past its deadline', () => {
     /**
      * Serviço com a eleição `e1` do dono, rodada de 1 min aberta (versão 1) e o relógio
-     * já 1 min e 1 s depois da abertura, ou seja, além do prazo.
+     * 1 ms depois do prazo com a tolerância, ou seja, com a rodada vencida.
      *
      * @returns O serviço e os doubles, como `makeService`.
      */
     async function serviceWithOverdueRound() {
-      const test = makeService();
-      await test.repository.create(
-        openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
-      );
-      await test.service.openRound(OWNER, 'e1', {
-        positionId: 'president',
-        durationSeconds: ONE_MINUTE_SECONDS,
-      });
-      test.clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+      const test = await serviceWithOpenRound();
+      test.clock.advance(JUST_PAST_THE_GRACE_MS);
       return test;
     }
 
@@ -487,6 +507,168 @@ describe('ElectionService.getElection', () => {
     const record = await service.getElection(OWNER, 'e1');
 
     expect(record.current).toMatchObject({ version: 1, rounds: [{ status: 'OPEN' }] });
+  });
+});
+
+describe('ElectionService at the last instant of the grace period', () => {
+  /**
+   * Serviço com a eleição `e1`, rodada de 1 min aberta e o relógio no último instante em que
+   * um voto ainda é aceito (prazo mais a tolerância).
+   *
+   * @returns O serviço e os doubles, como `makeService`.
+   */
+  async function serviceAtTheEndOfTheGrace() {
+    const test = await serviceWithOpenRound();
+    test.clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
+    return test;
+  }
+
+  it('keeps the round open when the admin reads the election', async () => {
+    const { service } = await serviceAtTheEndOfTheGrace();
+
+    const record = await service.getElection(OWNER, 'e1');
+
+    expect(record.current).toMatchObject({ version: 1, rounds: [{ status: 'OPEN' }] });
+  });
+
+  it('keeps the round open when the admin runs a command', async () => {
+    const { service } = await serviceAtTheEndOfTheGrace();
+
+    const record = await service.updateElection(OWNER, 'e1', { name: 'Annual vote' });
+
+    expect(record.current.rounds).toMatchObject([{ status: 'OPEN' }]);
+  });
+
+  it('still reports the round in progress as the next step', async () => {
+    const { service } = await serviceAtTheEndOfTheGrace();
+
+    const next = await service.nextPosition(OWNER, 'e1');
+
+    expect(next).toMatchObject({ status: 'ROUND_IN_PROGRESS' });
+  });
+});
+
+describe('ElectionService undo after an automatic closing', () => {
+  type TestService = ReturnType<typeof makeService>;
+
+  const AUTOMATIC_CLOSINGS = [
+    ['the timer', ({ scheduler, clock }: TestService) => scheduler.fireDue(clock.now())],
+    ['an admin read', ({ service }: TestService) => service.getElection(OWNER, 'e1')],
+    ['a voter read', ({ service }: TestService) => service.settleDueRound('e1')],
+  ] as const;
+
+  it.each(AUTOMATIC_CLOSINGS)(
+    'goes back to before the round was opened when %s closed it',
+    async (_closer, close) => {
+      const test = await serviceWithOpenRound();
+      test.clock.advance(JUST_PAST_THE_GRACE_MS);
+      await close(test);
+
+      const restored = await test.service.undo(OWNER, 'e1');
+
+      expect(restored.current).toMatchObject({ rounds: [], positions: [{ status: 'PENDING' }] });
+    },
+  );
+
+  describe('when an admin command closed the overdue round', () => {
+    /**
+     * Serviço em que a rodada de `president` venceu sem o timer disparar, e foi o comando de
+     * renomear a eleição que a fechou.
+     *
+     * @returns O serviço e os doubles, como `makeService`.
+     */
+    async function serviceWithRoundClosedByACommand() {
+      const test = await serviceWithOpenRound();
+      test.clock.advance(JUST_PAST_THE_GRACE_MS);
+      await test.service.updateElection(OWNER, 'e1', { name: 'Annual vote' });
+      return test;
+    }
+
+    it('undoes only the command, restoring the round already closed', async () => {
+      const { service } = await serviceWithRoundClosedByACommand();
+
+      const restored = await service.undo(OWNER, 'e1');
+
+      expect(restored.current).toMatchObject({
+        name: 'Board election',
+        rounds: [{ status: 'CLOSED' }],
+      });
+    });
+
+    it('goes back to before the round was opened on the next undo', async () => {
+      const { service } = await serviceWithRoundClosedByACommand();
+      await service.undo(OWNER, 'e1');
+
+      const restored = await service.undo(OWNER, 'e1');
+
+      expect(restored.current.rounds).toEqual([]);
+    });
+  });
+});
+
+describe('ElectionService when saves of an overdue round compete', () => {
+  const MAX_SETTLE_ATTEMPTS = 50;
+
+  /**
+   * Serviço com a eleição `e1`, a rodada `r1` (1 min) aberta em `START` (versão 0) e o
+   * relógio já além do prazo com a tolerância.
+   *
+   * @returns O serviço, os doubles e o repositório que pode ser programado para falhar.
+   */
+  async function serviceWithUnclosedOverdueRound() {
+    const repository = new FailingSaveElectionRepository();
+    const election = openElectionWithVoters({
+      id: 'e1',
+      adminId: OWNER,
+      positionIds: ['president'],
+    });
+    await repository.create(
+      withOpenRound(election, { positionId: 'president', roundId: 'r1', openedAt: START }),
+    );
+    const test = makeService({ repository });
+    test.clock.advance(JUST_PAST_THE_GRACE_MS);
+    return { ...test, repository };
+  }
+
+  it('gives every simultaneous read the round closed by a single save', async () => {
+    const { service } = await serviceWithUnclosedOverdueRound();
+
+    const reads = Promise.all([
+      service.getElection(OWNER, 'e1'),
+      service.settleDueRound('e1'),
+      service.settleDueRound('e1'),
+    ]);
+
+    const closedOnce = { current: { version: 1, rounds: [{ status: 'CLOSED' }] } };
+    await expect(reads).resolves.toMatchObject([closedOnce, closedOnce, closedOnce]);
+  });
+
+  it('retries the deadline closing that lost to another save, without logging it', async () => {
+    const { service, repository, logger } = await serviceWithUnclosedOverdueRound();
+    repository.pendingFailures = [versionConflict()];
+
+    await service.handleDeadline('e1');
+
+    expect((await repository.get('e1'))?.current.rounds).toMatchObject([{ status: 'CLOSED' }]);
+    expect(logger.errors).toEqual([]);
+  });
+
+  it('closes the round when only the last allowed attempt can save it', async () => {
+    const { service, repository } = await serviceWithUnclosedOverdueRound();
+    repository.pendingFailures = Array.from({ length: MAX_SETTLE_ATTEMPTS - 1 }, versionConflict);
+
+    const record = await service.getElection(OWNER, 'e1');
+
+    expect(record.current.rounds).toMatchObject([{ status: 'CLOSED' }]);
+  });
+
+  it('gives up with VERSION_CONFLICT after the maximum number of attempts', async () => {
+    const { service, repository } = await serviceWithUnclosedOverdueRound();
+    repository.pendingFailures = Array.from({ length: MAX_SETTLE_ATTEMPTS }, versionConflict);
+
+    const read = service.getElection(OWNER, 'e1');
+
+    await expect(read).rejects.toMatchObject({ status: 409, code: 'VERSION_CONFLICT' });
   });
 });
 
@@ -657,24 +839,6 @@ describe('ElectionService.revokeVoter', () => {
 describe('ElectionService.handleDeadline', () => {
   const LOG_MESSAGE = 'Failed to close the round at its deadline';
 
-  /**
-   * Serviço com a eleição `e1` do dono e uma rodada de 1 min aberta (versão 1).
-   *
-   * @param options - Repassadas a `makeService` (ex.: limite do histórico ou outro repositório).
-   * @returns O serviço e os doubles, como `makeService`.
-   */
-  async function serviceWithOpenRound(options: Parameters<typeof makeService>[0] = {}) {
-    const test = makeService(options);
-    await test.repository.create(
-      openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
-    );
-    await test.service.openRound(OWNER, 'e1', {
-      positionId: 'president',
-      durationSeconds: ONE_MINUTE_SECONDS,
-    });
-    return test;
-  }
-
   it('closes the round once its deadline has passed', async () => {
     const { service, repository, clock } = await serviceWithOpenRound();
     clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS);
@@ -715,6 +879,16 @@ describe('ElectionService.handleDeadline', () => {
     await service.handleDeadline('e1');
 
     expect(scheduler.pending()).toEqual([]);
+  });
+
+  it('closes the round even if the timer fires a millisecond early', async () => {
+    // O `setTimeout` pode adiantar; se o timer descontasse a tolerância, nada fecharia a rodada.
+    const { service, repository, clock } = await serviceWithOpenRound();
+    clock.advance(ONE_MINUTE_AND_ONE_SECOND_MS - 1);
+
+    await service.handleDeadline('e1');
+
+    expect((await repository.get('e1'))?.current.rounds).toMatchObject([{ status: 'CLOSED' }]);
   });
 
   describe('when the round is not due', () => {
@@ -774,5 +948,210 @@ describe('ElectionService.handleDeadline', () => {
         { context: { electionId: 'e1', err: new Error('database down') }, message: LOG_MESSAGE },
       ]);
     });
+  });
+});
+
+describe('ElectionService.rescheduleOpenRounds', () => {
+  // Rodada de 60 s (prazo padrão) aberta em START: prazo às 12:01:00, timer às 12:01:01.
+  const CLOSING_TIME = new Date('2026-01-01T12:01:01.000Z');
+
+  /**
+   * Serviço recém-criado (como depois de um reinício) sobre um repositório que já guarda a
+   * eleição `e1` com uma rodada aberta em `START` e nenhum agendamento.
+   *
+   * @returns O serviço e os doubles, como `makeService`.
+   */
+  async function restartedServiceWithOpenRound() {
+    const test = makeService();
+    const opened = withOpenRound(
+      openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
+      { positionId: 'president', roundId: 'round-1', openedAt: START },
+    );
+    await test.repository.create(opened);
+    return test;
+  }
+
+  it('schedules the closing of a stored open round at its deadline plus the grace period', async () => {
+    const { service, scheduler } = await restartedServiceWithOpenRound();
+
+    await service.rescheduleOpenRounds();
+
+    expect(scheduler.pending()).toEqual([{ key: 'round:e1', at: CLOSING_TIME }]);
+  });
+
+  it('schedules nothing for elections without an open round', async () => {
+    const { service, repository, scheduler } = makeService();
+    await repository.create(anElectionRecord({ id: 'draft', adminId: OWNER }));
+    await repository.create(
+      openElectionWithVoters({ id: 'waiting', adminId: OWNER, positionIds: ['president'] }),
+    );
+
+    await service.rescheduleOpenRounds();
+
+    expect(scheduler.pending()).toEqual([]);
+  });
+
+  it('closes the round when the rescheduled closing fires', async () => {
+    const { service, repository, clock, scheduler } = await restartedServiceWithOpenRound();
+    await service.rescheduleOpenRounds();
+    clock.set(CLOSING_TIME);
+
+    await scheduler.fireDue(clock.now());
+
+    expect((await repository.get('e1'))?.current.rounds).toMatchObject([{ status: 'CLOSED' }]);
+  });
+});
+
+describe('ElectionService.castVote', () => {
+  const FIRST_VOTER = 'e1:VOTERAAA';
+  const SECOND_VOTER = 'e1:VOTERBBB';
+  const VOTE = { roundId: 'r1', choice: 'president-candidate' };
+  const MAX_VOTE_ATTEMPTS = 50;
+  const LONG_AFTER_THE_DEADLINE_MS = 10 * ONE_MINUTE_MS;
+
+  /**
+   * Serviço com a eleição `e1`, dois eleitores e a rodada `r1` (1 min) aberta em `START`.
+   *
+   * @returns O serviço, os doubles e o repositório que pode ser programado para falhar.
+   */
+  async function serviceWithTwoVoters() {
+    const repository = new FailingSaveElectionRepository();
+    const election = openElectionWithVoters({
+      id: 'e1',
+      adminId: OWNER,
+      positionIds: ['president'],
+      voterCodes: ['VOTERAAA', 'VOTERBBB'],
+    });
+    await repository.create(
+      withOpenRound(election, { positionId: 'president', roundId: 'r1', openedAt: START }),
+    );
+    return { ...makeService({ repository }), repository };
+  }
+
+  describe('undo history', () => {
+    // A primeira rodada aberta pelo serviço recebe o primeiro id gerado.
+    const FIRST_VOTE = { roundId: 'id-1', choice: 'president-candidate' };
+    // Os códigos de FIRST_VOTER e SECOND_VOTER; a rodada é aberta pelo admin (passo desfazível).
+    const VOTER_CODES = ['VOTERAAA', 'VOTERBBB'];
+
+    it('undoes the opening of the round, not just the last vote', async () => {
+      const { service } = await serviceWithOpenRound({ voterCodes: VOTER_CODES });
+      await service.castVote(FIRST_VOTER, 'e1', FIRST_VOTE);
+
+      const restored = await service.undo(OWNER, 'e1');
+
+      expect(restored.current).toMatchObject({ rounds: [], positions: [{ status: 'PENDING' }] });
+    });
+
+    it('does not let votes push the admin steps out of the history', async () => {
+      const { service, repository } = await serviceWithOpenRound({
+        voterCodes: VOTER_CODES,
+        historyLimit: 1,
+      });
+
+      await service.castVote(FIRST_VOTER, 'e1', FIRST_VOTE);
+      await service.castVote(SECOND_VOTER, 'e1', FIRST_VOTE);
+
+      expect((await repository.get('e1'))?.past).toMatchObject([{ version: 0, rounds: [] }]);
+    });
+
+    it('does not turn the vote that closes the round into a step either', async () => {
+      const { service } = await serviceWithOpenRound({ voterCodes: VOTER_CODES });
+      await service.castVote(FIRST_VOTER, 'e1', FIRST_VOTE);
+      await service.castVote(SECOND_VOTER, 'e1', FIRST_VOTE);
+
+      const restored = await service.undo(OWNER, 'e1');
+
+      expect(restored.current.rounds).toEqual([]);
+    });
+
+    it('still saves each vote under the next version', async () => {
+      const { service, repository } = await serviceWithOpenRound({ voterCodes: VOTER_CODES });
+
+      await service.castVote(FIRST_VOTER, 'e1', FIRST_VOTE);
+
+      // Versão 0 → 1 (rodada aberta) → 2 (voto).
+      expect((await repository.get('e1'))?.current.version).toBe(2);
+    });
+  });
+
+  describe('when votes arrive at the same time', () => {
+    it('accepts and counts the votes of two different voters', async () => {
+      const { service, repository } = await serviceWithTwoVoters();
+
+      const votes = Promise.all([
+        service.castVote(FIRST_VOTER, 'e1', VOTE),
+        service.castVote(SECOND_VOTER, 'e1', VOTE),
+      ]);
+
+      await expect(votes).resolves.toHaveLength(2);
+      expect((await repository.get('e1'))?.current.rounds[0]).toMatchObject({
+        votedVoterIds: [FIRST_VOTER, SECOND_VOTER],
+        tally: { 'president-candidate': 2 },
+      });
+    });
+
+    it('refuses the repeated vote of the same voter and counts only one', async () => {
+      const { service, repository } = await serviceWithTwoVoters();
+
+      const first = service.castVote(FIRST_VOTER, 'e1', VOTE);
+      const repeated = service.castVote(FIRST_VOTER, 'e1', VOTE);
+
+      await Promise.all([
+        first,
+        expect(repeated).rejects.toMatchObject({ code: 'VOTER_ALREADY_VOTED' }),
+      ]);
+      expect((await repository.get('e1'))?.current.rounds[0]?.tally).toEqual({
+        'president-candidate': 1,
+      });
+    });
+  });
+
+  describe('when saving the vote keeps conflicting', () => {
+    it('accepts the vote when only the last allowed attempt can save it', async () => {
+      const { service, repository } = await serviceWithTwoVoters();
+      repository.pendingFailures = Array.from({ length: MAX_VOTE_ATTEMPTS - 1 }, versionConflict);
+
+      await service.castVote(FIRST_VOTER, 'e1', VOTE);
+
+      expect((await repository.get('e1'))?.current.rounds[0]?.votedVoterIds).toEqual([FIRST_VOTER]);
+    });
+
+    it('gives up with VERSION_CONFLICT after the maximum number of attempts', async () => {
+      const { service, repository } = await serviceWithTwoVoters();
+      repository.pendingFailures = Array.from({ length: MAX_VOTE_ATTEMPTS }, versionConflict);
+
+      const vote = service.castVote(FIRST_VOTER, 'e1', VOTE);
+
+      await expect(vote).rejects.toMatchObject({ status: 409, code: 'VERSION_CONFLICT' });
+    });
+
+    it('judges the deadline by when the vote arrived, not by when it is retried', async () => {
+      const { service, repository, clock } = await serviceWithTwoVoters();
+      repository.pendingFailures = [versionConflict()];
+      repository.onFailure = () => clock.advance(LONG_AFTER_THE_DEADLINE_MS);
+
+      await service.castVote(FIRST_VOTER, 'e1', VOTE);
+
+      expect((await repository.get('e1'))?.current.rounds[0]?.votedVoterIds).toEqual([FIRST_VOTER]);
+    });
+  });
+
+  it('does not retry a failure other than a version conflict', async () => {
+    const { service, repository } = await serviceWithTwoVoters();
+    repository.pendingFailures = [new Error('database down')];
+
+    const vote = service.castVote(FIRST_VOTER, 'e1', VOTE);
+
+    await expect(vote).rejects.toThrow('database down');
+  });
+
+  it('does not extend the retry to admin commands', async () => {
+    const { service, repository } = await serviceWithTwoVoters();
+    repository.pendingFailures = [versionConflict()];
+
+    const command = service.closeRound(OWNER, 'e1', 'r1');
+
+    await expect(command).rejects.toMatchObject({ status: 409, code: 'VERSION_CONFLICT' });
   });
 });

@@ -52,8 +52,8 @@ export class VoterService {
   }
 
   /**
-   * Diz o que a tela do eleitor deve mostrar agora. Se havia um prazo vencido que o timer
-   * não fechou, fecha a rodada antes (salva e notifica).
+   * Diz o que a tela do eleitor deve mostrar agora. Se uma rodada venceu (prazo mais a
+   * tolerância do voto) e o timer não a fechou, fecha antes (salva e notifica).
    *
    * @param voterId - Eleitor autenticado (do token).
    * @param electionId - Eleição do token.
@@ -77,7 +77,8 @@ export class VoterService {
    * @param voterId - Eleitor autenticado (do token).
    * @param electionId - Eleição do token.
    * @param vote - Rodada e escolha (id do candidato ou `BLANK`).
-   * @throws {HttpError} 401 `INVALID_TOKEN` se a eleição não existe mais; 409 `VERSION_CONFLICT`.
+   * @throws {HttpError} 401 `INVALID_TOKEN` se a eleição não existe mais; 409 `VERSION_CONFLICT`
+   *   se a disputa pela gravação persistir em todas as tentativas.
    * @throws {DomainError} `ROUND_NOT_FOUND` (inclusive rodada de outra eleição), `ROUND_NOT_OPEN`,
    *   `ROUND_EXPIRED`, `VOTER_NOT_ELIGIBLE`, `VOTER_REVOKED`, `VOTER_ALREADY_VOTED` ou `INVALID_CHOICE`.
    */
