@@ -99,7 +99,7 @@ agrupadas em um único commit.
 | C2 | Divide-se: rede simulada e testes auxiliares são dependências distintas | `[x] C2.a` handlers MSW; `[x] C2.b` providers/fábricas |
 | C3 | Divide-se: transporte/erro e API pública podem ser validados separadamente | `[x] C3.a` núcleo de `fetch` e `ErrorDTO`; `[x] C3.b` métodos tipados de cada grupo de rotas |
 | C4 | Divide-se: o cliente real e a injeção por fake têm responsabilidades independentes | `[x] C4.a` interface e cliente Socket.IO; `[x] C4.b` `SocketProvider` e `createFakeSocket()` |
-| C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[ ] C5.a` countdown corrigido por `serverNow`; `[ ] C5.b` porcentagens e rótulos |
+| C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[x] C5.a` countdown corrigido por `serverNow`; `[ ] C5.b` porcentagens e rótulos |
 | C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[ ] C6.a` diálogos de confirmação; `[ ] C6.b` `Countdown` e `ErrorMessage` |
 | C7 | Divide-se: formulário/rota e integração da sessão são dois comportamentos fechados | `[ ] C7.a` formulário e armazenamento do token; `[ ] C7.b` navegação e erros da sessão |
 | C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[ ] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[ ] C8.b` cédula e voto candidato/branco |
@@ -142,12 +142,14 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/api/public-api.ts` → consulta pública de saúde da API.
 - `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado e listeners removíveis.
 - `apps/web/src/api/socket-provider.tsx` → contexto de estado realtime com criação/limpeza do cliente por sessão.
+- `apps/web/src/lib/countdown.ts` → cálculo puro dos segundos restantes com deslocamento do relógio do servidor.
 - `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
 - `apps/web/test/api-methods.test.ts` → contratos MSW de rota, método, token e corpo de cada operação REST.
 - `apps/web/test/socket-client.test.ts` → testes do handshake, `admin:watch`, estados recebidos e limpeza de listeners.
 - `apps/web/test/socket-client.integration.test.ts` → rodada local efêmera com o cliente e servidor Socket.IO reais.
 - `apps/web/test/utils/fake-socket.ts` → fake injetável com controle de conexão, eventos e eleições observadas.
 - `apps/web/test/socket-provider.test.tsx` e `fake-socket.test.ts` → estado do contexto, descarte e ciclo de vida do fake.
+- `apps/web/test/countdown.test.ts` → prazo futuro, limites, expiração, offset de relógio e datas inválidas.
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
 - `apps/web/test/utils/factories.ts` → factories dos DTOs; nomes acessórios são localizados e reproduzíveis.
@@ -284,14 +286,20 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: 5 testes de provider e 1 teste do fake cobrindo substituição de snapshots, ausência de token, watch, cleanup e conexão/desconexão.
 - Decisões: o fake inicia conectado, como o cliente Socket.IO real; mensagens emitidas enquanto desconectado não chegam aos listeners.
 
-### [ ] C5.a — Countdown corrigido pelo servidor
+### [x] C5.a — Countdown corrigido pelo servidor
 **Ref.:** architecture §8.3.
 **Depende de:** contratos de `@voto/shared`.
 **Fazer:** calcular tempo restante comparando deadline ISO com o deslocamento de `serverNow`.
 **Testes (escrever antes):** futuro, limite exato, vencido e relógios do cliente desincronizados.
 **Pronto quando:** countdown é puro e determinístico.
-**Arquivos:** `apps/web/src/lib/countdown.ts`.
+**Arquivos:** `apps/web/src/lib/countdown.ts`, `apps/web/test/countdown.test.ts`.
 **Commit sugerido:** `feat(web): calcula countdown sincronizado com o servidor`
+**Notas do agente:**
+- Feito: cálculo puro dos segundos restantes usa o offset entre `serverNow` e a hora local capturada na sincronização; prazos vencidos são limitados a zero.
+- Arquivos: `apps/web/src/lib/countdown.ts`, `apps/web/test/countdown.test.ts`.
+- Como usar: `getRemainingSeconds({ deadline, serverNow, clientNowAtSync, clientNow })`; o resultado arredonda para cima para manter segundos parciais visíveis.
+- Testes: `apps/web/test/countdown.test.ts` (8 casos: futuro, arredondamento, limite exato, expirado, diferença de relógio e quatro campos de data inválidos).
+- Decisões: a hora local no instante em que `serverNow` é recebido ancora o offset; o instante local atual é injetado, mantendo a função determinística e sem leitura direta do relógio do sistema.
 
 ### [ ] C5.b — Porcentagens e rótulos
 **Ref.:** architecture §5.4.
