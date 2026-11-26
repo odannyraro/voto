@@ -108,7 +108,7 @@ agrupadas em um único commit.
 | C11 | Divide-se: leitura da lista e mutação/criação têm UI e testes distintos | `[x] C11.a` lista de eleições; `[x] C11.b` criação e navegação |
 | C12 | Divide-se: adicionar/editar cargos não inclui remover e confirmar | `[x] C12.a` criar e editar cargos; `[x] C12.b` remover cargo e confirmar estado permitido |
 | C13 | Divide-se: cadastro/validação e edição/removal têm casos próprios | `[x] C13.a` criar candidato e validações; `[x] C13.b` editar/remover candidato |
-| C14 | Divide-se: eleitores e fila são abas independentes com contratos próprios | `[ ] C14.a` gerar, listar, copiar e revogar códigos; `[ ] C14.b` ordem, sugestão e confirmação |
+| C14 | Divide-se: eleitores e fila são abas independentes com contratos próprios | `[x] C14.a` gerar, listar, copiar e revogar códigos; `[x] C14.b` ordem, sugestão e confirmação |
 | C15 | Divide-se: sincronização via socket e controles ao vivo podem ser validados separadamente | `[ ] C15.a` `useAdminElection` e ressincronização; `[ ] C15.b` abrir rodada, prazo e fechar antes |
 | C16 | Divide-se: resolução de rodada e ações de cargo insuficiente são fluxos distintos | `[ ] C16.a` resultado, 2º turno, liberar, desfazer e anular; `[ ] C16.b` anexar, adiar e cancelar |
 | C17 | Divide-se: configuração do runner e dados de preparação são entregáveis separadas | `[ ] C17.a` `playwright.config.ts` e `webServer`; `[ ] C17.b` fixtures e helpers de API |
@@ -145,9 +145,11 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/features/admin/auth/RequireAdmin.tsx` → protege as rotas administrativas após validar a identidade.
 - `apps/web/src/features/admin/auth/AdminDashboardPage.tsx` → exibe identidade autenticada, lista de eleições e logout.
 - `apps/web/src/features/admin/elections/AdminElectionsPage.tsx` → carrega resumos, apresenta estados/contagens e cria eleições com validação compartilhada.
-- `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx` → carrega o agregado completo da eleição e integra sua configuração.
+- `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx` → carrega o agregado completo e navega pelas abas acessíveis de configuração.
 - `apps/web/src/features/admin/config/PositionsTab.tsx` → lista, cria, edita e remove cargos respeitando fila, confirmação e estado devolvido pela API.
 - `apps/web/src/features/admin/config/CandidatesTab.tsx` → cadastra e edita candidatos/candidaturas, mantém primeira opção válida e respeita erros do servidor na remoção.
+- `apps/web/src/features/admin/config/VotersTab.tsx` → gera códigos, mostra rótulos/status, copia credenciais e revoga eleitores após confirmação.
+- `apps/web/src/features/admin/config/QueueTab.tsx` → edita proposta de fila, busca sugestão do servidor e só aplica após confirmação.
 - `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado, listeners removíveis e reconexão após entrada no namespace.
 - `apps/web/src/api/socket-provider.tsx` → contexto realtime com criação/limpeza do cliente por sessão e inscrição em snapshots e reconexão.
 - `apps/web/src/components/ConfirmDialog.tsx` e `DoubleConfirmDialog.tsx` → diálogos acessíveis de confirmação simples e por título exato.
@@ -174,6 +176,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/admin-elections.test.tsx` → lista vazia e preenchida, falhas de API, validação de prazo e criação/navegação.
 - `apps/web/test/admin-position-config.test.tsx` → criação no fim da fila, validação, edição, cancelamento e remoção confirmada ou rejeitada.
 - `apps/web/test/admin-candidate-config.test.tsx` → limites de idade, candidaturas, primeira opção, edição e remoção aceita/cancelada/rejeitada para candidato eleito.
+- `apps/web/test/admin-voter-queue-config.test.tsx` → quantidade/rótulos de eleitores, listagem/cópia/revogação e proposta/sugestão/confirmação da fila.
 - `apps/web/test/voter-session.test.tsx` → carregamento inicial e remontagem, ordenação de socket/REST, reconexão, erros e credenciais persistidas.
 - `apps/web/test/voter-vote-page.test.tsx` → voto candidato/branco, cliques duplicados, erros de rodada e countdown.
 - `apps/web/test/voter-final-state.test.tsx` → fases finais, desfechos do resultado e contagens sem cálculo local.
@@ -589,7 +592,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/admin-candidate-config.test.tsx` (4 casos C13.b: editar primeira opção, cancelar remoção, remover e preservar candidato eleito após erro da API).
 - Decisões: o servidor é autoridade sobre elegibilidade para remoção; a tela sinaliza candidatos já eleitos e não aplica mutações otimistas.
 
-### [ ] C14.a — Gestão de eleitores
+### [x] C14.a — Gestão de eleitores
 **Ref.:** architecture §6.1.
 **Depende de:** C13.b.
 **Fazer:** gerar 1–500 códigos, mostrar rótulos/códigos, copiar e revogar.
@@ -597,8 +600,14 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** admin credencia eleitores sem inferir códigos.
 **Arquivos:** `apps/web/src/features/admin/config/VotersTab.tsx`.
 **Commit sugerido:** `feat(web): gerencia códigos de eleitores`
+**Notas do agente:**
+- Feito: gera 1–500 códigos com rótulos opcionais, lista código/rótulo/status, copia código individual ou todos e revoga credencial com confirmação.
+- Arquivos: `apps/web/src/features/admin/config/VotersTab.tsx`, `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx`, `apps/web/test/admin-voter-queue-config.test.tsx`.
+- Como usar: abra a aba Eleitores, informe quantidade e rótulos opcionais; copie códigos da tabela ou revogue uma credencial ativa.
+- Testes: `apps/web/test/admin-voter-queue-config.test.tsx` (6 casos: quantidades 0/501, geração/listagem, rótulos acima da quantidade, cópia e revogação refletida no estado REST).
+- Decisões: limite e formato de credenciais usam o contrato compartilhado; estado da lista vem do agregado retornado pelo servidor e erros de clipboard/API são visíveis.
 
-### [ ] C14.b — Ordem da fila
+### [x] C14.b — Ordem da fila
 **Ref.:** architecture §6.1.
 **Depende de:** C14.a.
 **Fazer:** criar abas com ↑↓, buscar sugestão e confirmar antes de aplicar a fila.
@@ -606,6 +615,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** ordem proposta e aplicada ficam distintas até confirmação.
 **Arquivos:** `apps/web/src/features/admin/config/QueueTab.tsx`.
 **Commit sugerido:** `feat(web): permite ordenar e sugerir cargos`
+**Notas do agente:**
+- Feito: aba Ordem permite mover cargos com ↑↓, carregar uma sugestão sem aplicá-la e substituir a fila só depois de confirmação explícita.
+- Arquivos: `apps/web/src/features/admin/config/QueueTab.tsx`, `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx`, `apps/web/test/admin-voter-queue-config.test.tsx`.
+- Como usar: ajuste a proposta manualmente ou use Sugerir ordem; confirme em Aplicar ordem para persistir pela API.
+- Testes: `apps/web/test/admin-voter-queue-config.test.tsx` (3 casos: mover sem aplicação, sugestão não aplicada e persistência após confirmação).
+- Decisões: proposta local fica separada de `election.queue`; sugestões e alterações só substituem o estado após confirmação e resposta completa da API.
 
 ### [ ] C15.a — Estado ao vivo via socket
 **Ref.:** architecture §6.1 e §7.

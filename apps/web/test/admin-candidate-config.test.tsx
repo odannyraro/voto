@@ -124,6 +124,11 @@ afterAll(() => {
  *
  * @returns The rendered application for the election configuration route.
  */
+/**
+ * Renders the protected election configuration route.
+ *
+ * @returns The rendered application for candidate configuration.
+ */
 function renderConfiguration(): void {
   renderWithProviders(<App />, {
     initialEntries: [`/admin/eleicoes/${ELECTION_ID}/configurar`],
@@ -157,6 +162,7 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
+    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
     await screen.findByRole('heading', { name: 'Candidates' });
     await fillNewCandidate(user, 22);
     await user.click(screen.getByRole('button', { name: 'Add candidate' }));
@@ -185,6 +191,7 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
+    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
     await screen.findByRole('heading', { name: 'Candidates' });
     await fillNewCandidate(user, age);
     await user.click(screen.getByRole('button', { name: 'Add candidate' }));
@@ -202,6 +209,7 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
+    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
     await screen.findByRole('heading', { name: 'Candidates' });
     await user.type(screen.getByRole('textbox', { name: 'Candidate name' }), 'Beatriz Costa');
     await user.type(screen.getByRole('spinbutton', { name: 'Age' }), '22');
@@ -216,6 +224,7 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
+    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
     await screen.findByRole('heading', { name: 'Candidates' });
     await user.type(screen.getByRole('textbox', { name: 'Candidate name' }), 'Beatriz Costa');
     await user.click(screen.getByRole('checkbox', { name: 'President' }));
@@ -231,6 +240,7 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
+    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
     await screen.findByRole('heading', { name: 'Candidates' });
     await user.click(screen.getByRole('button', { name: 'Edit Ana Silva' }));
     await user.selectOptions(
@@ -252,6 +262,7 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
+    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
     await screen.findByRole('heading', { name: 'Candidates' });
     await user.click(screen.getByRole('button', { name: 'Remove Ana Silva' }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
@@ -263,6 +274,7 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
+    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
     await screen.findByRole('heading', { name: 'Candidates' });
     await user.click(screen.getByRole('button', { name: 'Remove Ana Silva' }));
     await user.click(
@@ -303,6 +315,7 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
+    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
     await screen.findByRole('heading', { name: 'Candidates' });
     await user.click(screen.getByRole('button', { name: 'Remove Ana Silva' }));
     await user.click(

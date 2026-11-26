@@ -6,7 +6,18 @@ import { adminApi } from '../../../api/admin-api';
 import { ApiError } from '../../../api/api-client';
 import { useAdminAuth } from '../auth/admin-auth-context';
 import { CandidatesTab } from '../config/CandidatesTab';
+import { QueueTab } from '../config/QueueTab';
 import { PositionsTab } from '../config/PositionsTab';
+import { VotersTab } from '../config/VotersTab';
+
+type ConfigurationTab = 'Positions' | 'Candidates' | 'Voters' | 'Order';
+
+const CONFIGURATION_TABS: readonly ConfigurationTab[] = [
+  'Positions',
+  'Candidates',
+  'Voters',
+  'Order',
+];
 
 /**
  * Carrega uma eleição administrativa e apresenta sua configuração de cargos.
@@ -18,6 +29,7 @@ export function AdminElectionConfigurationPage(): ReactElement {
   const { token } = useAdminAuth();
   const [election, setElection] = useState<AdminElectionDTO>();
   const [loadError, setLoadError] = useState<string>();
+  const [selectedTab, setSelectedTab] = useState<ConfigurationTab>('Positions');
 
   useEffect(() => {
     let active = true;
@@ -82,18 +94,64 @@ export function AdminElectionConfigurationPage(): ReactElement {
       <h1>Election configuration</h1>
       <p>Election ID: {electionId}</p>
       <p>Election: {election.election.name}</p>
-      <PositionsTab
-        token={token}
-        electionId={electionId}
-        state={election}
-        onElectionChange={setElection}
-      />
-      <CandidatesTab
-        token={token}
-        electionId={electionId}
-        state={election}
-        onElectionChange={setElection}
-      />
+      <div role="tablist" aria-label="Election configuration">
+        {CONFIGURATION_TABS.map((tab) => (
+          <button
+            key={tab}
+            id={`configuration-tab-${tab.toLowerCase()}`}
+            type="button"
+            role="tab"
+            aria-selected={selectedTab === tab}
+            aria-controls={`configuration-panel-${tab.toLowerCase()}`}
+            tabIndex={selectedTab === tab ? 0 : -1}
+            onClick={() => setSelectedTab(tab)}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+      {CONFIGURATION_TABS.map((tab) => (
+        <div
+          key={tab}
+          id={`configuration-panel-${tab.toLowerCase()}`}
+          role="tabpanel"
+          aria-labelledby={`configuration-tab-${tab.toLowerCase()}`}
+          hidden={selectedTab !== tab}
+        >
+          {selectedTab === tab && tab === 'Positions' && (
+            <PositionsTab
+              token={token}
+              electionId={electionId}
+              state={election}
+              onElectionChange={setElection}
+            />
+          )}
+          {selectedTab === tab && tab === 'Candidates' && (
+            <CandidatesTab
+              token={token}
+              electionId={electionId}
+              state={election}
+              onElectionChange={setElection}
+            />
+          )}
+          {selectedTab === tab && tab === 'Voters' && (
+            <VotersTab
+              token={token}
+              electionId={electionId}
+              state={election}
+              onElectionChange={setElection}
+            />
+          )}
+          {selectedTab === tab && tab === 'Order' && (
+            <QueueTab
+              token={token}
+              electionId={electionId}
+              state={election}
+              onElectionChange={setElection}
+            />
+          )}
+        </div>
+      ))}
     </main>
   );
 }
