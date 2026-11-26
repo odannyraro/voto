@@ -1,0 +1,44 @@
+# Blueprint do Render (https://render.com/docs/blueprint-spec). O passo a passo manual, os segredos
+# e as conferências em produção estão em docs/deploy.md.
+services:
+  - type: web
+    name: voto
+    runtime: node
+    plan: free
+    # Perto do banco do Neon (AWS us-east-1), para cada consulta não cruzar o continente.
+    region: virginia
+    branch: main
+    # O Render aplica as variáveis abaixo também no build; com NODE_ENV=production o `npm ci`
+    # pularia as devDependencies (vite, tsup e o cross-env do start).
+    buildCommand: npm ci --include=dev && npm run build
+    # `npm start` define WEB_DIST_DIR; `node apps/server/dist/main.js` direto não serviria o front.
+    startCommand: npm start
+    healthCheckPath: /api/health
+    # UMA instância só, e nunca mais: a fila de gravações por eleição e as salas do Socket.IO
+    # ficam na memória do processo. O plano gratuito também não passa de uma.
+    numInstances: 1
+    # Só código com CI verde vai para produção: quem publica é o .github/workflows/deploy.yml.
+    autoDeployTrigger: 'off'
+    envVars:
+      # Exige JWT_SECRET, ADMIN_USERNAME e ADMIN_PASSWORD (config.ts).
+      - key: NODE_ENV
+        value: production
+      - key: REPOSITORY
+        value: pg
+      - key: RATE_LIMIT
+        value: 'on'
+      # Proxies do Render entre o cliente e o servidor. Valor inicial a CONFIRMAR em produção
+      # (docs/deploy.md, passo 6): errado para menos, todo mundo divide o mesmo limite; para mais,
+      # o cliente escolhe o próprio IP pelo X-Forwarded-For e escapa do limite.
+      - key: TRUST_PROXY_HOPS
+        value: '1'
+      # Segredos: nunca no arquivo. `sync: false` faz o Render pedir o valor ao criar o serviço.
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      # Gerado pelo Render (256 bits aleatórios) na criação do serviço.
+      - key: JWT_SECRET
+        generateValue: true

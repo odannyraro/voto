@@ -110,6 +110,9 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/test/support/election-fixtures.ts` → `openElectionWithVoters(...)`: eleição aberta montada com o domínio real.
 - `.github/workflows/ci.yml` → CI (matriz de 3 SOs: lint, format, typecheck, cobertura; upload Codecov por flag só no Ubuntu; no fim, upload do `e2e/playwright-report/` quando o job falha, da A26). Os passos de e2e (C22) entram **antes** desse upload.
 - `docs/setup-repositorio.md` → passos manuais do usuário (Codecov, secret, proteção da `main`).
+- `render.yaml` → Blueprint do Render (serviço web único, auto-deploy desligado, variáveis da §13).
+- `.github/workflows/deploy.yml` → após o CI verde em push na `main`, chama o Deploy Hook do Render com o SHA aprovado.
+- `docs/deploy.md` → checklist manual do deploy (Neon, Render, secret, conferências em produção).
 - `packages/domain/vitest.stryker.config.ts` → config do Vitest usada só pelo StrykerJS (sem cobertura).
 - `packages/domain/tsconfig.stryker.json` → config do TS usada pelo StrykerJS.
 
@@ -905,7 +908,13 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 **Testes (escrever antes):** não se aplica (infraestrutura). A validação é o usuário seguir o checklist e a URL de produção responder.
 **Pronto quando:** o usuário confirmar a aplicação no ar (marco M2). Registre a URL nas notas.
 **Commit sugerido:** `ci: publica em produção no Render após CI verde na main`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Situação (2026-11-26): arquivos prontos; **falta o usuário seguir o `docs/deploy.md`** (passos 1 a 11) e mandar a URL, o `TRUST_PROXY_HOPS` medido e o resultado das conferências. Só então marcar `[x]` e registrar a URL aqui.
+- Feito: Blueprint `render.yaml` (web `free`, `virginia`, `branch: main`, build `npm ci --include=dev && npm run build`, start `npm start`, health `/api/health`, `numInstances: 1`, `autoDeployTrigger: 'off'`, `NODE_ENV=production`, `REPOSITORY=pg`, `RATE_LIMIT=on`, `TRUST_PROXY_HOPS=1` provisório; `DATABASE_URL`/`ADMIN_*` com `sync: false` e `JWT_SECRET` com `generateValue`). Workflow `deploy.yml` (`workflow_run` do CI na `main`, só `push` e `success`, `permissions: {}`, fila sem cancelamento) que faz `POST` no hook com `&ref=<head_sha>`. Checklist do usuário em `docs/deploy.md`.
+- Arquivos: `render.yaml`, `.github/workflows/deploy.yml`, `docs/deploy.md` (novos). Nenhum código de produção mudou.
+- Como usar: merge na `main` → CI verde → `Deploy` publica o commit aprovado. Secret `RENDER_DEPLOY_HOOK` = URL do hook como o Render mostra (`...?key=...`).
+- Testes: nenhum automatizado (infraestrutura). Conferências locais: `render.yaml` válido no JSON Schema oficial do Render (`render.com/schema/render.yaml.json`; uma variante com `autoDeployTrigger` inválido é recusada); `deploy.yml` e `ci.yml` válidos no schema do SchemaStore; o passo do `deploy.yml` rodado num servidor HTTP local (sem secret: erro e saída 1; com secret: `POST /deploy/srv-test?key=secret&ref=abc123`); os comandos do checklist rodados contra o build local (token de dev → 200 em dev; 10×401 e 429 no 11º login; hash bcrypt confere); log do Fastify mostra em `remoteAddress` o IP já resolvido pelo `trustProxy` (com 1 salto e `X-Forwarded-For: 203.0.113.7, 198.51.100.2`, saiu `198.51.100.2`). Suítes inalteradas e verdes: servidor 607, domínio 223, shared 138, web 2; `lint`, `format:check`, `typecheck`, `test:coverage`.
+- Decisões: (1) **`TRUST_PROXY_HOPS` não foi confirmado na documentação do Render** (não diz quantos saltos; a comunidade relata 1, 2 e 3, e que o Render acrescenta ao `X-Forwarded-For` do cliente sem apagá-lo). Fica 1 provisório e o passo 6 do checklist mede o valor pelo `remoteAddress` do log, com um IP forjado. O serviço só é alcançável pelo proxy (doc "Web Services" do Render), o que torna a contagem segura. (2) O hook leva `ref=<sha>` (aceito pelo Render em serviços com Git): publica o commit que o CI aprovou, não o último da `main`. (3) `on`/`off` entre aspas no YAML: sem elas, YAML 1.1 lê como booleano. (4) Neon com conexão direta (sem pooler) e `sslmode=verify-full` (o `pg` 8 avisa que `require` mudará de sentido no v9). (5) Troca de senha do admin por `UPDATE` do hash, sem apagar a linha (as eleições guardam o `admin_id`). (6) A conferência do token de dev usa `GET /api/elections`: `GET /api/admin/me` dá 401 também para token válido de admin inexistente e não provaria nada. (7) O 1º `Deploy` após o merge falha de propósito (secret ainda não existe), com mensagem clara; o checklist manda rodá-lo de novo.
 
 ### [ ] B16b — Cenários de integração HTTP avançados
 **Depende de:** nada pendente (A15–A20 já prontas).
@@ -963,3 +972,4 @@ Reaproveite os passos nomeados da B16a (`logIn`, `createMayorRace`, `castVote`..
 - 2026-11-25 — B20 — `shared` e `domain` não têm build próprio: entram no bundle do servidor (tsup, `noExternal: [/^@voto\//]`) e no do Vite. O front é servido porque o `npm start` define `WEB_DIST_DIR=apps/web/dist`; o comando de start do Render passa a ser `npm start`. Detalha a §13 e a §14.
 - 2026-11-25 — B20b — um POST com `Content-Type: application/json` e corpo vazio é tratado como sem corpo (parser próprio sobre o padrão do Fastify); quem exige corpo o recusa pelo Zod. Detalha a §6.
 - 2026-11-25 — B20b — `REPOSITORY=pg` exige `JWT_SECRET` mesmo fora de produção (banco real = ambiente real); o segredo fixo de dev só vale com memória em dev e teste. No Render, `NODE_ENV=production` é obrigatório e o build é `npm ci --include=dev && npm run build`. Detalha a §8.4 e a §13.
+- 2026-11-26 — B21 — o deploy chama o hook do Render com `ref=<sha>` do commit que passou no CI (e não o último da `main`); o `TRUST_PROXY_HOPS` de produção é medido no 1º deploy (valor inicial 1), porque o Render não documenta quantos proxies acrescenta ao `X-Forwarded-For`. Detalha a §12 e a §13.
