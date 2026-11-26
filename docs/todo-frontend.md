@@ -97,7 +97,7 @@ agrupadas em um único commit.
 | Tarefa | Avaliação | Plano de commits |
 |---|---|---|
 | C2 | Divide-se: rede simulada e testes auxiliares são dependências distintas | `[x] C2.a` handlers MSW; `[x] C2.b` providers/fábricas |
-| C3 | Divide-se: transporte/erro e API pública podem ser validados separadamente | `[ ] C3.a` núcleo de `fetch` e `ErrorDTO`; `[ ] C3.b` métodos tipados de cada grupo de rotas |
+| C3 | Divide-se: transporte/erro e API pública podem ser validados separadamente | `[x] C3.a` núcleo de `fetch` e `ErrorDTO`; `[ ] C3.b` métodos tipados de cada grupo de rotas |
 | C4 | Divide-se: o cliente real e a injeção por fake têm responsabilidades independentes | `[ ] C4.a` interface e cliente Socket.IO; `[ ] C4.b` `SocketProvider` e `createFakeSocket()` |
 | C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[ ] C5.a` countdown corrigido por `serverNow`; `[ ] C5.b` porcentagens e rótulos |
 | C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[ ] C6.a` diálogos de confirmação; `[ ] C6.b` `Countdown` e `ErrorMessage` |
@@ -136,6 +136,8 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/vite.config.ts` → proxy `/api` e `/socket.io` para `localhost:3000`.
 - `apps/web/test/setup.ts` → jest-dom e cleanup do Testing Library.
 - `apps/web/test/App.test.tsx` → teste de fumaça do esqueleto atual.
+- `apps/web/src/api/api-client.ts` → transporte REST com prefixo `/api`, Bearer, JSON e `ApiError`.
+- `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
 - `apps/web/test/utils/factories.ts` → factories dos DTOs; nomes acessórios são localizados e reproduzíveis.
@@ -204,7 +206,7 @@ defaults determinísticos.
 - Decisões: nomes e rótulos acessórios usam Faker `pt_BR` por instância isolada; IDs, títulos de
   cargo, status, votos e prazos continuam explícitos. A limpeza de RTL já ocorre em `test/setup.ts`.
 
-### [ ] C3.a — Núcleo tipado do cliente REST
+### [x] C3.a — Núcleo tipado do cliente REST
 **Ref.:** architecture §6.1–§6.3.
 **Depende de:** C2.b.
 **Fazer:** criar `fetch` tipado, token Bearer, prefixo `/api`, `ErrorDTO` tipado e tratamento de 204.
@@ -212,6 +214,15 @@ defaults determinísticos.
 **Pronto quando:** o núcleo HTTP retorna dados tipados ou um erro controlado.
 **Arquivos:** `apps/web/src/api/api-client.ts`.
 **Commit sugerido:** `feat(web): cria núcleo tipado do cliente REST`
+**Notas do agente:**
+- Feito: transporte REST adiciona prefixo `/api`, Bearer opcional, corpo JSON, validação do
+  `ErrorDTO`, erro `ApiError` tipado e resposta sem corpo `204`.
+- Arquivos: `apps/web/src/api/api-client.ts`, `apps/web/test/api-client.test.ts`.
+- Como usar: `apiRequest<T>('/endpoint', { method, token, body, signal })`; respostas `204`
+  resultam em `undefined`, e falhas controladas expõem status e erro compartilhado quando válido.
+- Testes: `apps/web/test/api-client.test.ts` (6 testes de transporte, serialização e respostas).
+- Decisões: corpos de erro só são expostos como `ErrorDTO` quando passam pela validação do
+  formato e do catálogo de códigos de `@voto/shared`; respostas não JSON geram `ApiError`.
 
 ### [ ] C3.b — Métodos REST das telas
 **Ref.:** architecture §6.1–§6.2.
