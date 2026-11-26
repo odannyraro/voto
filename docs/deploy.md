@@ -52,7 +52,7 @@ O Render lê o `render.yaml` da `main`, e o GitHub só roda o workflow `Deploy` 
    - `ADMIN_USERNAME`: o usuário do admin (ex.: `admin`);
    - `ADMIN_PASSWORD`: uma senha forte, guardada num gerenciador de senhas.
 
-   O `JWT_SECRET` o Render gera sozinho (256 bits aleatórios). As demais variáveis já vêm do arquivo: `NODE_ENV=production` (obrigatório: é o que exige o segredo e o admin), `REPOSITORY=pg`, `RATE_LIMIT=on` e `TRUST_PROXY_HOPS=1` (valor a confirmar no passo 6).
+   O `JWT_SECRET` o Render gera sozinho (256 bits aleatórios). As demais variáveis já vêm do arquivo: `NODE_ENV=production` (obrigatório: é o que exige o segredo e o admin), `REPOSITORY=pg`, `RATE_LIMIT=on` e `TRUST_PROXY_HOPS=3` (medido no passo 6).
 3. Aplique o Blueprint. O Render faz o 1º deploy na hora.
 4. Confira no serviço:
    - *Settings → Build & Deploy*: **Auto-Deploy = Off**; *Build Command* `npm ci --include=dev && npm run build`; *Start Command* `npm start` (não `node apps/server/dist/main.js`, que não serve o front); *Health Check Path* `/api/health`;
@@ -84,7 +84,7 @@ Abra `$URL` no navegador: o front carrega, e `$URL/admin/...` (rota do front) ta
 
 ### 6. Confirmar o número de proxies (`TRUST_PROXY_HOPS`)
 
-O rate limit conta tentativas por IP do cliente. Atrás do proxy do Render, o servidor vê o IP do proxy, e o IP do cliente vem no cabeçalho `X-Forwarded-For`. O Render **não apaga** um `X-Forwarded-For` mandado pelo próprio cliente: ele acrescenta entradas ao fim. Por isso o servidor conta `TRUST_PROXY_HOPS` entradas **a partir do fim** e ignora o resto, que o cliente pode ter inventado. A documentação do Render não diz quantas entradas ele acrescenta (relatos da comunidade falam em 1, 2 e 3), então o valor certo é medido aqui:
+O rate limit conta tentativas por IP do cliente. Atrás do proxy do Render, o servidor vê o IP do proxy, e o IP do cliente vem no cabeçalho `X-Forwarded-For`. O Render **não apaga** um `X-Forwarded-For` mandado pelo próprio cliente: ele acrescenta entradas ao fim. Por isso o servidor conta `TRUST_PROXY_HOPS` entradas **a partir do fim** e ignora o resto, que o cliente pode ter inventado. A documentação do Render não diz quantas entradas ele acrescenta (relatos da comunidade falam em 1, 2 e 3), então o valor é medido em produção. **Medição de 2026-11-26: `3`** (com `1`, onze logins errados seguidos não geravam `429`). Para conferir de novo:
 
 1. Descubra seu IP público: `curl -s https://ifconfig.me`.
 2. Mande uma requisição com um IP falso no cabeçalho e uma marca na URL, para achá-la no log:
@@ -99,7 +99,7 @@ O rate limit conta tentativas por IP do cliente. Atrás do proxy do Render, o se
    - **é outro IP** (do Render ou da Cloudflare) → o valor está **baixo demais** (todos os clientes dividem o mesmo limite): aumente 1.
 4. Para mudar: *Environment → TRUST_PROXY_HOPS → Save and deploy*; depois do deploy, repita os itens 2 e 3.
 5. Com o valor certo, repita a requisição mais 2 ou 3 vezes (o caminho pode passar por servidores diferentes) e uma vez de um celular **no 4G**: cada `remoteAddress` deve ser o IP de quem mandou.
-6. Se o valor final não for `1`, atualize o `TRUST_PROXY_HOPS` no `render.yaml` (ver o aviso do passo 3) e conte ao agente, para ele registrar nas notas da B21.
+6. Se o valor final for diferente do que está no `render.yaml`, atualize o `TRUST_PROXY_HOPS` lá (ver o aviso do passo 3) e conte ao agente, para ele registrar nas notas da B21.
 
 Contar proxies só é seguro se ninguém chega ao servidor sem passar pelo proxy. No Render isso vale: o serviço só é alcançável pela URL pública (*"Render forwards inbound requests to your web service at this port (it is not directly reachable via the public internet)"*, na página [Web Services](https://render.com/docs/web-services)). A exceção é a rede privada entre serviços da mesma conta e região: não crie lá outro serviço que receba tráfego de terceiros.
 
@@ -112,7 +112,9 @@ for i in $(seq 1 11); do
 done
 ```
 
-Esperado: dez `401` e, no 11º, `429`. Logo em seguida, num **segundo aparelho em outra rede** (celular no 4G), faça login como admin pelo front: deve funcionar. Se o segundo aparelho também receber 429, o `TRUST_PROXY_HOPS` está baixo demais (volte ao passo 6).
+Esperado: dez `401` e, no 11º, `429`. Logo em seguida, num **segundo aparelho em outra rede** (celular no 4G), faça login como admin pelo front: deve funcionar.
+
+Com o `TRUST_PROXY_HOPS` baixo demais, o servidor conta pelo IP de um proxy, e o sintoma depende de quantos proxies o Render usa: se o IP varia a cada requisição (o que se viu com `1` em 2026-11-26), o 11º login **não** recebe 429; se é sempre o mesmo, o segundo aparelho **também** recebe 429. Nos dois casos, volte ao passo 6.
 
 O limite é por IP: celulares na **mesma** rede Wi-Fi (NAT da universidade) dividem os 60 acessos de eleitor por minuto.
 
@@ -173,4 +175,6 @@ Mande ao agente a URL de produção, o valor final do `TRUST_PROXY_HOPS` e o res
 | `/api/health` responde, mas `/` dá 404 JSON | Start Command é `node apps/server/dist/main.js` em vez de `npm start` |
 | Deploy falha com erro de conexão ou de certificado no banco | `DATABASE_URL` errada, ou sem `sslmode=verify-full` |
 | Push na `main` com CI verde e nada publicado | Secret `RENDER_DEPLOY_HOOK` ausente ou errado: veja a execução do workflow `Deploy` em *Actions* |
+| 11º login errado seguido não recebe `429` | `TRUST_PROXY_HOPS` baixo demais: o limite conta pelo IP de um proxy, que muda a cada requisição (passo 6) |
+| Um IP forjado no `X-Forwarded-For` escapa do limite | `TRUST_PROXY_HOPS` alto demais (passo 6) |
 | 1º acesso do dia demora cerca de 1 minuto | Plano gratuito: o serviço dormiu (normal) |
