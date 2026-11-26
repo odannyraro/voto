@@ -93,6 +93,11 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/http/voter-access-routes.ts` → `registerVoterAccessRoutes`: `POST /api/voter/session` (pública), `GET /api/voter/state` e `POST /api/voter/votes` (`requireVoter`).
 - `apps/server/src/adapters/timeout-scheduler.ts` → `TimeoutScheduler`: `Scheduler` com `setTimeout` (uma tarefa por chave, prazos longos em etapas, `cancelAll()`).
 - `apps/server/src/adapters/crypto-code-generator.ts` → `createCryptoCodeGenerator()`: gerador do domínio com `crypto.randomInt`.
+- `apps/server/src/compose.ts` → `createServer(config, { createPool? })`: monta o servidor real (repositórios, adaptadores de produção, Socket.IO, seed do admin, estáticos) e o devolve `ready`; o `close` cancela timers e encerra o pool.
+- `apps/server/src/main.ts` → humilde (fora da cobertura): `loadConfig(process.env)` → `createServer` → `listen` e encerramento em `SIGTERM`/`SIGINT`.
+- `apps/server/src/http/static.ts` → `registerStatic(app, distDir)`: build do front com fallback para `index.html` (só `GET`, fora de `/api` e `/socket.io`).
+- `apps/server/src/adapters/system-clock.ts` → `systemClock`: `Clock` de produção.
+- `apps/server/test/doubles/pg-mem-pool.ts` → também `createPgMemDatabasePool()`: pool com `on('error')`/`emit` e `end` (recusa uso depois), para os testes do `createServer`.
 - `apps/server/src/services/presenters.ts` → `toAdminElectionDTO(record, now)`, `toVoterStateDTO(election, voterId, now)` e `toElectionSummaryDTO(election)`.
 - `apps/server/test/support/admin-test-app.ts` → `appWithTwoAdmins(overrides?)`: app de teste com os cabeçalhos `asAna`/`asBia` (ids `ANA`/`BIA`), fechado sozinho ao fim do teste (`onTestFinished`).
 - `apps/server/src/realtime/gateway.ts` → `createRealtimeServer()`, `attachRealtime(io, httpServer, deps)` (handshake JWT, salas do eleitor, `admin:watch`), tipos `RealtimeServer`/`RealtimeDeps`; `rooms.ts` → nomes das salas.
@@ -808,7 +813,7 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - Item 1, feito: o snapshot de `commit` leva o estado sobre o qual o comando agiu (rodada vencida já fechada); o `undo` desfaz só o comando, e o seguinte volta para antes da abertura da rodada. Testes: 2 em `election-service.test.ts` (o primeiro falhou antes; o segundo garante que os passos antigos continuam, falha que uma mutação expôs); 3 mutações manuais, todas pegas. Servidor: 560 testes, 100% linhas.
 - Item `allSettled` (aprovado junto): feito à parte, no mesmo commit do item 5 da revisão (ver B17).
 
-### [ ] B18 — Composição, arquivos estáticos e retomada após reinício
+### [x] B18 — Composição, arquivos estáticos e retomada após reinício
 **Ref.:** architecture §8.3, §13.
 **Fazer:**
 - `src/compose.ts`: `createServer(config)` monta os adaptadores reais conforme `REPOSITORY`, roda `migrate` (se for pg), executa `seedAdmin`, cria o `io` com `createRealtimeServer()` e chama `buildApp` com `notifier: new SocketNotifier(io)` e `realtime: io` (é o `buildApp` que liga o `io` ao servidor HTTP; ver as notas da B15), e reagenda as rodadas abertas (`rescheduleOpenRounds`, usando `repo.listAll()`).
@@ -829,7 +834,12 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - com 1 proxy confiável, um `X-Forwarded-For` forjado pelo cliente não muda o IP usado pelo rate limit (o 11º login no mesmo minuto ainda recebe 429).
 
 **Commit sugerido:** `feat(server): compõe aplicação real, serve o frontend e retoma prazos após reinício`
-**Notas do agente:** _pendente_
+**Notas do agente:**
+- Feito: `createServer(config)` monta o servidor real (memória ou Pg com `migrate`, `systemClock`, `TimeoutScheduler`, gerador `crypto`, `randomUUID`, Socket.IO + `SocketNotifier`, admin semeado, estáticos se `WEB_DIST_DIR`) e devolve o app já `ready`; `app.close()` fecha o Socket.IO, cancela os timers e encerra o pool. `main.ts` (humilde) lê o ambiente, faz `listen` em `0.0.0.0` e fecha no `SIGTERM`/`SIGINT`. `registerStatic` serve o build com fallback para `index.html`. Nova variável `TRUST_PROXY_HOPS` (padrão 0).
+- Arquivos: `src/{compose,main}.ts`, `src/http/static.ts`, `src/adapters/system-clock.ts`, `src/adapters/pg/sql.ts` (porta `DatabasePool`), `src/app.ts` (`trustProxy` e `onReady`), `src/config.ts`, `src/services/election-service.ts` (`rescheduleOpenRounds`), `test/doubles/pg-mem-pool.ts` (`createPgMemDatabasePool`); dep `@fastify/static` (prevista na §13).
+- Como usar: `const app = await createServer(loadConfig(process.env)); await app.listen(...)`. Testes trocam o banco: `createServer(config, { createPool: () => createPgMemDatabasePool() })`. O pool real tem `query_timeout` de 10 s.
+- Testes: 37 novos. `compose.test.ts` 12, `static.test.ts` 9, rate limit atrás de proxy 3, `rescheduleOpenRounds` 3, `app.test.ts` 1, `config.test.ts` 4 casos novos (e 2 atualizados), double do pool 5. Servidor: 597 testes, 99,84% linhas / 99,51% branches. 11 mutações manuais (sem `cancelAll`, `end`, `on('error')`, `migrate`, `query_timeout`, seed, `onReady`, reagendamento, prefixos da API), todas pegas. Smoke test real (bundle temporário do Vite, já apagado): health, fallback, 404 JSON, login semeado, handshake do Socket.IO e saída limpa no `SIGTERM`.
+- Decisões: (1) o reagendamento é um gancho `onReady` no `buildApp`, e não um passo só do `createServer`: o serviço nasce dentro do `buildApp` e todo app que sobe sobre um repositório com rodada aberta precisa retomá-la; nenhum teste antigo mudou. (2) **Fastify 5.12 recusa `trustProxy` numérico** (passou a não confiar em nada); a contagem de saltos virou a função `(_, hop) => hop < hops`. A própria doc do Fastify avisa que contar saltos só é seguro se o servidor não for alcançável sem passar pelo proxy: conferir isso no Render na B21. (3) A escolha do Pg é pelo `REPOSITORY`, não pela presença do `DATABASE_URL` (bug achado na própria tarefa, com teste de regressão antes). (4) O fallback só vale para `GET`; `/api` e `/socket.io` sem rota continuam 404 JSON. (5) Linha sem cobertura: só a fábrica padrão `new Pool(options)` (precisa de Postgres real). (6) Um arquivo do build que falta (ex.: `/assets/x.js`) recebe o `index.html`, como todo fallback de SPA.
 
 ### [ ] B20 — Build de produção
 **Ref.:** architecture §13, §14.
@@ -837,6 +847,10 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - Build do servidor com `tsup`: entrada `src/main.ts`, saída `apps/server/dist/main.js`, `target node24`, empacotando os workspaces `@voto/*` (`noExternal`).
 - Scripts raiz: `build` (web e depois server) e `start` (`node apps/server/dist/main.js`). O servidor serve `apps/web/dist` por padrão.
 - Adicionar `npm run build` ao `ci.yml`, depois dos testes e **antes** do passo "Upload Playwright report" (A26), que precisa continuar sendo o último.
+- **Cuidados vindos da B18:**
+  - O `createServer` só serve o front se `WEB_DIST_DIR` estiver definido (não há padrão no código). Para "servir `apps/web/dist` por padrão", defina o caminho no script `start` (de forma multiplataforma, ex.: `cross-env`) ou dê ao `config.ts` um padrão resolvido a partir do pacote, com teste. Não dependa da pasta de onde o comando é rodado.
+  - O `main.ts` usa `await` no topo do módulo: o bundle precisa sair em **ESM** (`format: 'esm'`).
+  - O `pg` tem um import opcional de `pg-native`, que não está instalado: deixe-o de fora do bundle (`external`), senão o build falha.
 
 **Testes (escrever antes):** é uma tarefa de configuração. Verifique localmente que `npm run build` e `npm start` sobem o servidor e que `GET /api/health` e `GET /` respondem. Descreva nas notas o comando usado para conferir.
 **Pronto quando:** o build passa no CI dos 3 SOs.
@@ -846,7 +860,7 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 ### [ ] B21 — Deploy contínuo (Render + Neon)
 **Ref.:** architecture §12, §13.
 **Fazer:**
-- `render.yaml` (Blueprint) com build `npm ci && npm run build`, start `npm start`, health check em `/api/health` e as variáveis da §13 (os valores secretos ficam fora do arquivo). Inclui a variável de proxy da B18 com o número de proxies do Render (confirmar na documentação do Render ou olhando o `X-Forwarded-For` que chega em produção) e `RATE_LIMIT` ligado.
+- `render.yaml` (Blueprint) com build `npm ci && npm run build`, start `npm start`, health check em `/api/health` e as variáveis da §13 (os valores secretos ficam fora do arquivo). Inclui a variável de proxy da B18 com o número de proxies do Render (confirmar na documentação do Render ou olhando o `X-Forwarded-For` que chega em produção) e `RATE_LIMIT` ligado. A variável é `TRUST_PROXY_HOPS`; como o Fastify 5.12 considera a contagem de saltos insegura quando o servidor é alcançável sem o proxy, confirme também que o serviço do Render só recebe tráfego pelo proxy dele (ver notas da B18).
 - **Uma instância só:** o serviço do Render não pode escalar para mais de uma instância (a fila de gravações por eleição da B17b é do processo). Deixe isso explícito no `render.yaml` e no `docs/deploy.md`.
 - **Esquema do banco congelado após o 1º deploy:** o `migrate` só tem `CREATE TABLE IF NOT EXISTS`, que não altera tabela já existente (ver notas da B17). Qualquer mudança de esquema depois disso precisa de um `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` no `migrate`, com teste de que roda num banco do esquema anterior.
 - `.github/workflows/deploy.yml`: dispara em `workflow_run` do CI com `conclusion == success` na `main` e chama `curl -fsS -X POST "$RENDER_DEPLOY_HOOK"` (secret).
@@ -856,7 +870,9 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
   3. criar o secret `RENDER_DEPLOY_HOOK` no GitHub;
   4. conferir `/api/health` em produção;
   5. conferir o rate limit em produção: o 11º login errado no mesmo minuto recebe 429, e um segundo aparelho (outra rede) ainda consegue logar;
-  6. conferir uma rodada com vários celulares votando ao mesmo tempo (a rajada só foi medida num Postgres local, não no Neon; ver B13b e B17b).
+  6. conferir uma rodada com vários celulares votando ao mesmo tempo (a rajada só foi medida num Postgres local, não no Neon; ver B13b e B17b);
+  7. saber que o admin é semeado **só na primeira subida**: se o usuário já existe no banco, a senha guardada é mantida (B18). Trocar `ADMIN_PASSWORD` no Render depois disso não muda a senha; escreva no checklist como trocar, se for preciso.
+- O primeiro deploy com `REPOSITORY=pg` é também o primeiro uso do `new Pool(...)` real (a única linha sem cobertura da B18): confira nos logs do Render que o `migrate` rodou sem erro.
 
 **Testes (escrever antes):** não se aplica (infraestrutura). A validação é o usuário seguir o checklist e a URL de produção responder.
 **Pronto quando:** o usuário confirmar a aplicação no ar (marco M2). Registre a URL nas notas.
@@ -888,6 +904,7 @@ Reaproveite os passos nomeados da B16a (`logIn`, `createMayorRace`, `castVote`..
 - Pontas soltas das revisões (avaliar e, se valer a pena, corrigir com teste antes; senão, registrar o motivo nas notas):
   - `TimeoutScheduler` (B14, decisão 5): duas mutações sobrevivem, a remoção do `timers.delete` no disparo (vazamento de memória) e a do `Math.min` (laço de timers de 1 ms). Falta um teste que observe isso, por exemplo uma contagem de tarefas pendentes depois do disparo.
   - Gravação no Postgres (B17, pendência c): cada voto ainda regrava o registro inteiro, e o `save` apaga e reinsere todos os `voter_codes` da eleição mesmo quando os códigos não mudaram. Dá para pular a reescrita dos códigos quando o conjunto for o mesmo.
+  - Fallback do front (B18, decisão 6): um arquivo do build que falta (ex.: `/assets/app-antigo.js`, pedido por uma aba aberta antes de um deploy) recebe o `index.html` com 200, e o navegador tenta rodar HTML como JavaScript. Avaliar responder 404 para caminhos com extensão de arquivo.
 **Notas do agente:** _pendente_
 
 ---
@@ -914,3 +931,4 @@ Reaproveite os passos nomeados da B16a (`logIn`, `createMayorRace`, `castVote`..
 - 2026-11-25 — B17b (aprovada) — o passo do desfazer de um comando guarda a eleição já com o prazo vencido aplicado: o fechamento automático não é desfeito junto, mesmo quando é o comando que o grava. Detalha a §5.4.
 - 2026-11-25 — A25 (feita pelo A) — o rate limit é um hook próprio (`http/rate-limit.ts`) com a porta `Clock`, e não o `@fastify/rate-limit` da §8.4: a janela fica testável com o `FakeClock` e não entra dependência nova. Veio junto a variável `RATE_LIMIT` (`on`/`off`, padrão `on`) no `config.ts`; os e2e (C17) sobem o servidor com `RATE_LIMIT=off`, porque todos os navegadores do teste saem do mesmo IP. Pendências do lado B: `trustProxy` pelo número de proxies (B18/B21) e avaliar a limpeza dos contadores (B23).
 - 2026-11-25 — A26 (feita pelo A) — o `ci.yml` ganhou, no fim, o upload do `e2e/playwright-report/` quando o job falha (`if-no-files-found: ignore`). Os passos de e2e da C22 entram antes dele.
+- 2026-11-25 — B18 — o `buildApp` reagenda as rodadas abertas num gancho `onReady` (o `createServer` só chama `ready`), porque o `ElectionService` nasce dentro dele. A confiança no proxy é a variável `TRUST_PROXY_HOPS` (padrão 0) aplicada como função de saltos, já que o Fastify 5.12 recusa o número puro. Detalha a §8.3 e a §8.4.

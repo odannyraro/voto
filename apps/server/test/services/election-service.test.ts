@@ -988,6 +988,57 @@ describe('ElectionService.handleDeadline', () => {
   });
 });
 
+describe('ElectionService.rescheduleOpenRounds', () => {
+  // Rodada de 60 s (prazo padrão) aberta em START: prazo às 12:01:00, timer às 12:01:01.
+  const CLOSING_TIME = new Date('2026-01-01T12:01:01.000Z');
+
+  /**
+   * Serviço recém-criado (como depois de um reinício) sobre um repositório que já guarda a
+   * eleição `e1` com uma rodada aberta em `START` e nenhum agendamento.
+   *
+   * @returns O serviço e os doubles, como `makeService`.
+   */
+  async function restartedServiceWithOpenRound() {
+    const test = makeService();
+    const opened = withOpenRound(
+      openElectionWithVoters({ id: 'e1', adminId: OWNER, positionIds: ['president'] }),
+      { positionId: 'president', roundId: 'round-1', openedAt: START },
+    );
+    await test.repository.create(opened);
+    return test;
+  }
+
+  it('schedules the closing of a stored open round at its deadline plus the grace period', async () => {
+    const { service, scheduler } = await restartedServiceWithOpenRound();
+
+    await service.rescheduleOpenRounds();
+
+    expect(scheduler.pending()).toEqual([{ key: 'round:e1', at: CLOSING_TIME }]);
+  });
+
+  it('schedules nothing for elections without an open round', async () => {
+    const { service, repository, scheduler } = makeService();
+    await repository.create(anElectionRecord({ id: 'draft', adminId: OWNER }));
+    await repository.create(
+      openElectionWithVoters({ id: 'waiting', adminId: OWNER, positionIds: ['president'] }),
+    );
+
+    await service.rescheduleOpenRounds();
+
+    expect(scheduler.pending()).toEqual([]);
+  });
+
+  it('closes the round when the rescheduled closing fires', async () => {
+    const { service, repository, clock, scheduler } = await restartedServiceWithOpenRound();
+    await service.rescheduleOpenRounds();
+    clock.set(CLOSING_TIME);
+
+    await scheduler.fireDue(clock.now());
+
+    expect((await repository.get('e1'))?.current.rounds).toMatchObject([{ status: 'CLOSED' }]);
+  });
+});
+
 describe('ElectionService.castVote', () => {
   const FIRST_VOTER = 'e1:VOTERAAA';
   const SECOND_VOTER = 'e1:VOTERBBB';

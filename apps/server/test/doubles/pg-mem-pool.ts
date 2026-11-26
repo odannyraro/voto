@@ -1,7 +1,8 @@
+import { EventEmitter } from 'node:events';
 import type { Pool } from 'pg';
 import { type IBackup, newDb } from 'pg-mem';
 import { migrate } from '../../src/adapters/pg/migrate';
-import type { SqlPool } from '../../src/adapters/pg/sql';
+import type { DatabasePool, SqlPool } from '../../src/adapters/pg/sql';
 
 /**
  * Postgres em memória (`pg-mem`) para testar os adaptadores SQL sem Docker nem rede. Cada
@@ -52,4 +53,43 @@ export async function createMigratedPgMemPool(): Promise<SqlPool> {
   const pool = createPgMemPool();
   await migrate(pool);
   return pool;
+}
+
+/** Pool em memória com o que a composição usa do `pg.Pool`: evento `error` e `end`. */
+export interface PgMemDatabasePool extends DatabasePool {
+  /**
+   * Simula a queda de uma conexão ociosa, que o `pg.Pool` avisa com o evento `error`.
+   *
+   * @param event - Sempre `error`.
+   * @param error - Erro entregue aos ouvintes.
+   * @returns `true` se havia ouvinte.
+   * @throws {Error} O próprio `error`, se ninguém ouve (como no `pg.Pool`, derruba o processo).
+   */
+  emit(event: 'error', error: Error): boolean;
+}
+
+// Mesma mensagem do `pg.Pool` depois do `end`.
+const POOL_ENDED_MESSAGE = 'Cannot use a pool after calling end on the pool';
+
+/**
+ * Cria um banco em memória vazio com um pool que se comporta como o `pg.Pool` no que a
+ * composição usa: avisa falhas de conexão pelo evento `error` e recusa uso depois do `end`.
+ *
+ * @returns O pool do banco novo (sem tabelas).
+ */
+export function createPgMemDatabasePool(): PgMemDatabasePool {
+  const pool = createPgMemPool();
+  const events = new EventEmitter();
+  let ended = false;
+  const refuseAfterEnd = () => Promise.reject(new Error(POOL_ENDED_MESSAGE));
+
+  return {
+    query: (text, values) => (ended ? refuseAfterEnd() : pool.query(text, values)),
+    connect: () => (ended ? refuseAfterEnd() : pool.connect()),
+    on: (event, listener) => events.on(event, listener),
+    emit: (event, error) => events.emit(event, error),
+    end: async () => {
+      ended = true;
+    },
+  };
 }

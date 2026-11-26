@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fastify/static": "^10.1.12",
     "@voto/domain": "*",
     "@voto/shared": "*",
     "bcryptjs": "^3.0.3",

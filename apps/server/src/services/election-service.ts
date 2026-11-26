@@ -188,6 +188,16 @@ export class ElectionService {
   }
 
   /**
+   * Retoma os prazos depois de um reinício: os timers morrem com o processo, então agenda o
+   * fechamento de cada rodada que o repositório ainda guarda aberta, no prazo mais a tolerância
+   * (§8.3). Um prazo que venceu com o servidor fora do ar dispara logo. Não grava nada.
+   */
+  async rescheduleOpenRounds(): Promise<void> {
+    const records = await this.deps.electionRepository.listAll();
+    for (const record of records) this.rescheduleClosing(record.current);
+  }
+
+  /**
    * Registra o voto de um eleitor. Salva, reagenda e notifica como os comandos do admin, mas
    * quem autoriza é o token do eleitor (não há dono a conferir), o prazo ganha a tolerância
    * `voteGraceMs`, que compensa a latência de rede, e o voto não é um passo do desfazer.

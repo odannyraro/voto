@@ -44,7 +44,9 @@ export interface AppDeps {
 
 /**
  * Monta o app Fastify sem abrir porta, para `main.ts` fazer `listen` e os testes usarem `inject`.
- * O domínio não entra nas deps: é puro e determinístico, então é importado direto.
+ * O domínio não entra nas deps: é puro e determinístico, então é importado direto. Ao ficar
+ * pronto (`ready`/`listen`), o app reagenda o fechamento das rodadas que o repositório guarda
+ * abertas, porque os timers não sobrevivem a um reinício.
  *
  * @param deps - Configuração e portas da aplicação.
  * @returns A instância Fastify com health check, tratamento de erros, limite de tentativas no
@@ -54,8 +56,11 @@ export interface AppDeps {
  *   `deps.realtime`, também o gateway Socket.IO no mesmo servidor HTTP.
  */
 export function buildApp(deps: AppDeps): FastifyInstance {
-  // Silencia o log nos testes; em dev e produção o Fastify loga requisições e erros.
-  const app = Fastify({ logger: deps.config.nodeEnv !== 'test' });
+  const app = Fastify({
+    // Silencia o log nos testes; em dev e produção o Fastify loga requisições e erros.
+    logger: deps.config.nodeEnv !== 'test',
+    trustProxy: trustedProxyHops(deps.config.trustProxyHops),
+  });
   registerErrorHandling(app);
   if (deps.config.rateLimit) registerRateLimit(app, deps.clock);
 
@@ -89,6 +94,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerVoterRoutes(app, adminRouteDeps);
   registerRoundRoutes(app, adminRouteDeps);
   registerResolutionRoutes(app, adminRouteDeps);
+  // Os timers não sobrevivem a um reinício: ao subir, o app reagenda as rodadas abertas (§8.3).
+  app.addHook('onReady', () => elections.rescheduleOpenRounds());
 
   const voters = new VoterService({
     electionRepository: deps.electionRepository,
@@ -102,6 +109,22 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     attachRealtimeToApp(app, deps.realtime, { auth, elections, clock: deps.clock });
 
   return app;
+}
+
+/**
+ * Diz ao Fastify em quais saltos do `X-Forwarded-For` confiar, para o `request.ip` (usado pelo
+ * limite de tentativas) ser o cliente que o proxy mais distante viu. Nunca é `true`: com ele o
+ * IP seria o primeiro do cabeçalho, que o próprio cliente escreve para fugir do limite. Também
+ * não é o número puro, que o Fastify 5.12 passou a recusar (não confia em nada) por não conferir
+ * quem conecta. A contagem de saltos só é segura se o servidor não puder ser alcançado sem
+ * passar pelo proxy, o que precisa valer no ambiente de produção.
+ *
+ * @param hops - Quantos proxies ficam na frente do servidor; 0 quando não há proxy.
+ * @returns `false` sem proxy; senão, a função que confia nos `hops` saltos mais próximos.
+ */
+function trustedProxyHops(hops: number): false | ((address: string, hop: number) => boolean) {
+  if (hops === 0) return false;
+  return (_address, hop) => hop < hops;
 }
 
 /**

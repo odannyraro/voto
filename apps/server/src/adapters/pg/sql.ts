@@ -42,3 +42,18 @@ export interface SqlPool extends SqlExecutor {
    */
   connect(): Promise<SqlConnection>;
 }
+
+/** O pool de produção (`pg.Pool`), com o que a composição usa além de executar SQL. */
+export interface DatabasePool extends SqlPool {
+  /**
+   * Ouve a queda de conexões ociosas; sem ouvinte, o `pg` derruba o processo.
+   *
+   * @param event - Sempre `error`.
+   * @param listener - Recebe o erro da conexão perdida.
+   * @returns O próprio pool (valor ignorado).
+   */
+  on(event: 'error', listener: (error: Error) => void): unknown;
+
+  /** Fecha todas as conexões; depois disso o pool recusa consultas. Usado no desligamento. */
+  end(): Promise<void>;
+}

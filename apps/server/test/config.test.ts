@@ -22,6 +22,7 @@ describe('loadConfig', () => {
         voteGraceMs: 1000,
         historyLimit: 50,
         rateLimit: true,
+        trustProxyHops: 0,
       });
     });
 
@@ -54,6 +55,7 @@ describe('loadConfig', () => {
         HISTORY_LIMIT: '10',
         WEB_DIST_DIR: 'apps/web/dist',
         RATE_LIMIT: 'off',
+        TRUST_PROXY_HOPS: '1',
       });
 
       expect(config).toEqual({
@@ -69,6 +71,7 @@ describe('loadConfig', () => {
         historyLimit: 10,
         webDistDir: 'apps/web/dist',
         rateLimit: false,
+        trustProxyHops: 1,
       });
     });
   });
@@ -130,6 +133,8 @@ describe('loadConfig', () => {
       ['NODE_ENV', 'staging'],
       ['REPOSITORY', 'mongo'],
       ['RATE_LIMIT', 'false'],
+      ['TRUST_PROXY_HOPS', '-1'],
+      ['TRUST_PROXY_HOPS', 'true'],
     ])('rejects %s=%s', (name, value) => {
       expect(() => loadConfig({ [name]: value })).toThrow(name);
     });
@@ -141,6 +146,7 @@ describe('loadConfig', () => {
       ['BCRYPT_ROUNDS', '31', { bcryptRounds: 31 }],
       ['VOTE_GRACE_MS', '0', { voteGraceMs: 0 }],
       ['HISTORY_LIMIT', '1', { historyLimit: 1 }],
+      ['TRUST_PROXY_HOPS', '0', { trustProxyHops: 0 }],
     ])('accepts %s=%s at the limit', (name, value, expected) => {
       expect(loadConfig({ [name]: value })).toMatchObject(expected);
     });

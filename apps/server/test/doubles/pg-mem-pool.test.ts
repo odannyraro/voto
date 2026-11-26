@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createPgMemPool } from './pg-mem-pool';
+import { createPgMemDatabasePool, createPgMemPool } from './pg-mem-pool';
 
 /**
  * Cria um banco com uma tabela vazia, insere uma linha numa transação e a encerra.
@@ -40,5 +40,51 @@ describe('createPgMemPool', () => {
     const outside = pool.query('SELECT 1');
 
     await expect(outside).rejects.toThrow(/outside the open transaction/);
+  });
+});
+
+describe('createPgMemDatabasePool', () => {
+  it('runs statements like the plain pool', async () => {
+    const pool = createPgMemDatabasePool();
+
+    const result = await pool.query('SELECT 1 AS one');
+
+    expect(result.rows).toEqual([{ one: 1 }]);
+  });
+
+  it('refuses statements after the pool is ended, like the real pg pool', async () => {
+    const pool = createPgMemDatabasePool();
+    await pool.end();
+
+    const afterEnd = pool.query('SELECT 1');
+
+    await expect(afterEnd).rejects.toThrow(/after calling end/);
+  });
+
+  it('refuses new connections after the pool is ended', async () => {
+    const pool = createPgMemDatabasePool();
+    await pool.end();
+
+    const afterEnd = pool.connect();
+
+    await expect(afterEnd).rejects.toThrow(/after calling end/);
+  });
+
+  it('hands an emitted connection error to the registered listener', () => {
+    const pool = createPgMemDatabasePool();
+    const received: Error[] = [];
+    pool.on('error', (error) => received.push(error));
+
+    pool.emit('error', new Error('Connection terminated unexpectedly'));
+
+    expect(received).toEqual([new Error('Connection terminated unexpectedly')]);
+  });
+
+  it('crashes on an emitted connection error nobody listens to, like the real pg pool', () => {
+    const pool = createPgMemDatabasePool();
+
+    const emitting = () => pool.emit('error', new Error('Connection terminated unexpectedly'));
+
+    expect(emitting).toThrow('Connection terminated unexpectedly');
   });
 });

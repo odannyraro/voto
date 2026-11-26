@@ -24,6 +24,12 @@ export interface Config {
    * (`RATE_LIMIT=off`), porque todos os navegadores do teste saem do mesmo IP.
    */
   readonly rateLimit: boolean;
+  /**
+   * Quantos proxies reversos ficam na frente do servidor (0 sem proxy; 1 atrás de um proxy). O IP do
+   * cliente, usado pelo limite de tentativas, é o que o proxy mais distante viu; o resto do
+   * `X-Forwarded-For` foi escrito pelo próprio cliente e é ignorado.
+   */
+  readonly trustProxyHops: number;
 }
 
 /** Variáveis de ambiente cruas (`process.env` em produção). */
@@ -38,6 +44,8 @@ const MIN_BCRYPT_ROUNDS = 4;
 const MAX_BCRYPT_ROUNDS = 31;
 const DEFAULT_VOTE_GRACE_MS = 1000;
 const DEFAULT_HISTORY_LIMIT = 50;
+// Sem proxy na frente por padrão (dev e testes): o `X-Forwarded-For` não é lido.
+const DEFAULT_TRUST_PROXY_HOPS = 0;
 // Segredo conhecido de propósito: só vale fora de produção, onde a variável é obrigatória.
 const DEV_JWT_SECRET = 'dev-only-jwt-secret-do-not-use-in-production';
 
@@ -80,6 +88,7 @@ const envSchema = z
     HISTORY_LIMIT: integerVar(1).default(DEFAULT_HISTORY_LIMIT),
     WEB_DIST_DIR: z.string().optional(),
     RATE_LIMIT: z.enum(['on', 'off']).default('on'),
+    TRUST_PROXY_HOPS: integerVar(0).default(DEFAULT_TRUST_PROXY_HOPS),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
@@ -110,6 +119,7 @@ const envSchema = z
     historyLimit: env.HISTORY_LIMIT,
     webDistDir: env.WEB_DIST_DIR,
     rateLimit: env.RATE_LIMIT === 'on',
+    trustProxyHops: env.TRUST_PROXY_HOPS,
   }));
 
 /**
