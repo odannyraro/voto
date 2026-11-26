@@ -103,7 +103,7 @@ agrupadas em um único commit.
 | C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[x] C6.a` diálogos de confirmação; `[x] C6.b` `Countdown` e `ErrorMessage` |
 | C7 | Divide-se: entrada e integração da sessão são dois comportamentos fechados | `[x] C7.a` formulário e criação de sessão; `[x] C7.b` persistência, navegação e erros da sessão |
 | C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[x] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[x] C8.b` cédula e voto candidato/branco |
-| C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[ ] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[ ] C9.b` reconexão e ordenação de estado |
+| C9 | Divide-se: fases finais e reconexão têm ciclos de teste diferentes | `[x] C9.a` `VOTED`, `RESULTS` e `FINISHED`; `[ ] C9.b` reconexão e ordenação de estado |
 | C10 | Divide-se: login em si não exige a proteção de toda a árvore de rotas | `[ ] C10.a` login, token e `/admin/me`; `[ ] C10.b` rotas protegidas e logout |
 | C11 | Divide-se: leitura da lista e mutação/criação têm UI e testes distintos | `[ ] C11.a` lista de eleições; `[ ] C11.b` criação e navegação |
 | C12 | Divide-se: adicionar/editar cargos não inclui remover e confirmar | `[ ] C12.a` criar e editar cargos; `[ ] C12.b` remover cargo e confirmar estado permitido |
@@ -149,6 +149,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/features/voter/useVoterSession.ts` → carrega o snapshot REST do eleitor e ressincroniza após eventos realtime/reconexão.
 - `apps/web/src/features/voter/VoterSessionPage.tsx` → escolhe a tela de espera, cédula ou status conforme a fase recebida.
 - `apps/web/src/features/voter/VoterVotePage.tsx` → exibe candidatos, opção `BLANK`, countdown e envio único do voto.
+- `apps/web/src/features/voter/VoterFinalState.tsx` → apresenta confirmação de voto, resultado liberado e encerramento usando os DTOs recebidos.
 - `apps/web/src/lib/countdown.ts` → cálculo puro dos segundos restantes com deslocamento do relógio do servidor.
 - `apps/web/src/lib/format.ts` → percentual de votos válidos e rótulos legíveis das regras de desempate.
 - `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
@@ -163,6 +164,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/voter-entry-page.test.tsx` → validação local, normalização do código, início de sessão e erros da API.
 - `apps/web/test/voter-session.test.tsx` → carregamento inicial, estado `WAITING`, eventos de socket, reconexão, erros e credenciais persistidas.
 - `apps/web/test/voter-vote-page.test.tsx` → voto candidato/branco, cliques duplicados, erros de rodada e countdown.
+- `apps/web/test/voter-final-state.test.tsx` → fases finais, desfechos do resultado e contagens sem cálculo local.
 - `apps/web/test/format.test.ts` → porcentagens, zero votos válidos, arredondamento e rótulos de desempate.
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
@@ -424,7 +426,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/voter-vote-page.test.tsx` (5 casos: voto de candidato com clique duplicado, `BLANK`, `VOTER_ALREADY_VOTED`, `ROUND_EXPIRED` e countdown).
 - Decisões: a API permanece autoritativa para prazo e votos duplicados; erros terminais desabilitam a cédula, enquanto falhas de rede permitem nova tentativa.
 
-### [ ] C9.a — Fases VOTED, RESULTS e FINISHED
+### [x] C9.a — Fases VOTED, RESULTS e FINISHED
 **Ref.:** architecture §6.2.
 **Depende de:** C8.b.
 **Fazer:** renderizar confirmação, resultado liberado e eleição encerrada.
@@ -432,6 +434,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** telas finais não calculam nem inferem contagens.
 **Arquivos:** `apps/web/src/features/voter/`.
 **Commit sugerido:** `feat(web): adiciona fases finais da tela do eleitor`
+**Notas do agente:**
+- Feito: a sessão mostra confirmação em `VOTED`, resultado liberado em `RESULTS` e encerramento em `FINISHED`.
+- Arquivos: `apps/web/src/features/voter/VoterFinalState.tsx`, `VoterSessionPage.tsx`, `apps/web/test/voter-final-state.test.tsx`.
+- Como usar: `/votar` troca para a apresentação final conforme o discriminante recebido em `VoterStateDTO`.
+- Testes: `apps/web/test/voter-final-state.test.tsx` (5 casos: confirmação, três desfechos e encerramento).
+- Decisões: contagens, votos válidos, brancos e desempate são apresentados sem cálculos locais; nomes de eleito/finalistas são associados aos IDs presentes no próprio resultado.
 
 ### [ ] C9.b — Reconexão e estado stale
 **Ref.:** architecture §7.

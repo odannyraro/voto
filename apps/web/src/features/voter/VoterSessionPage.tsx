@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { ErrorMessage } from '../../components/ErrorMessage';
+import { VoterFinalState } from './VoterFinalState';
 import { VoterVotePage } from './VoterVotePage';
 import { useVoterSession } from './useVoterSession';
 
@@ -39,8 +40,8 @@ export function VoterSessionPage({ token }: VoterSessionPageProps): ReactElement
           clientNowAtSync={clientNowAtSync}
         />
       )}
-      {state !== null && state.phase !== 'WAITING' && state.phase !== 'VOTING' && (
-        <p role="status">Current phase: {state.phase}</p>
+      {(state?.phase === 'VOTED' || state?.phase === 'RESULTS' || state?.phase === 'FINISHED') && (
+        <VoterFinalState state={state} />
       )}
     </main>
   );
