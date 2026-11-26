@@ -4,6 +4,7 @@ import { DomainError, type DomainErrorCode } from '@voto/domain';
 import { afterEach, describe, expect, it } from 'vitest';
 import { HttpError } from '../src/http/errors';
 import { parse } from '../src/http/validate';
+import { openElectionWithVoters, withOpenRound } from './support/election-fixtures';
 import { makeTestApp } from './support/make-test-app';
 
 const OK = 200;
@@ -61,6 +62,25 @@ describe('GET /api/health', () => {
 
     expect(response.statusCode).toBe(OK);
     expect(response.json()).toEqual({ status: 'ok' });
+  });
+});
+
+describe('resuming deadlines when the app starts', () => {
+  it('schedules the closing of a round that storage still holds open', async () => {
+    // Rodada de 60 s (prazo padrão) aberta antes do reinício: o timer vai para prazo + 1 s.
+    const test = makeTestApp();
+    app = test.app;
+    const openedBeforeRestart = withOpenRound(
+      openElectionWithVoters({ id: 'e1', positionIds: ['president'] }),
+      { positionId: 'president', roundId: 'round-1', openedAt: new Date('2026-01-01T11:59:30Z') },
+    );
+    await test.deps.electionRepository.create(openedBeforeRestart);
+
+    await app.ready();
+
+    expect(test.scheduler.pending()).toEqual([
+      { key: 'round:e1', at: new Date('2026-01-01T12:00:31Z') },
+    ]);
   });
 });
 
@@ -143,6 +163,20 @@ describe('error handling', () => {
 
     expect(response.statusCode).toBe(BAD_REQUEST);
     expect(response.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
+  });
+
+  it('rejects an empty JSON body through the route schema, as if no body came', async () => {
+    app = appValidatingName();
+    const withoutBody = await app.inject({ method: 'POST', url: VALIDATING_URL });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: VALIDATING_URL,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(BAD_REQUEST);
+    expect(response.json()).toEqual(withoutBody.json());
   });
 
   it('turns an unsupported content type into 415 VALIDATION_ERROR', async () => {

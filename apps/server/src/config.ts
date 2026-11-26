@@ -4,7 +4,10 @@ import { z } from 'zod';
 export interface Config {
   readonly port: number;
   readonly nodeEnv: 'development' | 'test' | 'production';
-  /** Segredo de assinatura dos JWTs; em dev e teste usa um valor fixo e inseguro. */
+  /**
+   * Segredo de assinatura dos JWTs. Obrigatório em produção e sempre que o repositório é `pg`;
+   * só em dev e teste com memória cai para um valor fixo e inseguro.
+   */
   readonly jwtSecret: string;
   /** Credenciais do admin inicial (seed). Só são obrigatórias em produção. */
   readonly adminUsername?: string;
@@ -24,6 +27,12 @@ export interface Config {
    * (`RATE_LIMIT=off`), porque todos os navegadores do teste saem do mesmo IP.
    */
   readonly rateLimit: boolean;
+  /**
+   * Quantos proxies reversos ficam na frente do servidor (0 sem proxy; 1 atrás de um proxy). O IP do
+   * cliente, usado pelo limite de tentativas, é o que o proxy mais distante viu; o resto do
+   * `X-Forwarded-For` foi escrito pelo próprio cliente e é ignorado.
+   */
+  readonly trustProxyHops: number;
 }
 
 /** Variáveis de ambiente cruas (`process.env` em produção). */
@@ -38,6 +47,8 @@ const MIN_BCRYPT_ROUNDS = 4;
 const MAX_BCRYPT_ROUNDS = 31;
 const DEFAULT_VOTE_GRACE_MS = 1000;
 const DEFAULT_HISTORY_LIMIT = 50;
+// Sem proxy na frente por padrão (dev e testes): o `X-Forwarded-For` não é lido.
+const DEFAULT_TRUST_PROXY_HOPS = 0;
 // Segredo conhecido de propósito: só vale fora de produção, onde a variável é obrigatória.
 const DEV_JWT_SECRET = 'dev-only-jwt-secret-do-not-use-in-production';
 
@@ -80,6 +91,7 @@ const envSchema = z
     HISTORY_LIMIT: integerVar(1).default(DEFAULT_HISTORY_LIMIT),
     WEB_DIST_DIR: z.string().optional(),
     RATE_LIMIT: z.enum(['on', 'off']).default('on'),
+    TRUST_PROXY_HOPS: integerVar(0).default(DEFAULT_TRUST_PROXY_HOPS),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
@@ -89,12 +101,22 @@ const envSchema = z
         }
       }
     }
-    if (env.REPOSITORY === 'pg' && env.DATABASE_URL === undefined) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['DATABASE_URL'],
-        message: 'is required when REPOSITORY is pg',
-      });
+    if (env.REPOSITORY === 'pg') {
+      // Banco real é ambiente real, mesmo sem `NODE_ENV=production`: o segredo de dev está no
+      // repositório e serviria para forjar tokens de admin. Em produção o aviso acima já cobre.
+      const pgRequired =
+        env.NODE_ENV === 'production'
+          ? (['DATABASE_URL'] as const)
+          : (['DATABASE_URL', 'JWT_SECRET'] as const);
+      for (const name of pgRequired) {
+        if (env[name] === undefined) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [name],
+            message: 'is required when REPOSITORY is pg',
+          });
+        }
+      }
     }
   })
   .transform((env): Config => ({
@@ -110,6 +132,7 @@ const envSchema = z
     historyLimit: env.HISTORY_LIMIT,
     webDistDir: env.WEB_DIST_DIR,
     rateLimit: env.RATE_LIMIT === 'on',
+    trustProxyHops: env.TRUST_PROXY_HOPS,
   }));
 
 /**

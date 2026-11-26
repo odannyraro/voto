@@ -145,6 +145,19 @@ describe('POST /api/elections/:id/positions/:pid/runoff', () => {
     });
   });
 
+  it('opens the runoff when a JSON content type comes without a body', async () => {
+    const test = await appWithTwoAdmins();
+    await test.deps.electionRepository.create(electionAwaitingRunoff());
+
+    const response = await test.app.inject({
+      method: 'POST',
+      url: '/api/elections/e1/positions/mayor/runoff',
+      headers: { ...test.asAna, 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(CREATED);
+  });
+
   it('schedules the automatic closing at the deadline plus the vote grace period', async () => {
     const test = await appWithTwoAdmins();
     await test.deps.electionRepository.create(electionAwaitingRunoff());
@@ -415,6 +428,20 @@ describe('POST /api/elections/:id/undo', () => {
       titles: ['mayor'],
       canUndo: false,
     });
+  });
+
+  it('restores the state when a JSON content type comes without a body', async () => {
+    const test = await appWithTwoAdmins();
+    await givenPositionAddedAfterDraft(test);
+
+    const response = await test.app.inject({
+      method: 'POST',
+      url: '/api/elections/e1/undo',
+      headers: { ...test.asAna, 'content-type': 'application/json' },
+    });
+
+    const titles = response.json<AdminElectionDTO>().election.positions.map((p) => p.title);
+    expect({ status: response.statusCode, titles }).toEqual({ status: OK, titles: ['mayor'] });
   });
 
   it('saves the restored state with a version higher than the one it replaces', async () => {

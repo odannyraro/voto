@@ -64,6 +64,16 @@ async function repeat(target: FastifyInstance, request: InjectOptions, times: nu
   return statuses;
 }
 
+/**
+ * Faz requisições diferentes, uma depois da outra.
+ *
+ * @param target - App que recebe as requisições.
+ * @param requests - Requisições, na ordem de envio.
+ */
+async function sendInOrder(target: FastifyInstance, requests: readonly InjectOptions[]) {
+  for (const request of requests) await target.inject(request);
+}
+
 describe('rate limit on POST /api/admin/login', () => {
   it('lets the first attempts of the minute reach the route', async () => {
     const { app } = emptyApp();
@@ -165,5 +175,66 @@ describe('rate limit scope', () => {
     const statuses = await repeat(app, wrongLogin, LOGIN_ATTEMPTS_PER_MINUTE + 1);
 
     expect(statuses).toEqual(Array(LOGIN_ATTEMPTS_PER_MINUTE + 1).fill(UNAUTHORIZED));
+  });
+});
+
+describe('rate limit behind a reverse proxy', () => {
+  // O proxy (Render) acrescenta ao fim do `X-Forwarded-For` o IP de quem se conectou a ele;
+  // o que vem antes foi escrito pelo próprio cliente.
+  const CLIENT_IP = '203.0.113.7';
+  const OTHER_CLIENT_IP = '198.51.100.20';
+
+  /**
+   * Monta o app confiando em um proxy na frente do servidor, como em produção.
+   *
+   * @returns O app de teste.
+   */
+  function appBehindOneProxy() {
+    const test = makeTestApp({
+      config: loadConfig({ NODE_ENV: 'test', BCRYPT_ROUNDS: '4', TRUST_PROXY_HOPS: '1' }),
+    });
+    app = test.app;
+    return test;
+  }
+
+  /**
+   * Login errado como chega do proxy: o cabeçalho traz o que o cliente forjou e, no fim, o IP real.
+   *
+   * @param forgedIp - Endereço que o cliente escreveu no cabeçalho para se passar por outro.
+   * @param realIp - Endereço que o proxy viu e acrescentou.
+   * @returns A requisição pronta para o `inject`.
+   */
+  function loginThroughProxy(forgedIp: string, realIp: string): InjectOptions {
+    return { ...wrongLogin, headers: { 'x-forwarded-for': `${forgedIp}, ${realIp}` } };
+  }
+
+  it('keeps limiting a client that forges a different address on every attempt', async () => {
+    const { app } = appBehindOneProxy();
+    const forgedAttempts = Array.from({ length: LOGIN_ATTEMPTS_PER_MINUTE }, (_, index) =>
+      loginThroughProxy(`10.0.0.${index + 1}`, CLIENT_IP),
+    );
+    await sendInOrder(app, forgedAttempts);
+
+    const response = await app.inject(loginThroughProxy('10.0.0.99', CLIENT_IP));
+
+    expect(response.statusCode).toBe(TOO_MANY_REQUESTS);
+  });
+
+  it('counts each real client behind the proxy separately', async () => {
+    const { app } = appBehindOneProxy();
+    await repeat(app, loginThroughProxy('10.0.0.1', CLIENT_IP), LOGIN_ATTEMPTS_PER_MINUTE);
+
+    const response = await app.inject(loginThroughProxy('10.0.0.1', OTHER_CLIENT_IP));
+
+    expect(response.statusCode).toBe(UNAUTHORIZED);
+  });
+
+  it('ignores X-Forwarded-For when no proxy is trusted', async () => {
+    const { app } = emptyApp();
+    await repeat(app, loginThroughProxy('10.0.0.1', CLIENT_IP), LOGIN_ATTEMPTS_PER_MINUTE);
+
+    const response = await app.inject(loginThroughProxy('10.0.0.1', OTHER_CLIENT_IP));
+
+    expect(response.statusCode).toBe(TOO_MANY_REQUESTS);
   });
 });

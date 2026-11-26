@@ -22,6 +22,7 @@ describe('loadConfig', () => {
         voteGraceMs: 1000,
         historyLimit: 50,
         rateLimit: true,
+        trustProxyHops: 0,
       });
     });
 
@@ -54,6 +55,7 @@ describe('loadConfig', () => {
         HISTORY_LIMIT: '10',
         WEB_DIST_DIR: 'apps/web/dist',
         RATE_LIMIT: 'off',
+        TRUST_PROXY_HOPS: '1',
       });
 
       expect(config).toEqual({
@@ -69,6 +71,7 @@ describe('loadConfig', () => {
         historyLimit: 10,
         webDistDir: 'apps/web/dist',
         rateLimit: false,
+        trustProxyHops: 1,
       });
     });
   });
@@ -102,6 +105,29 @@ describe('loadConfig', () => {
       );
     });
 
+    // Banco real é ambiente real: o segredo de dev está no repositório e forjaria tokens de admin.
+    it.each(['development', 'test'])(
+      'fails when REPOSITORY is pg and JWT_SECRET is missing, even in %s',
+      (nodeEnv) => {
+        const env = { NODE_ENV: nodeEnv, REPOSITORY: 'pg', DATABASE_URL: 'postgres://db/voto' };
+
+        expect(() => loadConfig(env)).toThrow('JWT_SECRET: is required when REPOSITORY is pg');
+      },
+    );
+
+    it('reports a missing JWT_SECRET only once in production with pg', () => {
+      const env = {
+        ...PRODUCTION_ENV,
+        JWT_SECRET: undefined,
+        REPOSITORY: 'pg',
+        DATABASE_URL: 'postgres://db/voto',
+      };
+
+      expect(() => loadConfig(env)).toThrow(
+        /^Invalid environment configuration:\n- JWT_SECRET: is required in production$/,
+      );
+    });
+
     it('does not require DATABASE_URL for the in-memory repository', () => {
       const config = loadConfig({ REPOSITORY: 'memory' });
 
@@ -130,6 +156,8 @@ describe('loadConfig', () => {
       ['NODE_ENV', 'staging'],
       ['REPOSITORY', 'mongo'],
       ['RATE_LIMIT', 'false'],
+      ['TRUST_PROXY_HOPS', '-1'],
+      ['TRUST_PROXY_HOPS', 'true'],
     ])('rejects %s=%s', (name, value) => {
       expect(() => loadConfig({ [name]: value })).toThrow(name);
     });
@@ -141,6 +169,7 @@ describe('loadConfig', () => {
       ['BCRYPT_ROUNDS', '31', { bcryptRounds: 31 }],
       ['VOTE_GRACE_MS', '0', { voteGraceMs: 0 }],
       ['HISTORY_LIMIT', '1', { historyLimit: 1 }],
+      ['TRUST_PROXY_HOPS', '0', { trustProxyHops: 0 }],
     ])('accepts %s=%s at the limit', (name, value, expected) => {
       expect(loadConfig({ [name]: value })).toMatchObject(expected);
     });

@@ -1,5 +1,5 @@
-import { httpErrorFor } from '../http/errors';
 import type { ElectionRecord, ElectionRepository, VoterCodeOwner } from '../ports';
+import { electionAlreadyExists, electionNotFound, versionConflict } from './repository-errors';
 
 /**
  * Repositório de eleições em memória: usado em desenvolvimento (`REPOSITORY=memory`) e como
@@ -29,7 +29,7 @@ export class InMemoryElectionRepository implements ElectionRepository {
    */
   create(record: ElectionRecord): Promise<void> {
     const id = record.current.id;
-    if (this.records.has(id)) return Promise.reject(new Error(`Election ${id} already exists`));
+    if (this.records.has(id)) return Promise.reject(electionAlreadyExists(id));
     this.store(record);
     return Promise.resolve();
   }
@@ -44,12 +44,8 @@ export class InMemoryElectionRepository implements ElectionRepository {
    */
   save(record: ElectionRecord, expectedVersion: number): Promise<void> {
     const stored = this.records.get(record.current.id);
-    if (!stored)
-      return Promise.reject(httpErrorFor('ELECTION_NOT_FOUND', 'Election does not exist'));
-    if (stored.current.version !== expectedVersion)
-      return Promise.reject(
-        httpErrorFor('VERSION_CONFLICT', 'Election was changed by someone else'),
-      );
+    if (!stored) return Promise.reject(electionNotFound());
+    if (stored.current.version !== expectedVersion) return Promise.reject(versionConflict());
     this.store(record);
     return Promise.resolve();
   }
@@ -58,7 +54,8 @@ export class InMemoryElectionRepository implements ElectionRepository {
    * Lista as eleições de um admin.
    *
    * @param adminId - Id do admin dono.
-   * @returns Cópias dos registros desse admin.
+   * @returns Cópias dos registros desse admin, na ordem de criação (a do `Map`, que mantém a
+   *   posição de uma chave regravada).
    */
   listByAdmin(adminId: string): Promise<ElectionRecord[]> {
     const mine = [...this.records.values()].filter((record) => record.current.adminId === adminId);
@@ -68,7 +65,7 @@ export class InMemoryElectionRepository implements ElectionRepository {
   /**
    * Lista todas as eleições.
    *
-   * @returns Cópias de todos os registros.
+   * @returns Cópias de todos os registros, na ordem de criação.
    */
   listAll(): Promise<ElectionRecord[]> {
     return Promise.resolve(structuredClone([...this.records.values()]));
