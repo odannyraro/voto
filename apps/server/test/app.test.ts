@@ -165,6 +165,20 @@ describe('error handling', () => {
     expect(response.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
   });
 
+  it('rejects an empty JSON body through the route schema, as if no body came', async () => {
+    app = appValidatingName();
+    const withoutBody = await app.inject({ method: 'POST', url: VALIDATING_URL });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: VALIDATING_URL,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(BAD_REQUEST);
+    expect(response.json()).toEqual(withoutBody.json());
+  });
+
   it('turns an unsupported content type into 415 VALIDATION_ERROR', async () => {
     app = appValidatingName();
 

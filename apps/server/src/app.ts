@@ -5,6 +5,7 @@ import { registerAuthRoutes } from './http/auth-routes';
 import { registerCandidateRoutes } from './http/candidate-routes';
 import { registerElectionRoutes } from './http/election-routes';
 import { registerErrorHandling } from './http/error-handler';
+import { registerLenientJsonBody } from './http/json-body';
 import { registerPositionRoutes } from './http/position-routes';
 import { registerRateLimit } from './http/rate-limit';
 import { registerResolutionRoutes } from './http/resolution-routes';
@@ -62,6 +63,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     trustProxy: trustedProxyHops(deps.config.trustProxyHops),
   });
   registerErrorHandling(app);
+  registerLenientJsonBody(app);
   if (deps.config.rateLimit) registerRateLimit(app, deps.clock);
 
   const auth = new AuthService({

@@ -73,6 +73,7 @@ Documentos de referência (leia as seções citadas em cada tarefa):
 - `apps/server/src/app.ts` → `AppDeps` e `buildApp(deps)` (Fastify sem `listen`; health e tratadores de erro).
 - `apps/server/src/http/error-handler.ts` → `toErrorResponse(error)` e `registerErrorHandling(app)`: `HttpError`/`DomainError`/`ZodError`/erro do Fastify → `ErrorDTO`.
 - `apps/server/src/http/validate.ts` → `parse(schema, data)` (lança `ZodError`).
+- `apps/server/src/http/json-body.ts` → `registerLenientJsonBody(app)`: corpo JSON vazio vale como ausente (o front manda `Content-Type: application/json` em todo POST).
 - `apps/server/test/support/make-test-app.ts` → `makeTestApp(overrides?)`: app com doubles e repositórios em memória.
 - `apps/server/test/contracts/` → suítes de contrato de `ElectionRepository` e `AdminRepository`, rodadas contra a memória e o Postgres.
 - `apps/server/src/services/auth.ts` → `AuthService` (bcrypt + JWT: `login`, `verifyToken`, `issueAdminToken`, `issueVoterToken`, `seedAdmin`).
@@ -863,6 +864,18 @@ Use um helper `waitForEvent(socket, nome, timeoutMs)` baseado em Promise, **sem 
 - Testes: nenhum automatizado novo (tarefa de configuração, como o TO-DO prevê). Conferência manual: `npm run build`, depois `PORT=3999 npm start` e `curl` em `/api/health` (200 `{"status":"ok"}`), `/` (200, `index.html`), `/admin/elections/x` (200, fallback), `/assets/index-*.js` (200, JS), `/api/nothing` (404 JSON `NOT_FOUND`) e `/socket.io/?EIO=4&transport=polling` (handshake 200); `SIGTERM` no processo → log `Shutting down` e saída sem erro. Imports externos do bundle conferidos (`fastify`, `pg`, `socket.io`, `zod`... e nenhum `@voto/`). Suítes inalteradas: servidor 597, domínio 223, shared 138, web 2; `lint`, `format:check`, `typecheck` e `test:coverage` verdes.
 - Decisões: (1) o "servir `apps/web/dist` por padrão" é o `start` definir `WEB_DIST_DIR` com caminho relativo: o `npm` roda o script na raiz do repositório de qualquer pasta, e o `createServer` já faz `resolve` (B18), então nada mudou no código de produção. (2) `shared` e `domain` não têm build próprio (a §14 cita os quatro): exportam o `.ts` e entram no bundle do servidor (e no do Vite). (3) `pg-native` fica `external` de forma explícita, embora o `pg` inteiro já seja externo. (4) O tsup avisa que não é mais mantido (sugere o tsdown); fica o tsup, que é o previsto na tarefa e funciona com o esbuild 0.28. (5) **Pronto quando** depende do CI nos 3 SOs, que só roda após o push do usuário.
 
+### [x] B20b — Correções da revisão geral pós-B20
+**Fazer** (achados na revisão geral do servidor depois da B20, pedidos pelo usuário em 2026-11-25; teste de regressão primeiro e um commit por item):
+- **Item 1 — POST sem corpo com `Content-Type: application/json`** (✔ feito): o parser padrão do Fastify recusava o corpo vazio com 400 `VALIDATION_ERROR` ("Body cannot be empty...") antes de chegar à rota. Afetava as rotas sem corpo (open, close, release, defer, annul, undo, finish, anexar candidato) e o runoff (corpo opcional), e o front manda esse cabeçalho em todo POST.
+  - Commit sugerido: `fix(server): aceita POST com corpo JSON vazio nas rotas sem corpo`
+- **Item 2 — segredo JWT de desenvolvimento com banco real**: _pendente_.
+
+**Notas do agente:**
+- Item 1, feito: `registerLenientJsonBody(app)` troca o parser de `application/json` por um que entrega corpo vazio como `undefined` e repassa o resto ao parser padrão do Fastify (`getDefaultJsonParser('error', 'error')`, com a proteção contra `__proto__`/`constructor`). Ligado no `buildApp` logo depois do tratamento de erros. As rotas que exigem corpo continuam com 400 pelo Zod; JSON malformado continua 400.
+- Arquivos: `src/http/json-body.ts` (novo), `src/app.ts`, `test/app.test.ts` (+1), `test/http/resolution-routes.test.ts` (+2).
+- Testes: 3 novos (`undo` e `runoff` com o cabeçalho e sem corpo; rota com schema recusa o corpo JSON vazio igual a um corpo ausente). Os 3 falharam antes da correção e de novo com a chamada desligada; o de JSON malformado (já existente) segue verde. Servidor: 600 testes, 99,84% linhas / 99,51% branches.
+- Decisões: (1) o teste do schema compara com a resposta da mesma rota sem corpo, em vez de fixar o texto do Zod: a 1ª versão esperava a mensagem com o campo `name`, mas um corpo ausente o Zod acusa no nível do objeto ("expected object, received undefined"). (2) Só o texto vazio vira ausente; espaços em branco seguem para o parser padrão (400).
+
 ### [ ] B21 — Deploy contínuo (Render + Neon)
 **Ref.:** architecture §12, §13.
 **Fazer:**
@@ -940,3 +953,4 @@ Reaproveite os passos nomeados da B16a (`logIn`, `createMayorRace`, `castVote`..
 - 2026-11-25 — A26 (feita pelo A) — o `ci.yml` ganhou, no fim, o upload do `e2e/playwright-report/` quando o job falha (`if-no-files-found: ignore`). Os passos de e2e da C22 entram antes dele.
 - 2026-11-25 — B18 — o `buildApp` reagenda as rodadas abertas num gancho `onReady` (o `createServer` só chama `ready`), porque o `ElectionService` nasce dentro dele. A confiança no proxy é a variável `TRUST_PROXY_HOPS` (padrão 0) aplicada como função de saltos, já que o Fastify 5.12 recusa o número puro. Detalha a §8.3 e a §8.4.
 - 2026-11-25 — B20 — `shared` e `domain` não têm build próprio: entram no bundle do servidor (tsup, `noExternal: [/^@voto\//]`) e no do Vite. O front é servido porque o `npm start` define `WEB_DIST_DIR=apps/web/dist`; o comando de start do Render passa a ser `npm start`. Detalha a §13 e a §14.
+- 2026-11-25 — B20b — um POST com `Content-Type: application/json` e corpo vazio é tratado como sem corpo (parser próprio sobre o padrão do Fastify); quem exige corpo o recusa pelo Zod. Detalha a §6.
