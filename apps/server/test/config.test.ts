@@ -105,6 +105,29 @@ describe('loadConfig', () => {
       );
     });
 
+    // Banco real é ambiente real: o segredo de dev está no repositório e forjaria tokens de admin.
+    it.each(['development', 'test'])(
+      'fails when REPOSITORY is pg and JWT_SECRET is missing, even in %s',
+      (nodeEnv) => {
+        const env = { NODE_ENV: nodeEnv, REPOSITORY: 'pg', DATABASE_URL: 'postgres://db/voto' };
+
+        expect(() => loadConfig(env)).toThrow('JWT_SECRET: is required when REPOSITORY is pg');
+      },
+    );
+
+    it('reports a missing JWT_SECRET only once in production with pg', () => {
+      const env = {
+        ...PRODUCTION_ENV,
+        JWT_SECRET: undefined,
+        REPOSITORY: 'pg',
+        DATABASE_URL: 'postgres://db/voto',
+      };
+
+      expect(() => loadConfig(env)).toThrow(
+        /^Invalid environment configuration:\n- JWT_SECRET: is required in production$/,
+      );
+    });
+
     it('does not require DATABASE_URL for the in-memory repository', () => {
       const config = loadConfig({ REPOSITORY: 'memory' });
 

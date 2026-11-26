@@ -4,7 +4,10 @@ import { z } from 'zod';
 export interface Config {
   readonly port: number;
   readonly nodeEnv: 'development' | 'test' | 'production';
-  /** Segredo de assinatura dos JWTs; em dev e teste usa um valor fixo e inseguro. */
+  /**
+   * Segredo de assinatura dos JWTs. Obrigatório em produção e sempre que o repositório é `pg`;
+   * só em dev e teste com memória cai para um valor fixo e inseguro.
+   */
   readonly jwtSecret: string;
   /** Credenciais do admin inicial (seed). Só são obrigatórias em produção. */
   readonly adminUsername?: string;
@@ -98,12 +101,22 @@ const envSchema = z
         }
       }
     }
-    if (env.REPOSITORY === 'pg' && env.DATABASE_URL === undefined) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['DATABASE_URL'],
-        message: 'is required when REPOSITORY is pg',
-      });
+    if (env.REPOSITORY === 'pg') {
+      // Banco real é ambiente real, mesmo sem `NODE_ENV=production`: o segredo de dev está no
+      // repositório e serviria para forjar tokens de admin. Em produção o aviso acima já cobre.
+      const pgRequired =
+        env.NODE_ENV === 'production'
+          ? (['DATABASE_URL'] as const)
+          : (['DATABASE_URL', 'JWT_SECRET'] as const);
+      for (const name of pgRequired) {
+        if (env[name] === undefined) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [name],
+            message: 'is required when REPOSITORY is pg',
+          });
+        }
+      }
     }
   })
   .transform((env): Config => ({

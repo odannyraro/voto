@@ -16,7 +16,8 @@ const UNAUTHORIZED = 401;
 
 const MEMORY_ENV = { NODE_ENV: 'test', BCRYPT_ROUNDS: '4' };
 const DATABASE_URL = 'postgres://db.example.test/voto';
-const PG_ENV = { ...MEMORY_ENV, REPOSITORY: 'pg', DATABASE_URL };
+// Com banco real o segredo JWT é obrigatório, mesmo fora de produção (config.ts).
+const PG_ENV = { ...MEMORY_ENV, REPOSITORY: 'pg', DATABASE_URL, JWT_SECRET: 'compose-test-secret' };
 const ADMIN_ENV = { ADMIN_USERNAME: 'ana', ADMIN_PASSWORD: 'ana-password' };
 
 let app: FastifyInstance | undefined;
