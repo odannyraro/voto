@@ -99,7 +99,7 @@ agrupadas em um único commit.
 | C2 | Divide-se: rede simulada e testes auxiliares são dependências distintas | `[x] C2.a` handlers MSW; `[x] C2.b` providers/fábricas |
 | C3 | Divide-se: transporte/erro e API pública podem ser validados separadamente | `[x] C3.a` núcleo de `fetch` e `ErrorDTO`; `[x] C3.b` métodos tipados de cada grupo de rotas |
 | C4 | Divide-se: o cliente real e a injeção por fake têm responsabilidades independentes | `[x] C4.a` interface e cliente Socket.IO; `[x] C4.b` `SocketProvider` e `createFakeSocket()` |
-| C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[x] C5.a` countdown corrigido por `serverNow`; `[ ] C5.b` porcentagens e rótulos |
+| C5 | Divide-se: cada grupo de funções puras tem limite e teste próprios | `[x] C5.a` countdown corrigido por `serverNow`; `[x] C5.b` porcentagens e rótulos |
 | C6 | Divide-se: confirmações e componentes informativos podem subir em PRs separados | `[ ] C6.a` diálogos de confirmação; `[ ] C6.b` `Countdown` e `ErrorMessage` |
 | C7 | Divide-se: formulário/rota e integração da sessão são dois comportamentos fechados | `[ ] C7.a` formulário e armazenamento do token; `[ ] C7.b` navegação e erros da sessão |
 | C8 | Divide-se: a camada reativa e a cédula podem ser verificadas separadamente | `[ ] C8.a` `useVoterSession` e fases `WAITING`/estado inicial; `[ ] C8.b` cédula e voto candidato/branco |
@@ -143,6 +143,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/api/socket-client.ts` → cliente Socket.IO tipado, handshake autenticado e listeners removíveis.
 - `apps/web/src/api/socket-provider.tsx` → contexto de estado realtime com criação/limpeza do cliente por sessão.
 - `apps/web/src/lib/countdown.ts` → cálculo puro dos segundos restantes com deslocamento do relógio do servidor.
+- `apps/web/src/lib/format.ts` → percentual de votos válidos e rótulos legíveis das regras de desempate.
 - `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
 - `apps/web/test/api-methods.test.ts` → contratos MSW de rota, método, token e corpo de cada operação REST.
 - `apps/web/test/socket-client.test.ts` → testes do handshake, `admin:watch`, estados recebidos e limpeza de listeners.
@@ -150,6 +151,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/utils/fake-socket.ts` → fake injetável com controle de conexão, eventos e eleições observadas.
 - `apps/web/test/socket-provider.test.tsx` e `fake-socket.test.ts` → estado do contexto, descarte e ciclo de vida do fake.
 - `apps/web/test/countdown.test.ts` → prazo futuro, limites, expiração, offset de relógio e datas inválidas.
+- `apps/web/test/format.test.ts` → porcentagens, zero votos válidos, arredondamento e rótulos de desempate.
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
 - `apps/web/test/utils/factories.ts` → factories dos DTOs; nomes acessórios são localizados e reproduzíveis.
@@ -301,14 +303,20 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/countdown.test.ts` (8 casos: futuro, arredondamento, limite exato, expirado, diferença de relógio e quatro campos de data inválidos).
 - Decisões: a hora local no instante em que `serverNow` é recebido ancora o offset; o instante local atual é injetado, mantendo a função determinística e sem leitura direta do relógio do sistema.
 
-### [ ] C5.b — Porcentagens e rótulos
+### [x] C5.b — Porcentagens e rótulos
 **Ref.:** architecture §5.4.
 **Depende de:** C5.a.
 **Fazer:** calcular porcentagens sobre válidos e rótulos dos três desempates.
 **Testes (escrever antes):** zero votos válidos, arredondamento e todos os rótulos.
 **Pronto quando:** formatação não contém regra implícita no componente.
-**Arquivos:** `apps/web/src/lib/format.ts`.
+**Arquivos:** `apps/web/src/lib/format.ts`, `apps/web/test/format.test.ts`.
 **Commit sugerido:** `feat(web): adiciona formatação de votos e desempates`
+**Notas do agente:**
+- Feito: funções puras formatam o percentual calculado sobre votos válidos e os três rótulos de desempate; contagens inválidas são rejeitadas explicitamente.
+- Arquivos: `apps/web/src/lib/format.ts`, `apps/web/test/format.test.ts`.
+- Como usar: `formatVotePercentage(candidateVotes, validVotes)` retorna percentual inteiro com `%`; `formatTiebreakRule(rule)` retorna o nome legível da regra.
+- Testes: `apps/web/test/format.test.ts` (13 casos de zero, arredondamento, unanimidade, valores inválidos e todos os rótulos).
+- Decisões: percentuais são arredondados ao inteiro mais próximo; somente `0/0` representa legitimamente 0% quando não há votos válidos.
 
 ### [ ] C6.a — Diálogos de confirmação
 **Ref.:** architecture §9 e regra de dupla confirmação.
