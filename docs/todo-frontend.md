@@ -137,7 +137,11 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/setup.ts` → jest-dom e cleanup do Testing Library.
 - `apps/web/test/App.test.tsx` → teste de fumaça do esqueleto atual.
 - `apps/web/src/api/api-client.ts` → transporte REST com prefixo `/api`, Bearer, JSON e `ApiError`.
+- `apps/web/src/api/admin-api.ts` → métodos REST tipados de autenticação, configuração e controle do admin.
+- `apps/web/src/api/voter-api.ts` → criação de sessão, leitura de estado e envio de voto.
+- `apps/web/src/api/public-api.ts` → consulta pública de saúde da API.
 - `apps/web/test/api-client.test.ts` → testes MSW do núcleo REST e dos formatos de resposta.
+- `apps/web/test/api-methods.test.ts` → contratos MSW de rota, método, token e corpo de cada operação REST.
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
 - `apps/web/test/utils/factories.ts` → factories dos DTOs; nomes acessórios são localizados e reproduzíveis.
@@ -224,14 +228,21 @@ defaults determinísticos.
 - Decisões: corpos de erro só são expostos como `ErrorDTO` quando passam pela validação do
   formato e do catálogo de códigos de `@voto/shared`; respostas não JSON geram `ApiError`.
 
-### [ ] C3.b — Métodos REST das telas
+### [x] C3.b — Métodos REST das telas
 **Ref.:** architecture §6.1–§6.2.
 **Depende de:** C3.a.
 **Fazer:** agrupar métodos por admin, eleitor e público sem espalhar `fetch` pelos componentes.
 **Testes (escrever antes):** método GET/POST/PATCH/DELETE usa rota, método e body corretos.
 **Pronto quando:** C7–C16 podem chamar toda a API por funções do cliente.
-**Arquivos:** `apps/web/src/api/api-client.ts`.
+**Arquivos:** `apps/web/src/api/admin-api.ts`, `voter-api.ts`, `public-api.ts`,
+`api-client.ts`, `apps/web/test/api-methods.test.ts`.
 **Commit sugerido:** `feat(web): adiciona métodos REST de admin e eleitor`
+**Notas do agente:**
+- Feito: métodos REST tipados foram agrupados em `adminApi`, `voterApi` e `publicApi`; respostas obrigatórias sem corpo geram `ApiError`.
+- Arquivos: `apps/web/src/api/admin-api.ts`, `voter-api.ts`, `public-api.ts`, `api-client.ts` e `apps/web/test/api-methods.test.ts`.
+- Como usar: importe o grupo apropriado e chame os métodos, por exemplo `adminApi.listElections(token)` ou `voterApi.castVote(token, body)`.
+- Testes: `apps/web/test/api-methods.test.ts` (34 testes cobrindo todas as operações, identificadores de rota, verbos, autenticação e corpos).
+- Decisões: IDs dinâmicos são codificados como segmentos de URL; o voto aceita a resposta `204`, enquanto endpoints com DTO obrigatório rejeitam resposta sem corpo.
 
 ### [ ] C4.a — Cliente Socket.IO
 **Ref.:** architecture §7.

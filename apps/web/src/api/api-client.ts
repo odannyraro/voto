@@ -144,3 +144,24 @@ export async function apiRequest<T>(
 
   return responseBody as T;
 }
+
+/**
+ * Makes a REST request whose contract requires a JSON response body.
+ *
+ * @param endpoint - Path started with `/`, relative to the `/api` prefix.
+ * @param options - Authentication, method, JSON body, and cancellation signal.
+ * @returns The response DTO.
+ * @throws {ApiError} When the request fails, its body is invalid, or the server returns `204`.
+ * @throws {TypeError} When request serialization or the network fails.
+ */
+export async function apiRequestWithBody<T>(
+  endpoint: `/${string}`,
+  options: ApiRequestOptions = {},
+): Promise<T> {
+  const response = await apiRequest<T>(endpoint, options);
+  if (response === undefined) {
+    throw new ApiError(204, undefined, 'Expected a JSON response body but received HTTP 204.');
+  }
+
+  return response;
+}
