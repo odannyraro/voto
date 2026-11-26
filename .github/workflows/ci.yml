@@ -84,6 +84,12 @@ jobs:
           flags: web
           fail_ci_if_error: false
 
+      # Build de produção (front e servidor), o mesmo que o Render roda. Fica depois dos uploads
+      # de cobertura, para uma falha aqui não esconder a cobertura; os passos de e2e entram logo
+      # abaixo dele, porque testam o build.
+      - name: Build
+        run: npm run build
+
       # Relatório do Playwright para investigar e2e que falhou (architecture §12). Enquanto o
       # workspace `e2e/` não existir, a pasta não existe e o passo não faz nada.
       - name: Upload Playwright report
