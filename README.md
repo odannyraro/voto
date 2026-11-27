@@ -47,7 +47,15 @@ O Vota Aê foi pensado para eleições presenciais de grupos, como a escolha de 
 
 O texto original dos requisitos está em [docs/requisitos.md](docs/requisitos.md).
 
-_A preencher: estado final das telas (eleitor e admin) e, se o grupo quiser, capturas de tela._
+**Telas**
+
+| Quem | O que faz no site |
+|---|---|
+| Eleitor (`/`) | entra com o código, acompanha a espera, vota (em um candidato ou em branco) com contagem regressiva e vê o resultado quando o admin o libera, tudo atualizado ao vivo |
+| Admin (`/admin`) | faz login, lista e cria eleições e as configura em abas: cargos e desempate, candidatos, códigos dos eleitores (gerar, copiar e revogar) e ordem de votação, com sugestão automática |
+| Admin, ao vivo | abre as rodadas, acompanha quantos já votaram, encerra antes do prazo, libera o resultado, anula uma rodada, desfaz a última ação e resolve segundo turno ou cargos sem candidatos suficientes |
+
+_A preencher: botão para **abrir a eleição** na tela do admin (ainda não existe na interface) e, se o grupo quiser, capturas de tela._
 
 ## Tecnologias
 
@@ -99,7 +107,7 @@ O projeto foi desenvolvido com agentes de IA para programação: o **Claude Code
 | `packages/domain` | Regras da eleição: apuração, segundo turno, desempates, exclusão do eleito, desfazer | 223 | 98% |
 | `packages/shared` | Contratos e validação das requisições | 138 | 100% |
 | `apps/server` | Rotas, tempo real, banco, prazos, concorrência e cenários completos de eleição pela API | 631 | 99% |
-| `apps/web` | Componentes, telas do eleitor e comunicação com o servidor | 134 | 95% |
+| `apps/web` | Componentes, telas do eleitor e do admin e comunicação com o servidor | 198 | 90% |
 | e2e | _a preencher_ | _a preencher_ | — |
 
 - **Unidade:** o domínio é testado com as regras reais, sem simulações, e os testes de componente do front simulam a rede com MSW.
