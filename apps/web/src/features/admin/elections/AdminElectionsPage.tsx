@@ -18,6 +18,23 @@ export interface AdminElectionsPageProps {
 }
 
 /**
+ * Traduz a situação da eleição para uma informação legível na lista.
+ *
+ * @param status - Estado oficial recebido no resumo do servidor.
+ * @returns Situação apresentada em português.
+ */
+function getElectionStatusLabel(status: ElectionSummaryDTO['status']): string {
+  switch (status) {
+    case 'DRAFT':
+      return 'Em preparação';
+    case 'OPEN':
+      return 'Aberta';
+    case 'FINISHED':
+      return 'Encerrada';
+  }
+}
+
+/**
  * Mostra eleições existentes e permite criar uma nova eleição.
  *
  * @param props - Token administrativo validado pelo provider.
@@ -46,7 +63,9 @@ export function AdminElectionsPage({ token }: AdminElectionsPageProps): ReactEle
         if (error instanceof ApiError) {
           setLoadError(error);
         } else {
-          setLoadMessage('Unable to load elections. Check your connection and try again.');
+          setLoadMessage(
+            'Não foi possível carregar as eleições. Confira sua conexão e tente novamente.',
+          );
         }
       } finally {
         if (active) {
@@ -72,13 +91,14 @@ export function AdminElectionsPage({ token }: AdminElectionsPageProps): ReactEle
 
   return (
     <section aria-labelledby="elections-heading">
-      <h2 id="elections-heading">Elections</h2>
-      {isLoading && <p role="status">Loading elections...</p>}
+      <h2 id="elections-heading">Suas eleições</h2>
+      {isLoading && <p role="status">Carregando eleições...</p>}
       {loadError?.error !== undefined && <ErrorMessage error={{ error: loadError.error }} />}
       {(loadMessage !== undefined ||
         (loadError !== undefined && loadError.error === undefined)) && (
         <p role="alert">
-          {loadMessage ?? 'Unable to load elections. Check your connection and try again.'}
+          {loadMessage ??
+            'Não foi possível carregar as eleições. Confira sua conexão e tente novamente.'}
         </p>
       )}
       {!isLoading && loadError === undefined && loadMessage === undefined && (
@@ -101,11 +121,11 @@ function ElectionList({
   readonly elections: readonly ElectionSummaryDTO[];
 }): ReactElement {
   if (elections.length === 0) {
-    return <p>No elections yet. Create one to get started.</p>;
+    return <p>Nenhuma eleição criada ainda. Crie uma para começar.</p>;
   }
 
   return (
-    <ul aria-label="Elections">
+    <ul aria-label="Eleições">
       {elections.map((election) => (
         <li key={election.id}>
           <h3>
@@ -113,12 +133,12 @@ function ElectionList({
               {election.name}
             </Link>
           </h3>
-          <p>Status: {election.status}</p>
+          <p>Situação: {getElectionStatusLabel(election.status)}</p>
           <p>
-            {election.positionCount} {election.positionCount === 1 ? 'position' : 'positions'}
+            {election.positionCount} {election.positionCount === 1 ? 'cargo' : 'cargos'}
           </p>
           <p>
-            {election.voterCount} {election.voterCount === 1 ? 'voter' : 'voters'}
+            {election.voterCount} {election.voterCount === 1 ? 'eleitor' : 'eleitores'}
           </p>
         </li>
       ))}
@@ -165,8 +185,8 @@ function CreateElectionForm({
     if (!parsedBody.success) {
       setValidationMessage(
         name.trim() === ''
-          ? 'Election name is required.'
-          : 'Voting duration must be a whole number from 5 to 3600 seconds.',
+          ? 'Informe o nome da eleição.'
+          : 'A duração da votação deve ser um número inteiro entre 5 e 3.600 segundos.',
       );
       return;
     }
@@ -179,7 +199,9 @@ function CreateElectionForm({
       if (error instanceof ApiError && error.error !== undefined) {
         setApiError(error);
       } else {
-        setRequestMessage('Unable to create the election. Check your connection and try again.');
+        setRequestMessage(
+          'Não foi possível criar a eleição. Confira sua conexão e tente novamente.',
+        );
       }
     } finally {
       setIsSubmitting(false);
@@ -188,8 +210,8 @@ function CreateElectionForm({
 
   return (
     <form noValidate onSubmit={handleSubmit}>
-      <h3>Create an election</h3>
-      <label htmlFor="election-name">Election name</label>
+      <h3>Criar eleição</h3>
+      <label htmlFor="election-name">Nome da eleição</label>
       <input
         id="election-name"
         type="text"
@@ -197,7 +219,7 @@ function CreateElectionForm({
         value={name}
         onChange={(event) => setName(event.currentTarget.value)}
       />
-      <label htmlFor="voting-duration">Default voting duration (seconds)</label>
+      <label htmlFor="voting-duration">Duração padrão da votação (segundos)</label>
       <input
         id="voting-duration"
         type="number"
@@ -212,7 +234,7 @@ function CreateElectionForm({
       {apiError?.error !== undefined && <ErrorMessage error={{ error: apiError.error }} />}
       {requestMessage !== undefined && <p role="alert">{requestMessage}</p>}
       <button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Creating...' : 'Create election'}
+        {isSubmitting ? 'Criando...' : 'Criar eleição'}
       </button>
     </form>
   );

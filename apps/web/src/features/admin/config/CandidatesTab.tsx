@@ -11,6 +11,7 @@ import type { FormEvent, ReactElement } from 'react';
 import { adminApi } from '../../../api/admin-api';
 import { ApiError } from '../../../api/api-client';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { getApiErrorMessage } from '../../../lib/ui-messages';
 
 /** Propriedades para administrar candidatos usando o estado devolvido pela API. */
 export interface CandidatesTabProps {
@@ -51,7 +52,9 @@ export function CandidatesTab({
       onElectionChange(updatedState);
       return true;
     } catch (error: unknown) {
-      setErrorMessage(getRequestErrorMessage(error, 'Unable to create the candidate.'));
+      setErrorMessage(
+        getRequestErrorMessage(error, 'Não foi possível cadastrar a pessoa candidata.'),
+      );
       return false;
     } finally {
       setIsMutating(false);
@@ -79,7 +82,9 @@ export function CandidatesTab({
       setEditingCandidateId(null);
       return true;
     } catch (error: unknown) {
-      setErrorMessage(getRequestErrorMessage(error, 'Unable to update the candidate.'));
+      setErrorMessage(
+        getRequestErrorMessage(error, 'Não foi possível atualizar a pessoa candidata.'),
+      );
       return false;
     } finally {
       setIsMutating(false);
@@ -108,7 +113,9 @@ export function CandidatesTab({
       });
       onElectionChange(updatedState);
     } catch (error: unknown) {
-      setErrorMessage(getRequestErrorMessage(error, 'Unable to remove the candidate.'));
+      setErrorMessage(
+        getRequestErrorMessage(error, 'Não foi possível remover a pessoa candidata.'),
+      );
     } finally {
       setIsMutating(false);
     }
@@ -126,19 +133,19 @@ export function CandidatesTab({
 
   return (
     <section aria-labelledby="candidates-heading">
-      <h2 id="candidates-heading">Candidates</h2>
+      <h2 id="candidates-heading">Candidaturas</h2>
       {errorMessage !== null && <p role="alert">{errorMessage}</p>}
       {state.election.candidates.length === 0 ? (
-        <p>No candidates have been added.</p>
+        <p>Nenhuma pessoa candidata foi cadastrada.</p>
       ) : (
-        <ul aria-label="Election candidates">
+        <ul aria-label="Pessoas candidatas da eleição">
           {state.election.candidates.map((candidate) => (
             <li key={candidate.id}>
               {editingCandidateId === candidate.id ? (
                 <CandidateForm
                   positions={state.election.positions}
                   initialCandidate={candidate}
-                  submitLabel="Save candidate"
+                  submitLabel="Salvar candidatura"
                   disabled={isMutating}
                   onSubmit={(body) => updateCandidate(candidate.id, body)}
                   onCancel={() => setEditingCandidateId(null)}
@@ -146,25 +153,25 @@ export function CandidatesTab({
               ) : (
                 <>
                   <h3>{candidate.name}</h3>
-                  <p>Age: {candidate.age}</p>
-                  <p>Remaining university time: {candidate.remainingMonths} months</p>
+                  <p>Idade: {candidate.age} anos</p>
+                  <p>Tempo restante na universidade: {candidate.remainingMonths} meses</p>
                   <p>
-                    Applications:{' '}
+                    Cargos pretendidos:{' '}
                     {candidate.applications
                       .map((positionId) => getPositionTitle(state.election, positionId))
                       .join(', ')}
                   </p>
                   <p>
-                    First choice:{' '}
+                    Primeira opção:{' '}
                     {getPositionTitle(state.election, candidate.firstChoicePositionId)}
                   </p>
-                  {isElectedCandidate(state.election, candidate.id) && <p>Elected candidate</p>}
+                  {isElectedCandidate(state.election, candidate.id) && <p>Pessoa já eleita</p>}
                   <button
                     type="button"
                     disabled={isMutating}
                     onClick={() => startEditing(candidate.id)}
                   >
-                    Edit {candidate.name}
+                    Editar {candidate.name}
                   </button>
                   <button
                     type="button"
@@ -174,7 +181,7 @@ export function CandidatesTab({
                       setCandidateToRemove(candidate);
                     }}
                   >
-                    Remove {candidate.name}
+                    Remover {candidate.name}
                   </button>
                 </>
               )}
@@ -185,20 +192,20 @@ export function CandidatesTab({
       {editingCandidateId === null && (
         <CandidateForm
           positions={state.election.positions}
-          submitLabel="Add candidate"
+          submitLabel="Adicionar candidatura"
           disabled={isMutating}
           onSubmit={createCandidate}
         />
       )}
       <ConfirmDialog
         open={candidateToRemove !== null}
-        title="Remove candidate?"
+        title="Remover pessoa candidata?"
         description={
           candidateToRemove === null
             ? ''
-            : `Remove ${candidateToRemove.name} from this election? The server will validate whether removal is allowed.`
+            : `Deseja remover ${candidateToRemove.name} desta eleição? A administração da eleição validará se a remoção é permitida.`
         }
-        confirmLabel="Remove candidate"
+        confirmLabel="Remover pessoa candidata"
         onConfirm={() => void removeCandidate()}
         onCancel={() => setCandidateToRemove(null)}
       />
@@ -290,8 +297,12 @@ function CandidateForm({
 
   return (
     <form noValidate onSubmit={handleSubmit}>
-      <h3>{submitLabel === 'Add candidate' ? 'Add a candidate' : 'Edit candidate'}</h3>
-      <label htmlFor="candidate-name">Candidate name</label>
+      <h3>
+        {submitLabel === 'Adicionar candidatura'
+          ? 'Cadastrar pessoa candidata'
+          : 'Editar candidatura'}
+      </h3>
+      <label htmlFor="candidate-name">Nome</label>
       <input
         id="candidate-name"
         type="text"
@@ -299,7 +310,7 @@ function CandidateForm({
         value={name}
         onChange={(event) => setName(event.currentTarget.value)}
       />
-      <label htmlFor="candidate-age">Age</label>
+      <label htmlFor="candidate-age">Idade (anos)</label>
       <input
         id="candidate-age"
         type="number"
@@ -310,7 +321,7 @@ function CandidateForm({
         value={age}
         onChange={(event) => setAge(event.currentTarget.value)}
       />
-      <label htmlFor="candidate-remaining-months">Remaining university time (months)</label>
+      <label htmlFor="candidate-remaining-months">Tempo restante na universidade (meses)</label>
       <input
         id="candidate-remaining-months"
         type="number"
@@ -321,7 +332,7 @@ function CandidateForm({
         onChange={(event) => setRemainingMonths(event.currentTarget.value)}
       />
       <fieldset>
-        <legend>Position applications</legend>
+        <legend>Cargos pretendidos</legend>
         {positions.map((position) => (
           <label key={position.id}>
             <input
@@ -333,14 +344,14 @@ function CandidateForm({
           </label>
         ))}
       </fieldset>
-      <label htmlFor="candidate-first-choice">First choice position</label>
+      <label htmlFor="candidate-first-choice">Primeira opção de cargo</label>
       <select
         id="candidate-first-choice"
         value={firstChoicePositionId}
         disabled={availableApplications.length === 0}
         onChange={(event) => setFirstChoicePositionId(event.currentTarget.value)}
       >
-        <option value="">Select an application</option>
+        <option value="">Selecione um cargo pretendido</option>
         {availableApplications.map((position) => (
           <option key={position.id} value={position.id}>
             {position.title}
@@ -353,7 +364,7 @@ function CandidateForm({
       </button>
       {onCancel !== undefined && (
         <button type="button" disabled={disabled} onClick={onCancel}>
-          Cancel editing
+          Cancelar edição
         </button>
       )}
     </form>
@@ -374,18 +385,18 @@ function getCandidateValidationMessage(body: {
   readonly firstChoicePositionId: string;
 }): string {
   if (body.name.trim() === '') {
-    return 'Candidate name is required.';
+    return 'Informe o nome da pessoa candidata.';
   }
   if (!Number.isInteger(body.age) || body.age < 16 || body.age > 120) {
-    return 'Candidate age must be a whole number from 16 to 120.';
+    return 'A idade deve ser um número inteiro entre 16 e 120 anos.';
   }
   if (!Number.isInteger(body.remainingMonths) || body.remainingMonths < 0) {
-    return 'Remaining university time must be a non-negative whole number of months.';
+    return 'O tempo restante na universidade deve ser um número inteiro não negativo de meses.';
   }
   if (body.applications.length === 0) {
-    return 'Select at least one position application.';
+    return 'Selecione ao menos um cargo pretendido.';
   }
-  return 'First choice must be one of the selected applications.';
+  return 'A primeira opção deve ser um dos cargos pretendidos.';
 }
 
 /**
@@ -419,10 +430,10 @@ function isElectedCandidate(election: Election, candidateId: string): boolean {
  */
 function getRequestErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError && error.error !== undefined) {
-    return `${error.error.code}: ${error.error.message}`;
+    return getApiErrorMessage(error.error.code);
   }
   if (error instanceof Error) {
-    return error.message;
+    return fallback;
   }
   return fallback;
 }

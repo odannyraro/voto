@@ -21,8 +21,8 @@ export function VoterFinalState({ state }: VoterFinalStateProps): ReactElement {
     case 'VOTED':
       return (
         <section>
-          <h2>Vote recorded</h2>
-          <p>Your vote has been recorded. Waiting for results.</p>
+          <h2>Voto registrado</h2>
+          <p>Seu voto foi registrado. Aguarde a divulgação do resultado.</p>
         </section>
       );
     case 'RESULTS':
@@ -30,8 +30,8 @@ export function VoterFinalState({ state }: VoterFinalStateProps): ReactElement {
     case 'FINISHED':
       return (
         <section>
-          <h2>Election finished</h2>
-          <p>This election has ended.</p>
+          <h2>Eleição encerrada</h2>
+          <p>Esta eleição foi finalizada.</p>
         </section>
       );
     default:
@@ -48,32 +48,32 @@ export function VoterFinalState({ state }: VoterFinalStateProps): ReactElement {
 function VoterResults({ result }: { readonly result: RoundResultDTO }): ReactElement {
   return (
     <section aria-labelledby="results-heading">
-      <h2 id="results-heading">Results for {result.positionTitle}</h2>
+      <h2 id="results-heading">Resultado: {result.positionTitle}</h2>
       <p role="status">{getOutcomeMessage(result.outcome)}</p>
       {result.electedCandidateId !== undefined && (
-        <p>Elected candidate: {getCandidateName(result.electedCandidateId, result.counts)}</p>
+        <p>Pessoa eleita: {getCandidateName(result.electedCandidateId, result.counts)}</p>
       )}
       {result.runoffCandidateIds !== undefined && (
         <p>
-          Runoff candidates:{' '}
+          Pessoas classificadas para o segundo turno:{' '}
           {result.runoffCandidateIds
             .map((candidateId) => getCandidateName(candidateId, result.counts))
-            .join(' and ')}
+            .join(' e ')}
         </p>
       )}
-      <ul aria-label="Candidate vote counts">
+      <ul aria-label="Contagem de votos por candidatura">
         {result.counts.map((count) => (
           <li key={count.candidateId}>
-            {count.name}: {count.votes}
+            {count.name}: {count.votes} votos
           </li>
         ))}
       </ul>
-      <p>Valid votes: {result.validVotes}</p>
-      <p>Blank votes: {result.blank}</p>
+      <p>Votos válidos: {result.validVotes}</p>
+      <p>Votos em branco: {result.blank}</p>
       <p>
         {result.tiebreakApplied
-          ? 'A tie-break rule was applied.'
-          : 'No tie-break rule was applied.'}
+          ? 'Foi aplicada a regra de desempate.'
+          : 'Não foi necessário aplicar a regra de desempate.'}
       </p>
     </section>
   );
@@ -100,11 +100,11 @@ function getCandidateName(candidateId: string, counts: RoundResultDTO['counts'])
 function getOutcomeMessage(outcome: RoundOutcome): string {
   switch (outcome) {
     case 'ELECTED':
-      return 'A candidate was elected.';
+      return 'Uma pessoa candidata foi eleita.';
     case 'RUNOFF_REQUIRED':
-      return 'A runoff is required.';
+      return 'É necessário realizar um segundo turno.';
     case 'NO_VALID_VOTES':
-      return 'No valid votes were cast.';
+      return 'Não houve votos válidos.';
     default:
       return assertNever(outcome);
   }

@@ -11,7 +11,7 @@ describe('App', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('textbox', { name: 'Voter code' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Código de acesso' })).toBeInTheDocument();
   });
 
   it('does not show the home heading on an unknown route', () => {
@@ -21,6 +21,6 @@ describe('App', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.queryByRole('textbox', { name: 'Voter code' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Código de acesso' })).not.toBeInTheDocument();
   });
 });

@@ -11,7 +11,7 @@ export function RequireAdmin(): ReactElement {
   const { status } = useAdminAuth();
 
   if (status === 'loading') {
-    return <p role="status">Checking administrator session...</p>;
+    return <p role="status">Verificando sua sessão administrativa...</p>;
   }
 
   if (status === 'anonymous') {

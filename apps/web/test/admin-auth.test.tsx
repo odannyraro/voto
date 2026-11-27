@@ -59,13 +59,13 @@ describe('administrator authentication', () => {
     const user = userEvent.setup();
     renderWithProviders(<App />, { initialEntries: ['/admin/login'] });
 
-    await user.type(screen.getByRole('textbox', { name: 'Username' }), 'admin');
-    await user.type(screen.getByLabelText('Password'), 'password');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await user.type(screen.getByRole('textbox', { name: 'Usuário' }), 'admin');
+    await user.type(screen.getByLabelText('Senha'), 'password');
+    await user.click(screen.getByRole('button', { name: 'Entrar' }));
 
     expect({
-      heading: await screen.findByRole('heading', { name: 'Administrator dashboard' }),
-      identity: screen.getByText('Signed in as admin'),
+      heading: await screen.findByRole('heading', { name: 'Painel administrativo' }),
+      identity: screen.getByText('Sessão iniciada como admin'),
       storedToken: sessionStorage.getItem(ADMIN_TOKEN_KEY),
     }).toEqual({
       heading: expect.any(HTMLElement),
@@ -78,13 +78,11 @@ describe('administrator authentication', () => {
     const user = userEvent.setup();
     renderWithProviders(<App />, { initialEntries: ['/admin/login'] });
 
-    await user.type(screen.getByRole('textbox', { name: 'Username' }), 'admin');
-    await user.type(screen.getByLabelText('Password'), 'wrong-password');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await user.type(screen.getByRole('textbox', { name: 'Usuário' }), 'admin');
+    await user.type(screen.getByLabelText('Senha'), 'wrong-password');
+    await user.click(screen.getByRole('button', { name: 'Entrar' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'INVALID_CREDENTIALSInvalid credentials',
-    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Usuário ou senha incorretos.');
   });
 
   it('shows a readable message when the login response is unavailable', async () => {
@@ -96,19 +94,21 @@ describe('administrator authentication', () => {
     const user = userEvent.setup();
     renderWithProviders(<App />, { initialEntries: ['/admin/login'] });
 
-    await user.type(screen.getByRole('textbox', { name: 'Username' }), 'admin');
-    await user.type(screen.getByLabelText('Password'), 'password');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await user.type(screen.getByRole('textbox', { name: 'Usuário' }), 'admin');
+    await user.type(screen.getByLabelText('Senha'), 'password');
+    await user.click(screen.getByRole('button', { name: 'Entrar' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Unable to sign in. Check your connection and try again.',
+      'Não foi possível entrar. Confira sua conexão e tente novamente.',
     );
   });
 
   it('redirects an unauthenticated visitor away from a protected admin route', async () => {
     renderWithProviders(<App />, { initialEntries: ['/admin'] });
 
-    expect(await screen.findByRole('heading', { name: 'Administrator login' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Acesso administrativo' }),
+    ).toBeInTheDocument();
   });
 
   it('restores a valid stored session before showing the requested admin route', async () => {
@@ -124,7 +124,7 @@ describe('administrator authentication', () => {
     });
 
     expect(
-      await screen.findByRole('heading', { name: 'Election configuration' }),
+      await screen.findByRole('heading', { name: 'Configuração da eleição' }),
     ).toBeInTheDocument();
   });
 
@@ -144,7 +144,9 @@ describe('administrator authentication', () => {
     sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
     renderWithProviders(<App />, { initialEntries: ['/admin/elections'] });
 
-    expect(await screen.findByRole('heading', { name: 'Administrator login' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Acesso administrativo' }),
+    ).toBeInTheDocument();
     expect(sessionStorage.getItem(ADMIN_TOKEN_KEY)).toBeNull();
   });
 
@@ -152,14 +154,14 @@ describe('administrator authentication', () => {
     const user = userEvent.setup();
     renderWithProviders(<App />, { initialEntries: ['/admin/login'] });
 
-    await user.type(screen.getByRole('textbox', { name: 'Username' }), 'admin');
-    await user.type(screen.getByLabelText('Password'), 'password');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
-    await screen.findByRole('heading', { name: 'Administrator dashboard' });
-    await user.click(await screen.findByRole('button', { name: 'Log out' }));
+    await user.type(screen.getByRole('textbox', { name: 'Usuário' }), 'admin');
+    await user.type(screen.getByLabelText('Senha'), 'password');
+    await user.click(screen.getByRole('button', { name: 'Entrar' }));
+    await screen.findByRole('heading', { name: 'Painel administrativo' });
+    await user.click(await screen.findByRole('button', { name: 'Sair' }));
 
     expect({
-      loginPage: await screen.findByRole('heading', { name: 'Administrator login' }),
+      loginPage: await screen.findByRole('heading', { name: 'Acesso administrativo' }),
       storedToken: sessionStorage.getItem(ADMIN_TOKEN_KEY),
     }).toEqual({ loginPage: expect.any(HTMLElement), storedToken: null });
   });

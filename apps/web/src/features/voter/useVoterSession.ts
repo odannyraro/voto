@@ -31,7 +31,7 @@ export function useVoterSession(token: string | null): VoterSessionSnapshot {
   const [isLoading, setIsLoading] = useState(token !== null);
   const [error, setError] = useState<ErrorDTO | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(
-    token === null ? 'Voter session not found. Join an election again.' : null,
+    token === null ? 'Sessão de eleitor não encontrada. Entre novamente com seu código.' : null,
   );
   const requestVersion = useRef(0);
   const socketVersion = useRef(0);
@@ -55,7 +55,7 @@ export function useVoterSession(token: string | null): VoterSessionSnapshot {
       setClientNowAtSync(null);
       setIsLoading(false);
       setError(null);
-      setErrorMessage('Voter session not found. Join an election again.');
+      setErrorMessage('Sessão de eleitor não encontrada. Entre novamente com seu código.');
       return;
     }
 
@@ -102,7 +102,7 @@ export function useVoterSession(token: string | null): VoterSessionSnapshot {
           setErrorMessage(null);
         } else {
           setError(null);
-          setErrorMessage('Unable to load voter session. Please try again.');
+          setErrorMessage('Não foi possível carregar sua sessão. Tente novamente.');
         }
       } finally {
         if (

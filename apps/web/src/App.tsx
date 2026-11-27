@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { Route, Routes } from 'react-router';
+import { AppHeader } from './components/AppHeader';
 import { SocketProvider } from './api/socket-provider';
 import type { SocketClient } from './api/socket-client';
 import { AdminDashboardPage } from './features/admin/auth/AdminDashboardPage';
@@ -10,6 +11,7 @@ import { AdminElectionConfigurationPage } from './features/admin/elections/Admin
 import { VoterEntryPage } from './features/voter/VoterEntryPage';
 import { VoterSessionPage } from './features/voter/VoterSessionPage';
 import { getVoterSession } from './features/voter/voter-session-storage';
+import { ThemeProvider } from './features/theme/theme-provider';
 
 /** Dependências opcionais de composição da aplicação. */
 export interface AppProps {
@@ -26,21 +28,24 @@ export interface AppProps {
  */
 export function App({ createSocketClient }: AppProps = {}): ReactElement {
   return (
-    <AdminAuthProvider>
-      <Routes>
-        <Route path="/" element={<VoterEntryPage />} />
-        <Route path="/votar" element={<VoterSessionRoute />} />
-        <Route path="/admin/login" element={<AdminLoginPage />} />
-        <Route path="/admin" element={<RequireAdmin />}>
-          <Route index element={<AdminDashboardPage />} />
-          <Route
-            path="eleicoes/:electionId/configurar"
-            element={<AdminElectionRoute createSocketClient={createSocketClient} />}
-          />
-          <Route path="*" element={<AdminDashboardPage />} />
-        </Route>
-      </Routes>
-    </AdminAuthProvider>
+    <ThemeProvider>
+      <AdminAuthProvider>
+        <AppHeader />
+        <Routes>
+          <Route path="/" element={<VoterEntryPage />} />
+          <Route path="/votar" element={<VoterSessionRoute />} />
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/admin" element={<RequireAdmin />}>
+            <Route index element={<AdminDashboardPage />} />
+            <Route
+              path="eleicoes/:electionId/configurar"
+              element={<AdminElectionRoute createSocketClient={createSocketClient} />}
+            />
+            <Route path="*" element={<AdminDashboardPage />} />
+          </Route>
+        </Routes>
+      </AdminAuthProvider>
+    </ThemeProvider>
   );
 }
 

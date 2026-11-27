@@ -33,7 +33,7 @@ export function AdminLoginPage(): ReactElement {
 
     const parsedBody = loginBodySchema.safeParse({ username, password });
     if (!parsedBody.success) {
-      setMessage('Enter a username and password.');
+      setMessage('Informe seu usuário e sua senha.');
       return;
     }
 
@@ -45,7 +45,7 @@ export function AdminLoginPage(): ReactElement {
       if (loginError instanceof ApiError && loginError.error !== undefined) {
         setError(loginError);
       } else {
-        setMessage('Unable to sign in. Check your connection and try again.');
+        setMessage('Não foi possível entrar. Confira sua conexão e tente novamente.');
       }
     } finally {
       setIsSubmitting(false);
@@ -58,9 +58,9 @@ export function AdminLoginPage(): ReactElement {
 
   return (
     <main>
-      <h1>Administrator login</h1>
+      <h1>Acesso administrativo</h1>
       <form noValidate onSubmit={handleSubmit}>
-        <label htmlFor="admin-username">Username</label>
+        <label htmlFor="admin-username">Usuário</label>
         <input
           id="admin-username"
           type="text"
@@ -69,7 +69,7 @@ export function AdminLoginPage(): ReactElement {
           value={username}
           onChange={(event) => setUsername(event.currentTarget.value)}
         />
-        <label htmlFor="admin-password">Password</label>
+        <label htmlFor="admin-password">Senha</label>
         <input
           id="admin-password"
           type="password"
@@ -82,7 +82,7 @@ export function AdminLoginPage(): ReactElement {
         {error?.error !== undefined && <ErrorMessage error={{ error: error.error }} />}
         {message !== undefined && <p role="alert">{message}</p>}
         <button type="submit" disabled={isSubmitting || status === 'loading'}>
-          {isSubmitting ? 'Signing in...' : 'Sign in'}
+          {isSubmitting ? 'Entrando...' : 'Entrar'}
         </button>
       </form>
     </main>

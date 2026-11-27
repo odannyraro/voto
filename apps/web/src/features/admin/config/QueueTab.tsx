@@ -4,6 +4,7 @@ import type { ReactElement } from 'react';
 import { adminApi } from '../../../api/admin-api';
 import { ApiError } from '../../../api/api-client';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { getApiErrorMessage } from '../../../lib/ui-messages';
 
 /** Propriedades para propor e confirmar a ordem de votação dos cargos. */
 export interface QueueTabProps {
@@ -83,7 +84,7 @@ export function QueueTab({
       const suggestion = await adminApi.getQueueSuggestion(token, electionId);
       setProposedOrder(suggestion.positionIds);
     } catch (error: unknown) {
-      setErrorMessage(getRequestErrorMessage(error, 'Unable to get an order suggestion.'));
+      setErrorMessage(getRequestErrorMessage(error, 'Não foi possível sugerir uma ordem.'));
     } finally {
       setIsLoadingSuggestion(false);
     }
@@ -98,7 +99,7 @@ export function QueueTab({
     setIsConfirmationOpen(false);
     const parsedBody = queueBodySchema.safeParse({ positionIds: proposedOrder });
     if (!parsedBody.success) {
-      setErrorMessage('The proposed order is invalid. Refresh the election and try again.');
+      setErrorMessage('A ordem sugerida é inválida. Atualize a eleição e tente novamente.');
       return;
     }
 
@@ -109,7 +110,7 @@ export function QueueTab({
       onElectionChange(updatedState);
       setProposedOrder(updatedState.election.queue);
     } catch (error: unknown) {
-      setErrorMessage(getRequestErrorMessage(error, 'Unable to apply the proposed order.'));
+      setErrorMessage(getRequestErrorMessage(error, 'Não foi possível aplicar a ordem sugerida.'));
     } finally {
       setIsApplying(false);
     }
@@ -117,25 +118,25 @@ export function QueueTab({
 
   return (
     <section aria-labelledby="queue-heading">
-      <h2 id="queue-heading">Voting order</h2>
+      <h2 id="queue-heading">Ordem de votação</h2>
       {errorMessage !== null && <p role="alert">{errorMessage}</p>}
       <button
         type="button"
         disabled={isLoadingSuggestion || isApplying}
         onClick={() => void loadSuggestion()}
       >
-        {isLoadingSuggestion ? 'Getting suggestion...' : 'Suggest order'}
+        {isLoadingSuggestion ? 'Buscando sugestão...' : 'Sugerir ordem'}
       </button>
       {proposedPositions.length === 0 ? (
-        <p>No pending positions are in the voting queue.</p>
+        <p>Não há cargos pendentes na fila de votação.</p>
       ) : (
-        <ol aria-label="Proposed voting order">
+        <ol aria-label="Ordem de votação sugerida">
           {proposedPositions.map((position, index) => (
             <li key={position.id}>
               <span>{position.title}</span>
               <button
                 type="button"
-                aria-label={`Move ${position.title} up`}
+                aria-label={`Mover ${position.title} para cima`}
                 disabled={index === 0 || isApplying}
                 onClick={() => movePosition(index, -1)}
               >
@@ -143,7 +144,7 @@ export function QueueTab({
               </button>
               <button
                 type="button"
-                aria-label={`Move ${position.title} down`}
+                aria-label={`Mover ${position.title} para baixo`}
                 disabled={index === proposedPositions.length - 1 || isApplying}
                 onClick={() => movePosition(index, 1)}
               >
@@ -155,21 +156,21 @@ export function QueueTab({
       )}
       <p>
         {hasChanges
-          ? 'Proposed order has not been applied.'
-          : 'Proposed order matches the current voting queue.'}
+          ? 'A ordem sugerida ainda não foi aplicada.'
+          : 'A ordem sugerida corresponde à fila atual.'}
       </p>
       <button
         type="button"
         disabled={!hasChanges || isApplying || isLoadingSuggestion}
         onClick={() => setIsConfirmationOpen(true)}
       >
-        Apply order
+        Aplicar ordem
       </button>
       <ConfirmDialog
         open={isConfirmationOpen}
-        title="Apply voting order?"
-        description="This will replace the current voting queue with the proposed order."
-        confirmLabel="Apply order"
+        title="Aplicar ordem de votação?"
+        description="A fila atual será substituída pela ordem sugerida."
+        confirmLabel="Aplicar ordem"
         onConfirm={() => void applyProposedOrder()}
         onCancel={() => setIsConfirmationOpen(false)}
       />
@@ -186,10 +187,10 @@ export function QueueTab({
  */
 function getRequestErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError && error.error !== undefined) {
-    return `${error.error.code}: ${error.error.message}`;
+    return getApiErrorMessage(error.error.code);
   }
   if (error instanceof Error) {
-    return error.message;
+    return fallback;
   }
   return fallback;
 }

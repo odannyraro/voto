@@ -9,8 +9,8 @@ describe('ConfirmDialog', () => {
     renderWithProviders(
       <ConfirmDialog
         open
-        title="Remove candidate?"
-        description="This action cannot be undone."
+        title="Remover pessoa candidata?"
+        description="Esta ação não pode ser desfeita."
         onConfirm={() => undefined}
         onCancel={() => undefined}
       />,
@@ -18,8 +18,8 @@ describe('ConfirmDialog', () => {
 
     expect(
       screen.getByRole('dialog', {
-        name: 'Remove candidate?',
-        description: 'This action cannot be undone.',
+        name: 'Remover pessoa candidata?',
+        description: 'Esta ação não pode ser desfeita.',
       }),
     ).toBeInTheDocument();
   });
@@ -30,14 +30,14 @@ describe('ConfirmDialog', () => {
     renderWithProviders(
       <ConfirmDialog
         open
-        title="Remove candidate?"
-        description="This action cannot be undone."
+        title="Remover pessoa candidata?"
+        description="Esta ação não pode ser desfeita."
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
 
     expect({ confirms: onConfirm.mock.calls.length, cancels: onCancel.mock.calls.length }).toEqual({
       confirms: 1,
@@ -51,14 +51,14 @@ describe('ConfirmDialog', () => {
     renderWithProviders(
       <ConfirmDialog
         open
-        title="Remove candidate?"
-        description="This action cannot be undone."
+        title="Remover pessoa candidata?"
+        description="Esta ação não pode ser desfeita."
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
 
     expect({ confirms: onConfirm.mock.calls.length, cancels: onCancel.mock.calls.length }).toEqual({
       confirms: 0,
@@ -70,8 +70,8 @@ describe('ConfirmDialog', () => {
     renderWithProviders(
       <ConfirmDialog
         open={false}
-        title="Remove candidate?"
-        description="This action cannot be undone."
+        title="Remover pessoa candidata?"
+        description="Esta ação não pode ser desfeita."
         onConfirm={() => undefined}
         onCancel={() => undefined}
       />,
@@ -88,18 +88,22 @@ describe('DoubleConfirmDialog', () => {
       renderWithProviders(
         <DoubleConfirmDialog
           open
-          title="Cancel position?"
-          description="Confirm the position title to continue."
+          title="Cancelar cargo?"
+          description="Digite exatamente o nome do cargo para cancelá-lo."
           confirmationTitle="President"
           onConfirm={() => undefined}
+          inputLabel="Digite o nome do cargo para confirmar"
           onCancel={() => undefined}
         />,
       );
-      fireEvent.change(screen.getByRole('textbox', { name: 'Type the title to confirm' }), {
-        target: { value: typedTitle },
-      });
+      fireEvent.change(
+        screen.getByRole('textbox', { name: 'Digite o nome do cargo para confirmar' }),
+        {
+          target: { value: typedTitle },
+        },
+      );
 
-      expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Confirmar' })).toBeDisabled();
     },
   );
 
@@ -109,18 +113,22 @@ describe('DoubleConfirmDialog', () => {
     renderWithProviders(
       <DoubleConfirmDialog
         open
-        title="Cancel position?"
-        description="Confirm the position title to continue."
+        title="Cancelar cargo?"
+        description="Digite exatamente o nome do cargo para cancelá-lo."
         confirmationTitle="President"
+        inputLabel="Digite o nome do cargo para confirmar"
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
     );
-    fireEvent.change(screen.getByRole('textbox', { name: 'Type the title to confirm' }), {
-      target: { value: 'President' },
-    });
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'Digite o nome do cargo para confirmar' }),
+      {
+        target: { value: 'President' },
+      },
+    );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
 
     expect({ confirms: onConfirm.mock.calls.length, cancels: onCancel.mock.calls.length }).toEqual({
       confirms: 1,
@@ -132,30 +140,37 @@ describe('DoubleConfirmDialog', () => {
     const { rerender } = renderWithProviders(
       <DoubleConfirmDialog
         open
-        title="Cancel position?"
-        description="Confirm the position title to continue."
+        title="Cancelar cargo?"
+        description="Digite exatamente o nome do cargo para cancelá-lo."
         confirmationTitle="President"
+        inputLabel="Digite o nome do cargo para confirmar"
         onConfirm={() => undefined}
         onCancel={() => undefined}
       />,
     );
-    fireEvent.change(screen.getByRole('textbox', { name: 'Type the title to confirm' }), {
-      target: { value: 'President' },
-    });
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'Digite o nome do cargo para confirmar' }),
+      {
+        target: { value: 'President' },
+      },
+    );
 
     rerender(
       <DoubleConfirmDialog
         open
-        title="Cancel position?"
-        description="Confirm the position title to continue."
+        title="Cancelar cargo?"
+        description="Digite exatamente o nome do cargo para cancelá-lo."
         confirmationTitle="Chancellor"
+        inputLabel="Digite o nome do cargo para confirmar"
         onConfirm={() => undefined}
         onCancel={() => undefined}
       />,
     );
 
-    expect(screen.getByRole('textbox', { name: 'Type the title to confirm' })).toHaveValue('');
-    expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
+    expect(
+      screen.getByRole('textbox', { name: 'Digite o nome do cargo para confirmar' }),
+    ).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Confirmar' })).toBeDisabled();
   });
 
   it('cancels the double confirmation without invoking confirm', () => {
@@ -164,15 +179,16 @@ describe('DoubleConfirmDialog', () => {
     renderWithProviders(
       <DoubleConfirmDialog
         open
-        title="Cancel position?"
-        description="Confirm the position title to continue."
+        title="Cancelar cargo?"
+        description="Digite exatamente o nome do cargo para cancelá-lo."
         confirmationTitle="President"
+        inputLabel="Digite o nome do cargo para confirmar"
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
 
     expect({ confirms: onConfirm.mock.calls.length, cancels: onCancel.mock.calls.length }).toEqual({
       confirms: 0,

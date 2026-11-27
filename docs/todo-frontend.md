@@ -111,7 +111,8 @@ agrupadas em um único commit.
 | C14 | Divide-se: eleitores e fila são abas independentes com contratos próprios | `[x] C14.a` gerar, listar, copiar e revogar códigos; `[x] C14.b` ordem, sugestão e confirmação |
 | C15 | Uma entrega: sincronização e controles ao vivo compõem o mesmo painel administrativo | `[x] C15.a + C15.b` painel ao vivo completo |
 | C16 | Uma entrega completa: resultados e resolução de cargo insuficiente integram o painel ao vivo | `[x] C16.a + C16.b` resolução completa da rodada e da fila |
-| C17 | Divide-se: configuração do runner e dados de preparação são entregáveis separadas | `[ ] C17.a` `playwright.config.ts` e `webServer`; `[ ] C17.b` fixtures e helpers de API |
+| C17 | Divide-se: configuração do runner e dados de preparação são entregáveis separadas | `[x] C17.a` `playwright.config.ts` e `webServer`; `[x] C17.b` fixtures e helpers de API |
+| C17.x | Uma entrega extra: identidade, temas e idioma precisam ficar consistentes em toda a interface | `[x] C17.x` identidade Vota Ae, temas claro/escuro, atalho admin e textos em português |
 | C18 | Não divide: uma jornada curta e linear de configuração | `[ ] C18` uma spec administrativa completa |
 | C19 | Divide-se: preparação de contexto/votos e liberação/verificação são dois grupos de risco | `[ ] C19.a` três contextos, entrada e votos; `[ ] C19.b` fechamento e liberação do resultado |
 | C20 | Divide-se: montagem do cenário e ação do 2º turno têm verificações independentes | `[ ] C20.a` cenário de `AWAITING_RUNOFF`; `[ ] C20.b` abrir 2º turno e verificar vencedor |
@@ -133,6 +134,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/App.tsx` → tabela de rotas do frontend; `/` inicia entrada e `/votar` restaura a sessão do eleitor.
 - `apps/web/src/main.tsx` → composição do `BrowserRouter` e da árvore React; objeto humilde,
   excluído da cobertura.
+- `apps/web/src/vite-env.d.ts` → carrega as declarações do Vite para imports de estilos CSS.
 - `apps/web/vite.config.ts` → proxy `/api` e `/socket.io` para `localhost:3000`.
 - `apps/web/test/setup.ts` → jest-dom e cleanup do Testing Library.
 - `apps/web/test/App.test.tsx` → verifica que a rota inicial exibe o formulário do eleitor.
@@ -144,6 +146,10 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/features/admin/auth/AdminLoginPage.tsx` → formulário acessível para login e erros de credenciais.
 - `apps/web/src/features/admin/auth/RequireAdmin.tsx` → protege as rotas administrativas após validar a identidade.
 - `apps/web/src/features/admin/auth/AdminDashboardPage.tsx` → exibe identidade autenticada, lista de eleições e logout.
+- `apps/web/src/features/theme/theme-provider.tsx` → aplica e persiste a preferência de tema claro/escuro.
+- `apps/web/src/components/AppHeader.tsx` → apresenta a marca Vota Ae, o seletor de tema e o atalho administrativo da página inicial.
+- `apps/web/src/styles.css` → identidade visual responsiva azul, branca e preta com variáveis por tema.
+- `apps/web/src/lib/ui-messages.ts` → traduz códigos de erro da API para mensagens seguras em português.
 - `apps/web/src/features/admin/elections/AdminElectionsPage.tsx` → carrega resumos, apresenta estados/contagens e cria eleições com validação compartilhada.
 - `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx` → carrega o agregado completo e navega pelas abas acessíveis de configuração.
 - `apps/web/src/features/admin/live/useAdminElection.ts` → sincroniza o agregado administrativo por REST/Socket.IO e reinscreve/ressincroniza após reconexão.
@@ -173,6 +179,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/countdown.test.ts` → prazo futuro, limites, expiração, offset de relógio e datas inválidas.
 - `apps/web/test/confirmation-dialogs.test.tsx` → comportamento, acessibilidade, cancelamento e título exato dos diálogos.
 - `apps/web/test/reusable-status-components.test.tsx` → atualização/expiração do timer e anúncio do código/mensagem de erro.
+- `apps/web/test/branding-theme.test.tsx` → marca, atalho administrativo, alternância e persistência dos temas.
 - `apps/web/test/voter-entry-page.test.tsx` → validação local, normalização do código, início de sessão e erros da API.
 - `apps/web/test/admin-auth.test.tsx` → login, identidade, restauração, rotas protegidas, credenciais inválidas e logout.
 - `apps/web/test/admin-elections.test.tsx` → lista vazia e preenchida, falhas de API, validação de prazo e criação/navegação.
@@ -717,6 +724,21 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Como usar: importe `test` e `expect` de `e2e/fixtures/index.ts`; peça `admin`, `election`, `readyElection`, `adminPage` ou `cleanContext` no teste.
 - Testes: `e2e/specs/fixtures.spec.ts` (3 cenários: identidade admin, eleição preparada e isolamento de `sessionStorage`); smoke: 1.
 - Decisões: preparação usa as rotas reais da API, e cada teste recebe uma eleição identificada pelo `testId`; erros HTTP e respostas incompletas falham explicitamente.
+
+### [x] C17.x — Identidade visual e interface em português
+**Ref.:** tarefa extra solicitada pelo usuário após C17; architecture §9.
+**Depende de:** C6, C10–C16 e C17.
+**Fazer:** aplicar a marca Vota Ae, paleta azul/preto/branco, temas claro/escuro intercambiáveis, atalho discreto de acesso admin na tela inicial e textos da interface em português.
+**Testes (escrever antes):** identificar marca e atalho; alternar e persistir o tema; manter os fluxos acessíveis após a tradução dos textos.
+**Pronto quando:** as telas e mensagens do frontend estiverem em português, a identidade e os dois temas estiverem disponíveis e testes web/E2E passarem.
+**Arquivos:** `apps/web/src/`, `apps/web/test/branding-theme.test.tsx`, testes e2e afetados.
+**Commit sugerido:** `feat(web): moderniza identidade visual em português`
+**Notas do agente:**
+- Feito: identidade Vota Ae com marca placeholder de caixa marcada, paleta azul/preto/branco, temas claro/escuro persistidos e atalho discreto para acesso administrativo; interface, acessibilidade e erros da API traduzidos para português.
+- Arquivos: cabeçalho, provedor de tema, estilos globais, mensagens da API, telas de eleitor/admin, testes web e smoke/fixtures Playwright.
+- Como usar: alternar o tema pelo cabeçalho; a preferência fica salva em `localStorage` na chave `vota-ae:theme`; o acesso administrativo fica disponível na página inicial.
+- Testes: `apps/web/test/branding-theme.test.tsx` (2 testes); suíte web (200 testes); Playwright (4 testes).
+- Decisões: o ícone vetorial é um espaço reservado com caixa marcada; erros da API são traduzidos pelo código estruturado e falhas sem tradução recebem mensagem genérica em português.
 
 ### [ ] C18 — E2E de configuração pelo admin
 **Ref.:** architecture §10.2 cenário 1.

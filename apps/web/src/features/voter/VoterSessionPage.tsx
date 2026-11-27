@@ -21,13 +21,13 @@ export function VoterSessionPage({ token }: VoterSessionPageProps): ReactElement
 
   return (
     <main>
-      <h1>Voter session</h1>
-      {isLoading && <p role="status">Loading voter session...</p>}
+      <h1>Sessão de votação</h1>
+      {isLoading && <p role="status">Carregando sua sessão...</p>}
       {error !== null && <ErrorMessage error={error} />}
       {errorMessage !== null && <p role="alert">{errorMessage}</p>}
       {state?.phase === 'WAITING' && (
         <section>
-          <h2>Waiting for election to start</h2>
+          <h2>Aguardando o início da eleição</h2>
           <p>{state.electionName}</p>
         </section>
       )}

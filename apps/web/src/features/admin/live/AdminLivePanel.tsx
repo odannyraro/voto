@@ -11,6 +11,7 @@ import { ApiError } from '../../../api/api-client';
 import { Countdown } from '../../../components/Countdown';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { DoubleConfirmDialog } from '../../../components/DoubleConfirmDialog';
+import { getApiErrorMessage } from '../../../lib/ui-messages';
 import { useAdminElection } from './useAdminElection';
 
 /** Propriedades para controlar ao vivo uma eleição acompanhada pelo socket. */
@@ -80,7 +81,9 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
     };
     const parsedBody = openRoundBodySchema.safeParse(body);
     if (!parsedBody.success) {
-      setValidationMessage('Round duration must be a whole number from 5 to 3600 seconds.');
+      setValidationMessage(
+        'A duração da votação deve ser um número inteiro entre 5 e 3.600 segundos.',
+      );
       return;
     }
 
@@ -90,7 +93,9 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
     try {
       acceptState(await adminApi.openRound(token, electionId, parsedBody.data));
     } catch (error: unknown) {
-      setMutationError(getRequestErrorMessage(error, 'Unable to open the voting round.'));
+      setMutationError(
+        getRequestErrorMessage(error, 'Não foi possível abrir a rodada de votação.'),
+      );
     } finally {
       setIsMutating(false);
     }
@@ -113,7 +118,9 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
     try {
       acceptState(await adminApi.closeRound({ token, electionId, roundId }));
     } catch (error: unknown) {
-      setMutationError(getRequestErrorMessage(error, 'Unable to close the voting round.'));
+      setMutationError(
+        getRequestErrorMessage(error, 'Não foi possível encerrar a rodada de votação.'),
+      );
     } finally {
       setIsMutating(false);
     }
@@ -133,7 +140,7 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
     setRoundToAnnul(null);
     await applyMutation(
       () => adminApi.annulRound({ token, electionId, roundId }),
-      'Unable to annul the voting round.',
+      'Não foi possível anular a rodada de votação.',
     );
   }
 
@@ -152,12 +159,12 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
     setPositionToCancel(null);
     await applyMutation(
       () => adminApi.cancelPosition({ token, electionId, positionId, body: { confirmTitle } }),
-      'Unable to cancel the position.',
+      'Não foi possível cancelar o cargo.',
     );
   }
 
   if (isLoading && state === null) {
-    return <p role="status">Loading live election state...</p>;
+    return <p role="status">Carregando o estado da eleição...</p>;
   }
 
   if (errorMessage !== null && state === null) {
@@ -165,7 +172,7 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
   }
 
   if (state === null) {
-    return <p role="status">Waiting for election state...</p>;
+    return <p role="status">Aguardando o estado da eleição...</p>;
   }
 
   const nextPosition = state.election.positions.find(({ id }) => id === state.next.positionId);
@@ -174,18 +181,18 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
   return (
     <>
       <section aria-labelledby="live-election-heading">
-        <h2 id="live-election-heading">Live election</h2>
+        <h2 id="live-election-heading">Acompanhamento ao vivo</h2>
         {(errorMessage !== null || mutationError !== null) && (
           <p role="alert">{mutationError ?? errorMessage}</p>
         )}
         {state.next.status === 'READY' && (
           <>
-            {nextPosition !== undefined && <p>Ready to open: {nextPosition.title}</p>}
+            {nextPosition !== undefined && <p>Pronto para iniciar: {nextPosition.title}</p>}
             {state.election.status !== 'OPEN' ? (
-              <p>Open the election before starting a voting round.</p>
+              <p>Abra a eleição antes de iniciar uma rodada de votação.</p>
             ) : (
               <form noValidate onSubmit={handleOpenRound}>
-                <label htmlFor="round-duration">Round duration (seconds)</label>
+                <label htmlFor="round-duration">Duração da rodada (segundos)</label>
                 <input
                   id="round-duration"
                   type="number"
@@ -197,7 +204,7 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
                 />
                 {validationMessage !== null && <p role="alert">{validationMessage}</p>}
                 <button type="submit" disabled={isMutating || state.next.positionId === undefined}>
-                  {isMutating ? 'Opening round...' : 'Open round'}
+                  {isMutating ? 'Abrindo rodada...' : 'Abrir rodada'}
                 </button>
               </form>
             )}
@@ -205,11 +212,11 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
         )}
         {state.next.status === 'ROUND_IN_PROGRESS' && currentRound !== undefined && (
           <>
-            <p>Voting in progress: {currentRound.positionTitle}</p>
+            <p>Votação em andamento: {currentRound.positionTitle}</p>
             <p>
-              Votes: {currentRound.votedCount} of {currentRound.eligibleCount}
+              Votos: {currentRound.votedCount} de {currentRound.eligibleCount}
             </p>
-            <p>Voting deadline: {currentRound.deadline}</p>
+            <p>Prazo da votação: {currentRound.deadline}</p>
             {clientNowAtSync !== null && (
               <Countdown
                 clock={{
@@ -224,12 +231,12 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
               disabled={isMutating}
               onClick={() => void handleCloseRound(state)}
             >
-              {isMutating ? 'Closing round...' : 'Close round early'}
+              {isMutating ? 'Encerrando rodada...' : 'Encerrar rodada antecipadamente'}
             </button>
           </>
         )}
         {state.next.status === 'ROUND_IN_PROGRESS' && currentRound === undefined && (
-          <p role="alert">The server reports an active round but did not provide its state.</p>
+          <p role="alert">O servidor informa uma rodada ativa, mas não forneceu os dados dela.</p>
         )}
         {state.next.status === 'INSUFFICIENT_CANDIDATES' && (
           <InsufficientCandidatesPanel
@@ -238,20 +245,20 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
             onAttach={(positionId, candidateId) =>
               void applyMutation(
                 () => adminApi.attachCandidate({ token, electionId, positionId, candidateId }),
-                'Unable to attach the candidate.',
+                'Não foi possível vincular a pessoa candidata ao cargo.',
               )
             }
             onDefer={(positionId) =>
               void applyMutation(
                 () => adminApi.deferPosition({ token, electionId, positionId }),
-                'Unable to defer the position.',
+                'Não foi possível adiar o cargo.',
               )
             }
             onCancel={(position) => setPositionToCancel(position)}
           />
         )}
-        {state.next.status === 'AWAITING_RUNOFF' && <p>The next position is awaiting a runoff.</p>}
-        {state.next.status === 'NONE_LEFT' && <p>No positions remain in the queue.</p>}
+        {state.next.status === 'AWAITING_RUNOFF' && <p>O próximo cargo aguarda o segundo turno.</p>}
+        {state.next.status === 'NONE_LEFT' && <p>Não há mais cargos na fila.</p>}
         {state.lastResult !== undefined && (
           <RoundResultPanel
             state={state}
@@ -260,20 +267,20 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
             onOpenRunoff={(positionId) =>
               void applyMutation(
                 () => adminApi.openRunoff({ token, electionId, positionId, body: {} }),
-                'Unable to open the runoff.',
+                'Não foi possível abrir o segundo turno.',
               )
             }
             onRelease={(roundId) =>
               void applyMutation(
                 () => adminApi.releaseRound({ token, electionId, roundId }),
-                'Unable to release the round results.',
+                'Não foi possível divulgar o resultado da rodada.',
               )
             }
             onAnnul={setRoundToAnnul}
             onUndo={() =>
               void applyMutation(
                 () => adminApi.undoElection(token, electionId),
-                'Unable to undo the last election action.',
+                'Não foi possível desfazer a última ação da eleição.',
               )
             }
           />
@@ -281,34 +288,34 @@ export function AdminLivePanel({ token, electionId }: AdminLivePanelProps): Reac
       </section>
       <ConfirmDialog
         open={roundToAnnul !== null}
-        title="Annul round?"
+        title="Anular rodada?"
         description={
           roundToAnnul === null
             ? ''
-            : `Annul the closed round for ${roundToAnnul.positionTitle}? The position will return to the queue.`
+            : `Deseja anular a rodada encerrada de ${roundToAnnul.positionTitle}? O cargo retornará à fila.`
         }
-        confirmLabel="Annul round"
+        confirmLabel="Anular rodada"
         onConfirm={() => void annulSelectedRound()}
         onCancel={() => setRoundToAnnul(null)}
       />
       <ConfirmDialog
         open={positionToCancel !== null && !isCancelConfirmationOpen}
-        title="Cancel position?"
+        title="Cancelar cargo?"
         description={
           positionToCancel === null
             ? ''
-            : `Cancel ${positionToCancel.title}? This position will be removed from the election.`
+            : `Deseja cancelar ${positionToCancel.title}? O cargo será removido da eleição.`
         }
-        confirmLabel="Continue"
+        confirmLabel="Continuar"
         onConfirm={() => setIsCancelConfirmationOpen(true)}
         onCancel={() => setPositionToCancel(null)}
       />
       <DoubleConfirmDialog
         open={isCancelConfirmationOpen && positionToCancel !== null}
-        title="Confirm cancellation"
-        description="Type the exact position title to cancel it."
+        title="Confirmar cancelamento"
+        description="Digite exatamente o nome do cargo para cancelá-lo."
         confirmationTitle={positionToCancel?.title ?? ''}
-        confirmLabel="Cancel position"
+        confirmLabel="Cancelar cargo"
         onConfirm={() => void cancelSelectedPosition()}
         onCancel={() => {
           setIsCancelConfirmationOpen(false);
@@ -357,23 +364,26 @@ function RoundResultPanel({
 
   return (
     <section aria-labelledby="last-round-result-heading">
-      <h3 id="last-round-result-heading">Last round result</h3>
-      <p>{outcomeMessage ?? 'The server result is missing required candidate details.'}</p>
+      <h3 id="last-round-result-heading">Resultado da última rodada</h3>
+      <p>
+        {outcomeMessage ??
+          'O resultado do servidor não contém os dados necessários da candidatura.'}
+      </p>
       {result.counts.length === 0 ? (
-        <p>No candidate votes were recorded.</p>
+        <p>Nenhum voto em candidaturas foi registrado.</p>
       ) : (
-        <ul aria-label="Candidate vote counts">
+        <ul aria-label="Votos por candidatura">
           {result.counts.map(({ candidateId, name, votes }) => (
             <li key={candidateId}>
-              {name}: {votes} votes
+              {name}: {votes} votos
             </li>
           ))}
         </ul>
       )}
       <p>
-        Valid votes: {result.validVotes}; blank votes: {result.blank}.
+        Votos válidos: {result.validVotes}; votos em branco: {result.blank}.
       </p>
-      {result.tiebreakApplied && <p>The position tie-break rule determined the result.</p>}
+      {result.tiebreakApplied && <p>A regra de desempate do cargo determinou o resultado.</p>}
       {result.outcome === 'RUNOFF_REQUIRED' &&
         state.next.status === 'AWAITING_RUNOFF' &&
         (canOpenRunoff ? (
@@ -386,32 +396,34 @@ function RoundResultPanel({
               }
             }}
           >
-            Open runoff
+            Abrir segundo turno
           </button>
         ) : (
-          <p role="alert">The server result is missing runoff finalist details.</p>
+          <p role="alert">
+            O resultado do servidor não contém os dados dos finalistas do segundo turno.
+          </p>
         ))}
       {round === undefined ? (
-        <p role="alert">The server result does not match a round in the election.</p>
+        <p role="alert">O resultado do servidor não corresponde a nenhuma rodada desta eleição.</p>
       ) : (
         <>
           {round.resultsReleased ? (
-            <p>Results released to voters.</p>
+            <p>Resultado divulgado aos eleitores.</p>
           ) : round.status === 'CLOSED' ? (
             <button type="button" disabled={isMutating} onClick={() => onRelease(round.id)}>
-              Release results to voters
+              Divulgar resultado aos eleitores
             </button>
           ) : null}
           {round.status === 'CLOSED' && (
             <button type="button" disabled={isMutating} onClick={() => onAnnul(result)}>
-              Annul round
+              Anular rodada
             </button>
           )}
         </>
       )}
       {state.canUndo && (
         <button type="button" disabled={isMutating} onClick={onUndo}>
-          Undo last action
+          Desfazer última ação
         </button>
       )}
     </section>
@@ -430,18 +442,18 @@ function getOutcomeMessage(result: RoundResultDTO): string | null {
       const electedCandidate = result.counts.find(
         ({ candidateId }) => candidateId === result.electedCandidateId,
       );
-      return electedCandidate === undefined ? null : `Candidate elected: ${electedCandidate.name}.`;
+      return electedCandidate === undefined ? null : `Pessoa eleita: ${electedCandidate.name}.`;
     }
     case 'RUNOFF_REQUIRED': {
       const finalists = result.runoffCandidateIds?.map(
         (candidateId) => result.counts.find(({ candidateId: id }) => id === candidateId)?.name,
       );
       return finalists?.every((name) => name !== undefined)
-        ? `Runoff required between ${finalists[0]} and ${finalists[1]}.`
+        ? `Segundo turno entre ${finalists[0]} e ${finalists[1]}.`
         : null;
     }
     case 'NO_VALID_VOTES':
-      return 'No valid votes were cast.';
+      return 'Não houve votos válidos.';
   }
 }
 
@@ -471,18 +483,22 @@ function InsufficientCandidatesPanel({
   const position = state.election.positions.find(({ id }) => id === positionId);
 
   if (positionId === undefined || position === undefined) {
-    return <p role="alert">The server did not provide the insufficient position details.</p>;
+    return (
+      <p role="alert">O servidor não forneceu os dados do cargo com candidaturas insuficientes.</p>
+    );
   }
 
   const attachableCandidates = state.next.attachableCandidates ?? [];
 
   return (
     <section aria-labelledby="insufficient-candidates-heading">
-      <h3 id="insufficient-candidates-heading">Not enough candidates for: {position.title}</h3>
+      <h3 id="insufficient-candidates-heading">
+        Pessoas candidatas insuficientes para: {position.title}
+      </h3>
       {attachableCandidates.length === 0 ? (
-        <p>No existing eligible candidates can be attached.</p>
+        <p>Não há pessoas candidatas aptas que possam ser vinculadas.</p>
       ) : (
-        <ul aria-label="Attachable candidates">
+        <ul aria-label="Pessoas candidatas que podem ser vinculadas">
           {attachableCandidates.map((candidate) => (
             <li key={candidate.id}>
               {candidate.name}
@@ -491,21 +507,21 @@ function InsufficientCandidatesPanel({
                 disabled={isMutating}
                 onClick={() => onAttach(positionId, candidate.id)}
               >
-                Attach {candidate.name}
+                Vincular {candidate.name}
               </button>
             </li>
           ))}
         </ul>
       )}
       <button type="button" disabled={isMutating} onClick={() => onDefer(positionId)}>
-        Defer {position.title}
+        Adiar {position.title}
       </button>
       <button
         type="button"
         disabled={isMutating}
         onClick={() => onCancel({ id: positionId, title: position.title })}
       >
-        Cancel {position.title}
+        Cancelar {position.title}
       </button>
     </section>
   );
@@ -520,10 +536,7 @@ function InsufficientCandidatesPanel({
  */
 function getRequestErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError && error.error !== undefined) {
-    return `${error.error.code}: ${error.error.message}`;
-  }
-  if (error instanceof Error) {
-    return error.message;
+    return getApiErrorMessage(error.error.code);
   }
   return fallback;
 }

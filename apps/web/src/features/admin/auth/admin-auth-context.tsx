@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { PropsWithChildren, ReactElement } from 'react';
 import { ApiError } from '../../../api/api-client';
 import { adminApi } from '../../../api/admin-api';
+import { getApiErrorMessage } from '../../../lib/ui-messages';
 
 const ADMIN_TOKEN_STORAGE_KEY = 'voto:admin-token';
 
@@ -34,10 +35,10 @@ const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
  */
 function getRestoreErrorMessage(error: unknown): string {
   if (error instanceof ApiError && error.error !== undefined) {
-    return `Unable to restore the administrator session: ${error.error.message}`;
+    return `Não foi possível recuperar sua sessão: ${getApiErrorMessage(error.error.code)}`;
   }
 
-  return 'Unable to verify the administrator session. Check your connection and sign in again.';
+  return 'Não foi possível verificar sua sessão. Confira a conexão e entre novamente.';
 }
 
 /**

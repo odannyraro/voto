@@ -28,14 +28,14 @@ describe('VoterEntryPage', () => {
     const user = userEvent.setup();
     renderWithProviders(<App />);
 
-    await user.type(screen.getByRole('textbox', { name: 'Voter code' }), 'abc23456');
-    await user.click(screen.getByRole('button', { name: 'Enter' }));
-    await screen.findByRole('heading', { name: 'Waiting for election to start' });
+    await user.type(screen.getByRole('textbox', { name: 'Código de acesso' }), 'abc23456');
+    await user.click(screen.getByRole('button', { name: 'Entrar para votar' }));
+    await screen.findByRole('heading', { name: 'Aguardando o início da eleição' });
 
     expect({
       request: createSession.mock.calls[0]?.[0],
       storedSession: sessionStorage.getItem('voto:voter-session'),
-      destination: screen.queryByRole('heading', { name: 'Voter session' }) !== null,
+      destination: screen.queryByRole('heading', { name: 'Sessão de votação' }) !== null,
     }).toEqual({
       request: { code: 'ABC23456' },
       storedSession: JSON.stringify({ token: 'voter-token', electionId: 'election-1' }),
@@ -50,17 +50,17 @@ describe('VoterEntryPage', () => {
       const user = userEvent.setup();
       renderWithProviders(<App />);
 
-      fireEvent.change(screen.getByRole('textbox', { name: 'Voter code' }), {
+      fireEvent.change(screen.getByRole('textbox', { name: 'Código de acesso' }), {
         target: { value: code },
       });
-      await user.click(screen.getByRole('button', { name: 'Enter' }));
+      await user.click(screen.getByRole('button', { name: 'Entrar para votar' }));
 
       expect({
         sessionStarted: createSession.mock.calls.length > 0,
         validationMessage: screen.getByRole('alert').textContent,
       }).toEqual({
         sessionStarted: false,
-        validationMessage: 'Enter a valid eight-character voter code.',
+        validationMessage: 'Informe um código válido com oito caracteres.',
       });
     },
   );
@@ -70,31 +70,32 @@ describe('VoterEntryPage', () => {
       status: 404,
       code: 'INVALID_CODE',
       apiMessage: 'Unknown voter code',
-      message: 'This voter code is invalid or does not exist.',
     },
     {
       status: 403,
       code: 'VOTER_REVOKED',
       apiMessage: 'This voter code was revoked',
-      message: 'This voter code has been revoked. Contact the election administrator.',
     },
   ] as const)(
     'shows a distinct message when the API rejects a code with $code',
-    async ({ status, code, apiMessage, message }) => {
+    async ({ status, code, apiMessage }) => {
       vi.spyOn(voterApi, 'createSession').mockRejectedValue(
         new ApiError(status, { code, message: apiMessage }),
       );
       const user = userEvent.setup();
       renderWithProviders(<App />);
 
-      await user.type(screen.getByRole('textbox', { name: 'Voter code' }), 'ABC23456');
-      await user.click(screen.getByRole('button', { name: 'Enter' }));
+      await user.type(screen.getByRole('textbox', { name: 'Código de acesso' }), 'ABC23456');
+      await user.click(screen.getByRole('button', { name: 'Entrar para votar' }));
 
       expect({
         alert: screen.getByRole('alert').textContent,
         storedSession: sessionStorage.getItem('voto:voter-session'),
       }).toEqual({
-        alert: `${code}${message}`,
+        alert:
+          code === 'INVALID_CODE'
+            ? 'Este código não é válido. Confira os caracteres e tente novamente.'
+            : 'Este código foi revogado. Peça ajuda à administração da eleição.',
         storedSession: null,
       });
     },
@@ -105,11 +106,11 @@ describe('VoterEntryPage', () => {
     const user = userEvent.setup();
     renderWithProviders(<App />);
 
-    await user.type(screen.getByRole('textbox', { name: 'Voter code' }), 'ABC23456');
-    await user.click(screen.getByRole('button', { name: 'Enter' }));
+    await user.type(screen.getByRole('textbox', { name: 'Código de acesso' }), 'ABC23456');
+    await user.click(screen.getByRole('button', { name: 'Entrar para votar' }));
 
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Unable to start your session. Please try again.',
+      'Não foi possível iniciar sua sessão. Tente novamente.',
     );
   });
 });

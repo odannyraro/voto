@@ -18,7 +18,7 @@ test('starts a new browser context without inheriting the administrator session'
   adminPage,
   cleanContext,
 }) => {
-  await expect(adminPage.getByRole('heading', { name: 'Administrator dashboard' })).toBeVisible();
+  await expect(adminPage.getByRole('heading', { name: 'Painel administrativo' })).toBeVisible();
 
   const cleanPage = await cleanContext.newPage();
   await cleanPage.goto('/admin');

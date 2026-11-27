@@ -8,33 +8,6 @@ import { useNavigate } from 'react-router';
 import { saveVoterSession } from './voter-session-storage';
 
 /**
- * Substitui mensagens técnicas por instruções claras nos erros de entrada conhecidos.
- *
- * @param error - Erro validado recebido ao solicitar uma sessão de eleitor.
- * @returns DTO com mensagem específica para código inválido/revogado ou o erro original.
- */
-function mapVoterSessionError(error: ApiError): ErrorDTO | undefined {
-  if (error.error === undefined) {
-    return undefined;
-  }
-
-  if (error.error.code === 'INVALID_CODE') {
-    return { error: { ...error.error, message: 'This voter code is invalid or does not exist.' } };
-  }
-
-  if (error.error.code === 'VOTER_REVOKED') {
-    return {
-      error: {
-        ...error.error,
-        message: 'This voter code has been revoked. Contact the election administrator.',
-      },
-    };
-  }
-
-  return { error: error.error };
-}
-
-/**
  * Permite que um eleitor inicie uma sessão usando seu código de acesso.
  *
  * @returns Formulário acessível para entrar em uma eleição.
@@ -74,7 +47,7 @@ export function VoterEntryPage(): ReactElement {
 
     const parsedBody = voterSessionBodySchema.safeParse({ code });
     if (!parsedBody.success) {
-      setValidationMessage('Enter a valid eight-character voter code.');
+      setValidationMessage('Informe um código válido com oito caracteres.');
       return;
     }
 
@@ -85,14 +58,13 @@ export function VoterEntryPage(): ReactElement {
       navigate('/votar', { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
-        const mappedError = mapVoterSessionError(error);
-        if (mappedError !== undefined) {
-          setRequestError(mappedError);
+        if (error.error !== undefined) {
+          setRequestError({ error: error.error });
         } else {
-          setRequestMessage('Unable to start your session. Please try again.');
+          setRequestMessage('Não foi possível iniciar sua sessão. Tente novamente.');
         }
       } else {
-        setRequestMessage('Unable to start your session. Please try again.');
+        setRequestMessage('Não foi possível iniciar sua sessão. Tente novamente.');
       }
     } finally {
       setIsSubmitting(false);
@@ -101,10 +73,10 @@ export function VoterEntryPage(): ReactElement {
 
   return (
     <main>
-      <h1>Join an election</h1>
-      <p>Enter the eight-character voter code provided to you.</p>
+      <h1>Vote na sua eleição</h1>
+      <p>Digite o código de oito caracteres que você recebeu para participar.</p>
       <form noValidate onSubmit={handleSubmit}>
-        <label htmlFor="voter-code">Voter code</label>
+        <label htmlFor="voter-code">Código de acesso</label>
         <input
           id="voter-code"
           type="text"
@@ -123,7 +95,7 @@ export function VoterEntryPage(): ReactElement {
         {requestError !== undefined && <ErrorMessage error={requestError} />}
         {requestMessage !== undefined && <p role="status">{requestMessage}</p>}
         <button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Joining...' : 'Enter'}
+          {isSubmitting ? 'Entrando...' : 'Entrar para votar'}
         </button>
       </form>
     </main>

@@ -67,7 +67,7 @@ export function VoterVotePage({
           setIsBallotUnavailable(true);
         }
       } else {
-        setErrorMessage('Unable to submit your vote. Please try again.');
+        setErrorMessage('Não foi possível enviar seu voto. Tente novamente.');
       }
     } finally {
       submissionInProgress.current = false;
@@ -87,10 +87,10 @@ export function VoterVotePage({
       />
       {error !== null && <ErrorMessage error={error} />}
       {errorMessage !== null && <p role="alert">{errorMessage}</p>}
-      {isSubmitting && <p role="status">Submitting your vote...</p>}
-      {hasVoted && <p role="status">Vote recorded. Waiting for the next update.</p>}
+      {isSubmitting && <p role="status">Registrando seu voto...</p>}
+      {hasVoted && <p role="status">Voto registrado. Aguarde a próxima atualização.</p>}
       <fieldset disabled={isDisabled}>
-        <legend>Choose a candidate or cast a blank vote</legend>
+        <legend>Escolha uma pessoa candidata ou vote em branco</legend>
         {round.candidates.map((candidate) => (
           <button
             key={candidate.id}
@@ -98,11 +98,11 @@ export function VoterVotePage({
             disabled={isDisabled}
             onClick={() => void submitVote(candidate.id)}
           >
-            Vote for {candidate.name}
+            Votar em {candidate.name}
           </button>
         ))}
         <button type="button" disabled={isDisabled} onClick={() => void submitVote('BLANK')}>
-          Cast a blank vote
+          Votar em branco
         </button>
       </fieldset>
     </section>

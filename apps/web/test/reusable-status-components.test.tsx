@@ -28,13 +28,13 @@ describe('Countdown', () => {
     vi.setSystemTime(new Date('2026-11-26T12:00:00.000Z'));
     renderWithProviders(<Countdown clock={COUNTDOWN_CLOCK} />);
 
-    expect(screen.getByRole('timer', { name: 'Time remaining' })).toHaveTextContent('00:02');
+    expect(screen.getByRole('timer', { name: 'Tempo restante' })).toHaveTextContent('00:02');
 
     act(() => {
       vi.advanceTimersByTime(1_000);
     });
 
-    expect(screen.getByRole('timer', { name: 'Time remaining' })).toHaveTextContent('00:01');
+    expect(screen.getByRole('timer', { name: 'Tempo restante' })).toHaveTextContent('00:01');
   });
 
   it('shows zero when the deadline expires', () => {
@@ -42,13 +42,13 @@ describe('Countdown', () => {
     vi.setSystemTime(new Date('2026-11-26T12:00:00.000Z'));
     renderWithProviders(<Countdown clock={COUNTDOWN_CLOCK} />);
 
-    expect(screen.getByRole('timer', { name: 'Time remaining' })).toHaveTextContent('00:02');
+    expect(screen.getByRole('timer', { name: 'Tempo restante' })).toHaveTextContent('00:02');
 
     act(() => {
       vi.advanceTimersByTime(2_000);
     });
 
-    expect(screen.getByRole('timer', { name: 'Time remaining' })).toHaveTextContent('00:00');
+    expect(screen.getByRole('timer', { name: 'Tempo restante' })).toHaveTextContent('00:00');
   });
 });
 
@@ -58,7 +58,6 @@ describe('ErrorMessage', () => {
 
     const alert = screen.getByRole('alert');
 
-    expect(alert).toHaveTextContent('INVALID_CODE');
-    expect(alert).toHaveTextContent('The voter code is invalid.');
+    expect(alert).toHaveTextContent('Este código não é válido.');
   });
 });

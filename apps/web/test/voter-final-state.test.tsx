@@ -58,12 +58,12 @@ const RESULT_CASES: Array<{
       electedCandidateId: 'candidate-ana',
       tiebreakApplied: false,
     },
-    outcomeMessage: 'A candidate was elected.',
-    decision: 'Elected candidate: Ana',
-    candidateCounts: 'Ana: 2Bia: 1',
+    outcomeMessage: 'Uma pessoa candidata foi eleita.',
+    decision: 'Pessoa eleita: Ana',
+    candidateCounts: 'Ana: 2 votosBia: 1 votos',
     validVotes: 3,
     blankVotes: 1,
-    tiebreakMessage: 'No tie-break rule was applied.',
+    tiebreakMessage: 'Não foi necessário aplicar a regra de desempate.',
   },
   {
     description: 'runoff required',
@@ -81,12 +81,12 @@ const RESULT_CASES: Array<{
       runoffCandidateIds: ['candidate-ana', 'candidate-bia'],
       tiebreakApplied: true,
     },
-    outcomeMessage: 'A runoff is required.',
-    decision: 'Runoff candidates: Ana and Bia',
-    candidateCounts: 'Ana: 2Bia: 2',
+    outcomeMessage: 'É necessário realizar um segundo turno.',
+    decision: 'Pessoas classificadas para o segundo turno: Ana e Bia',
+    candidateCounts: 'Ana: 2 votosBia: 2 votos',
     validVotes: 4,
     blankVotes: 1,
-    tiebreakMessage: 'A tie-break rule was applied.',
+    tiebreakMessage: 'Foi aplicada a regra de desempate.',
   },
   {
     description: 'no valid votes',
@@ -103,24 +103,24 @@ const RESULT_CASES: Array<{
       outcome: 'NO_VALID_VOTES',
       tiebreakApplied: false,
     },
-    outcomeMessage: 'No valid votes were cast.',
+    outcomeMessage: 'Não houve votos válidos.',
     decision: null,
-    candidateCounts: 'Ana: 0Bia: 0',
+    candidateCounts: 'Ana: 0 votosBia: 0 votos',
     validVotes: 0,
     blankVotes: 2,
-    tiebreakMessage: 'No tie-break rule was applied.',
+    tiebreakMessage: 'Não foi necessário aplicar a regra de desempate.',
   },
 ];
 
 describe('VoterSessionPage final phases', () => {
   it('confirms that the voter submitted their vote in the VOTED phase', async () => {
     renderVoterState(makeVoterStateDTO({ phase: 'VOTED', roundId: 'round-closed' }));
-    const heading = await screen.findByRole('heading', { name: 'Vote recorded' });
+    const heading = await screen.findByRole('heading', { name: 'Voto registrado' });
 
     expect({
       heading: heading.textContent,
-      results: screen.queryByRole('list', { name: 'Candidate vote counts' }),
-    }).toEqual({ heading: 'Vote recorded', results: null });
+      results: screen.queryByRole('list', { name: 'Contagem de votos por candidatura' }),
+    }).toEqual({ heading: 'Voto registrado', results: null });
   });
 
   it.each(RESULT_CASES)(
@@ -137,23 +137,25 @@ describe('VoterSessionPage final phases', () => {
       renderVoterState(makeVoterStateDTO({ phase: 'RESULTS', result }));
 
       expect(
-        await screen.findByRole('heading', { name: 'Results for President' }),
+        await screen.findByRole('heading', { name: 'Resultado: President' }),
       ).toBeInTheDocument();
       expect({
         outcome: screen.getByRole('status').textContent,
         decision:
-          screen.queryByText(/^(Elected candidate|Runoff candidates):/)?.textContent ?? null,
-        candidateCounts: screen.getByRole('list', { name: 'Candidate vote counts' }).textContent,
-        validVotes: screen.getByText(`Valid votes: ${validVotes}`).textContent,
-        blankVotes: screen.getByText(`Blank votes: ${blankVotes}`).textContent,
+          screen.queryByText(/^(Pessoa eleita|Pessoas classificadas para o segundo turno):/)
+            ?.textContent ?? null,
+        candidateCounts: screen.getByRole('list', { name: 'Contagem de votos por candidatura' })
+          .textContent,
+        validVotes: screen.getByText(`Votos válidos: ${validVotes}`).textContent,
+        blankVotes: screen.getByText(`Votos em branco: ${blankVotes}`).textContent,
         tiebreak: screen.getByText(tiebreakMessage).textContent,
         hasDerivedTotal: screen.queryByText(/Total votes:/) !== null,
       }).toEqual({
         outcome: outcomeMessage,
         decision,
         candidateCounts,
-        validVotes: `Valid votes: ${validVotes}`,
-        blankVotes: `Blank votes: ${blankVotes}`,
+        validVotes: `Votos válidos: ${validVotes}`,
+        blankVotes: `Votos em branco: ${blankVotes}`,
         tiebreak: tiebreakMessage,
         hasDerivedTotal: false,
       });
@@ -162,11 +164,11 @@ describe('VoterSessionPage final phases', () => {
 
   it('shows that the election has ended in the FINISHED phase', async () => {
     renderVoterState(makeVoterStateDTO({ phase: 'FINISHED' }));
-    const heading = await screen.findByRole('heading', { name: 'Election finished' });
+    const heading = await screen.findByRole('heading', { name: 'Eleição encerrada' });
 
     expect({
       heading: heading.textContent,
-      results: screen.queryByRole('list', { name: 'Candidate vote counts' }),
-    }).toEqual({ heading: 'Election finished', results: null });
+      results: screen.queryByRole('list', { name: 'Contagem de votos por candidatura' }),
+    }).toEqual({ heading: 'Eleição encerrada', results: null });
   });
 });

@@ -224,7 +224,7 @@ export const test = base.extend<E2EFixtures>({
       { token: admin.token, storageKey: ADMIN_TOKEN_STORAGE_KEY },
     );
     await page.goto('/admin');
-    await expect(page.getByRole('heading', { name: 'Administrator dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Painel administrativo' })).toBeVisible();
     await use(page);
   },
 

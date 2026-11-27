@@ -22,8 +22,8 @@ export function ConfirmDialog({
   open,
   title,
   description,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel = 'Confirmar',
+  cancelLabel = 'Voltar',
   onConfirm,
   onCancel,
 }: ConfirmDialogProps): ReactElement | null {

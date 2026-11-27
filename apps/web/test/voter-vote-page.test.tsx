@@ -57,7 +57,7 @@ describe('VoterVotePage', () => {
     });
     const castVote = vi.spyOn(voterApi, 'castVote').mockReturnValue(pendingVote);
     renderVotingSession();
-    const voteButton = await screen.findByRole('button', { name: 'Vote for Ana' });
+    const voteButton = await screen.findByRole('button', { name: 'Votar em Ana' });
 
     act(() => {
       fireEvent.click(voteButton);
@@ -74,12 +74,12 @@ describe('VoterVotePage', () => {
       requests: castVote.mock.calls.length,
       submitted: screen.getByRole('status').textContent,
       voteButtonsDisabled: screen
-        .getByRole('button', { name: 'Vote for Bia' })
+        .getByRole('button', { name: 'Votar em Bia' })
         .hasAttribute('disabled'),
     }).toEqual({
       request: [SESSION_TOKEN, { roundId: ROUND_ID, choice: 'candidate-ana' }],
       requests: 1,
-      submitted: 'Vote recorded. Waiting for the next update.',
+      submitted: 'Voto registrado. Aguarde a próxima atualização.',
       voteButtonsDisabled: true,
     });
   });
@@ -89,7 +89,7 @@ describe('VoterVotePage', () => {
     const user = userEvent.setup();
     renderVotingSession();
 
-    await user.click(await screen.findByRole('button', { name: 'Cast a blank vote' }));
+    await user.click(await screen.findByRole('button', { name: 'Votar em branco' }));
 
     expect(castVote).toHaveBeenCalledWith(SESSION_TOKEN, {
       roundId: ROUND_ID,
@@ -106,7 +106,7 @@ describe('VoterVotePage', () => {
     );
     const user = userEvent.setup();
     renderVotingSession();
-    const voteButton = await screen.findByRole('button', { name: 'Vote for Ana' });
+    const voteButton = await screen.findByRole('button', { name: 'Votar em Ana' });
 
     await user.click(voteButton);
 
@@ -114,7 +114,7 @@ describe('VoterVotePage', () => {
       error: screen.getByRole('alert').textContent,
       disabled: voteButton.hasAttribute('disabled'),
     }).toEqual({
-      error: 'VOTER_ALREADY_VOTEDThis voter has already voted in this round.',
+      error: 'Seu voto nesta rodada já foi registrado.',
       disabled: true,
     });
   });
@@ -125,7 +125,7 @@ describe('VoterVotePage', () => {
     );
     const user = userEvent.setup();
     renderVotingSession();
-    const voteButton = await screen.findByRole('button', { name: 'Vote for Ana' });
+    const voteButton = await screen.findByRole('button', { name: 'Votar em Ana' });
 
     await user.click(voteButton);
 
@@ -133,7 +133,7 @@ describe('VoterVotePage', () => {
       error: screen.getByRole('alert').textContent,
       disabled: voteButton.hasAttribute('disabled'),
     }).toEqual({
-      error: 'ROUND_EXPIREDThis round has expired.',
+      error: 'O prazo desta votação terminou.',
       disabled: true,
     });
   });
@@ -146,6 +146,6 @@ describe('VoterVotePage', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByRole('timer', { name: 'Time remaining' })).toHaveTextContent('00:30');
+    expect(screen.getByRole('timer', { name: 'Tempo restante' })).toHaveTextContent('00:30');
   });
 });

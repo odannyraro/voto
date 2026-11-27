@@ -25,9 +25,9 @@ export function DoubleConfirmDialog({
   title,
   description,
   confirmationTitle,
-  inputLabel = 'Type the title to confirm',
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  inputLabel = 'Digite o nome do cargo para confirmar',
+  confirmLabel = 'Confirmar',
+  cancelLabel = 'Voltar',
   onConfirm,
   onCancel,
 }: DoubleConfirmDialogProps): ReactElement | null {

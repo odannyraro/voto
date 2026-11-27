@@ -4,6 +4,7 @@ import type { FormEvent, ReactElement } from 'react';
 import { adminApi } from '../../../api/admin-api';
 import { ApiError } from '../../../api/api-client';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { getApiErrorMessage } from '../../../lib/ui-messages';
 
 /** Propriedades para gerar e administrar credenciais de eleitores. */
 export interface VotersTabProps {
@@ -58,7 +59,7 @@ export function VotersTab({
     }
 
     if (labels.length > parsedBody.data.count) {
-      setValidationMessage('Provide no more labels than the number of voters.');
+      setValidationMessage('Informe no máximo um rótulo por eleitor.');
       return;
     }
 
@@ -68,9 +69,11 @@ export function VotersTab({
       const result = await adminApi.credentialVoters(token, electionId, parsedBody.data);
       onElectionChange(result.election);
       setLabelsText('');
-      setFeedbackMessage(`${result.codes.length} voter codes generated.`);
+      setFeedbackMessage(`${result.codes.length} códigos de acesso gerados.`);
     } catch (error: unknown) {
-      setErrorMessage(getRequestErrorMessage(error, 'Unable to generate voter codes.'));
+      setErrorMessage(
+        getRequestErrorMessage(error, 'Não foi possível gerar os códigos de acesso.'),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -92,8 +95,8 @@ export function VotersTab({
     } catch (error: unknown) {
       setErrorMessage(
         error instanceof Error
-          ? `Unable to copy voter codes: ${error.message}`
-          : 'Unable to copy voter codes. Check clipboard permissions and try again.',
+          ? 'Não foi possível copiar os códigos de acesso. Confira a permissão da área de transferência e tente novamente.'
+          : 'Não foi possível copiar os códigos de acesso. Tente novamente.',
       );
     }
   }
@@ -116,9 +119,11 @@ export function VotersTab({
     try {
       const updatedState = await adminApi.revokeVoter({ token, electionId, voterId });
       onElectionChange(updatedState);
-      setFeedbackMessage('Voter credential revoked.');
+      setFeedbackMessage('Código de acesso revogado.');
     } catch (error: unknown) {
-      setErrorMessage(getRequestErrorMessage(error, 'Unable to revoke this voter credential.'));
+      setErrorMessage(
+        getRequestErrorMessage(error, 'Não foi possível revogar este código de acesso.'),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -128,11 +133,11 @@ export function VotersTab({
 
   return (
     <section aria-labelledby="voters-heading">
-      <h2 id="voters-heading">Voters</h2>
+      <h2 id="voters-heading">Eleitores</h2>
       {errorMessage !== null && <p role="alert">{errorMessage}</p>}
       {feedbackMessage !== null && <p role="status">{feedbackMessage}</p>}
       <form noValidate onSubmit={handleGenerate}>
-        <label htmlFor="voter-count">Number of voters</label>
+        <label htmlFor="voter-count">Quantidade de eleitores</label>
         <input
           id="voter-count"
           type="number"
@@ -143,7 +148,7 @@ export function VotersTab({
           value={count}
           onChange={(event) => setCount(event.currentTarget.value)}
         />
-        <label htmlFor="voter-labels">Optional voter labels, one per line</label>
+        <label htmlFor="voter-labels">Rótulos opcionais, um por linha</label>
         <textarea
           id="voter-labels"
           value={labelsText}
@@ -151,42 +156,42 @@ export function VotersTab({
         />
         {validationMessage !== null && <p role="alert">{validationMessage}</p>}
         <button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Generating...' : 'Generate codes'}
+          {isSubmitting ? 'Gerando...' : 'Gerar códigos'}
         </button>
       </form>
       {state.election.voters.length === 0 ? (
-        <p>No voter codes have been generated.</p>
+        <p>Nenhum código de acesso foi gerado.</p>
       ) : (
         <>
           <button
             type="button"
             disabled={isSubmitting}
-            onClick={() => void copyCodes(voterCodes, 'Voter codes copied.')}
+            onClick={() => void copyCodes(voterCodes, 'Códigos de acesso copiados.')}
           >
-            Copy all codes
+            Copiar todos os códigos
           </button>
-          <table aria-label="Voter credentials">
+          <table aria-label="Códigos de acesso dos eleitores">
             <thead>
               <tr>
-                <th scope="col">Label</th>
-                <th scope="col">Code</th>
-                <th scope="col">Status</th>
-                <th scope="col">Actions</th>
+                <th scope="col">Rótulo</th>
+                <th scope="col">Código</th>
+                <th scope="col">Situação</th>
+                <th scope="col">Ações</th>
               </tr>
             </thead>
             <tbody>
               {state.election.voters.map((voter) => (
                 <tr key={voter.id}>
-                  <td>{voter.label ?? 'Unlabeled voter'}</td>
+                  <td>{voter.label ?? 'Sem rótulo'}</td>
                   <td>{voter.code}</td>
-                  <td>{voter.status}</td>
+                  <td>{voter.status === 'CREDENTIALED' ? 'Ativo' : 'Revogado'}</td>
                   <td>
                     <button
                       type="button"
                       disabled={isSubmitting}
-                      onClick={() => void copyCodes(voter.code, 'Code copied.')}
+                      onClick={() => void copyCodes(voter.code, 'Código copiado.')}
                     >
-                      Copy code for {voter.label ?? voter.id}
+                      Copiar código de {voter.label ?? voter.id}
                     </button>
                     {voter.status === 'CREDENTIALED' && (
                       <button
@@ -194,7 +199,7 @@ export function VotersTab({
                         disabled={isSubmitting}
                         onClick={() => setVoterToRevoke(voter)}
                       >
-                        Revoke {voter.label ?? voter.id}
+                        Revogar acesso de {voter.label ?? voter.id}
                       </button>
                     )}
                   </td>
@@ -206,13 +211,13 @@ export function VotersTab({
       )}
       <ConfirmDialog
         open={voterToRevoke !== null}
-        title="Revoke voter credential?"
+        title="Revogar código de acesso?"
         description={
           voterToRevoke === null
             ? ''
-            : `Revoke the credential for ${voterToRevoke.label ?? voterToRevoke.id}?`
+            : `Deseja revogar o código de ${voterToRevoke.label ?? voterToRevoke.id}?`
         }
-        confirmLabel="Revoke voter"
+        confirmLabel="Revogar código"
         onConfirm={() => void revokeVoter()}
         onCancel={() => setVoterToRevoke(null)}
       />
@@ -229,12 +234,12 @@ export function VotersTab({
  */
 function getCredentialValidationMessage(count: number, labelCount: number): string {
   if (!Number.isInteger(count) || count < 1 || count > 500) {
-    return 'Number of voters must be a whole number from 1 to 500.';
+    return 'A quantidade deve ser um número inteiro entre 1 e 500.';
   }
   if (labelCount > count) {
-    return 'Provide no more labels than the number of voters.';
+    return 'Informe no máximo um rótulo por eleitor.';
   }
-  return 'Voter labels must not be empty.';
+  return 'Os rótulos dos eleitores não podem estar vazios.';
 }
 
 /**
@@ -246,10 +251,10 @@ function getCredentialValidationMessage(count: number, labelCount: number): stri
  */
 function getRequestErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError && error.error !== undefined) {
-    return `${error.error.code}: ${error.error.message}`;
+    return getApiErrorMessage(error.error.code);
   }
   if (error instanceof Error) {
-    return error.message;
+    return fallback;
   }
   return fallback;
 }

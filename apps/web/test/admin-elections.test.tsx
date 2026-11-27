@@ -91,7 +91,7 @@ describe('administrator elections', () => {
     renderWithProviders(<App />, { initialEntries: ['/admin'] });
 
     expect(
-      await screen.findByText('No elections yet. Create one to get started.'),
+      await screen.findByText('Nenhuma eleição criada ainda. Crie uma para começar.'),
     ).toBeInTheDocument();
   });
 
@@ -99,8 +99,8 @@ describe('administrator elections', () => {
     elections = [firstElection, openElection];
     renderWithProviders(<App />, { initialEntries: ['/admin'] });
 
-    expect(await screen.findByRole('list', { name: 'Elections' })).toHaveTextContent(
-      'Student CouncilStatus: DRAFT2 positions12 votersFaculty ElectionStatus: OPEN1 position5 voters',
+    expect(await screen.findByRole('list', { name: 'Eleições' })).toHaveTextContent(
+      'Student CouncilSituação: Em preparação2 cargos12 eleitoresFaculty ElectionSituação: Aberta1 cargo5 eleitores',
     );
   });
 
@@ -115,17 +115,19 @@ describe('administrator elections', () => {
     );
     renderWithProviders(<App />, { initialEntries: ['/admin'] });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Elections are unavailable.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Ocorreu um erro inesperado. Tente novamente.',
+    );
   });
 
   it('does not create an election when its name is empty', async () => {
     const user = userEvent.setup();
     renderWithProviders(<App />, { initialEntries: ['/admin'] });
 
-    await screen.findByRole('heading', { name: 'Administrator dashboard' });
-    await user.click(screen.getByRole('button', { name: 'Create election' }));
+    await screen.findByRole('heading', { name: 'Painel administrativo' });
+    await user.click(screen.getByRole('button', { name: 'Criar eleição' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Election name is required.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Informe o nome da eleição.');
   });
 
   it.each(['4', '3601', '60.5'])(
@@ -133,18 +135,18 @@ describe('administrator elections', () => {
     async (duration) => {
       const user = userEvent.setup();
       renderWithProviders(<App />, { initialEntries: ['/admin'] });
-      await screen.findByRole('heading', { name: 'Administrator dashboard' });
-      await user.type(screen.getByRole('textbox', { name: 'Election name' }), 'New election');
+      await screen.findByRole('heading', { name: 'Painel administrativo' });
+      await user.type(screen.getByRole('textbox', { name: 'Nome da eleição' }), 'New election');
       fireEvent.change(
-        screen.getByRole('spinbutton', { name: 'Default voting duration (seconds)' }),
+        screen.getByRole('spinbutton', { name: 'Duração padrão da votação (segundos)' }),
         {
           target: { value: duration },
         },
       );
-      await user.click(screen.getByRole('button', { name: 'Create election' }));
+      await user.click(screen.getByRole('button', { name: 'Criar eleição' }));
 
       expect(screen.getByRole('alert')).toHaveTextContent(
-        'Voting duration must be a whole number from 5 to 3600 seconds.',
+        'A duração da votação deve ser um número inteiro entre 5 e 3.600 segundos.',
       );
     },
   );
@@ -152,15 +154,15 @@ describe('administrator elections', () => {
   it.each(['5', '3600'])('accepts the voting duration boundary of %s seconds', async (duration) => {
     const user = userEvent.setup();
     renderWithProviders(<App />, { initialEntries: ['/admin'] });
-    await screen.findByRole('heading', { name: 'Administrator dashboard' });
-    await user.type(screen.getByRole('textbox', { name: 'Election name' }), 'New election');
+    await screen.findByRole('heading', { name: 'Painel administrativo' });
+    await user.type(screen.getByRole('textbox', { name: 'Nome da eleição' }), 'New election');
     fireEvent.change(
-      screen.getByRole('spinbutton', { name: 'Default voting duration (seconds)' }),
+      screen.getByRole('spinbutton', { name: 'Duração padrão da votação (segundos)' }),
       {
         target: { value: duration },
       },
     );
-    await user.click(screen.getByRole('button', { name: 'Create election' }));
+    await user.click(screen.getByRole('button', { name: 'Criar eleição' }));
 
     expect(createdBody).toEqual({ name: 'New election', defaultVotingSeconds: Number(duration) });
   });
@@ -169,20 +171,20 @@ describe('administrator elections', () => {
     const user = userEvent.setup();
     renderWithProviders(<App />, { initialEntries: ['/admin'] });
 
-    await screen.findByRole('heading', { name: 'Administrator dashboard' });
-    await user.type(screen.getByRole('textbox', { name: 'Election name' }), 'New election');
+    await screen.findByRole('heading', { name: 'Painel administrativo' });
+    await user.type(screen.getByRole('textbox', { name: 'Nome da eleição' }), 'New election');
     fireEvent.change(
-      screen.getByRole('spinbutton', { name: 'Default voting duration (seconds)' }),
+      screen.getByRole('spinbutton', { name: 'Duração padrão da votação (segundos)' }),
       {
         target: { value: '90' },
       },
     );
-    await user.click(screen.getByRole('button', { name: 'Create election' }));
+    await user.click(screen.getByRole('button', { name: 'Criar eleição' }));
 
     expect({
       requestBody: createdBody,
-      destination: await screen.findByRole('heading', { name: 'Election configuration' }),
-      electionId: screen.getByText(`Election ID: ${NEW_ELECTION_ID}`),
+      destination: await screen.findByRole('heading', { name: 'Configuração da eleição' }),
+      electionId: screen.getByText(`Identificador da eleição: ${NEW_ELECTION_ID}`),
     }).toEqual({
       requestBody: { name: 'New election', defaultVotingSeconds: 90 },
       destination: expect.any(HTMLElement),
@@ -202,10 +204,12 @@ describe('administrator elections', () => {
     const user = userEvent.setup();
     renderWithProviders(<App />, { initialEntries: ['/admin'] });
 
-    await screen.findByRole('heading', { name: 'Administrator dashboard' });
-    await user.type(screen.getByRole('textbox', { name: 'Election name' }), 'New election');
-    await user.click(screen.getByRole('button', { name: 'Create election' }));
+    await screen.findByRole('heading', { name: 'Painel administrativo' });
+    await user.type(screen.getByRole('textbox', { name: 'Nome da eleição' }), 'New election');
+    await user.click(screen.getByRole('button', { name: 'Criar eleição' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Election could not be created.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Ocorreu um erro inesperado. Tente novamente.',
+    );
   });
 });

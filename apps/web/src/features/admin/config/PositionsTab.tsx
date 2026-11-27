@@ -11,6 +11,7 @@ import type { FormEvent, ReactElement } from 'react';
 import { adminApi } from '../../../api/admin-api';
 import { ApiError } from '../../../api/api-client';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { getApiErrorMessage } from '../../../lib/ui-messages';
 
 /** Propriedades para administrar cargos usando o agregado atualizado pela API. */
 export interface PositionsTabProps {
@@ -54,7 +55,7 @@ export function PositionsTab({
       onElectionChange(updatedElection);
       return true;
     } catch (error: unknown) {
-      setErrorMessage(getRequestErrorMessage(error, 'Unable to create the position.'));
+      setErrorMessage(getRequestErrorMessage(error, 'Não foi possível criar o cargo.'));
       return false;
     } finally {
       setIsMutating(false);
@@ -82,7 +83,7 @@ export function PositionsTab({
       setEditingPositionId(null);
       return true;
     } catch (error: unknown) {
-      setErrorMessage(getRequestErrorMessage(error, 'Unable to update the position.'));
+      setErrorMessage(getRequestErrorMessage(error, 'Não foi possível atualizar o cargo.'));
       return false;
     } finally {
       setIsMutating(false);
@@ -111,7 +112,7 @@ export function PositionsTab({
       });
       onElectionChange(updatedElection);
     } catch (error: unknown) {
-      setErrorMessage(getRequestErrorMessage(error, 'Unable to remove the position.'));
+      setErrorMessage(getRequestErrorMessage(error, 'Não foi possível remover o cargo.'));
     } finally {
       setIsMutating(false);
     }
@@ -127,19 +128,19 @@ export function PositionsTab({
 
   return (
     <section aria-labelledby="positions-heading">
-      <h2 id="positions-heading">Positions</h2>
+      <h2 id="positions-heading">Cargos</h2>
       {errorMessage !== null && <p role="alert">{errorMessage}</p>}
       {positions.length === 0 ? (
-        <p>No positions have been added.</p>
+        <p>Nenhum cargo foi adicionado.</p>
       ) : (
-        <ul aria-label="Election positions">
+        <ul aria-label="Cargos da eleição">
           {positions.map((position) => (
             <li key={position.id}>
               {editingPositionId === position.id ? (
                 <PositionForm
                   initialTitle={position.title}
                   initialTiebreak={position.tiebreak}
-                  submitLabel="Save position"
+                  submitLabel="Salvar cargo"
                   disabled={isMutating}
                   onSubmit={(body) => updatePosition(position.id, body)}
                   onCancel={() => setEditingPositionId(null)}
@@ -147,13 +148,13 @@ export function PositionsTab({
               ) : (
                 <>
                   <h3>{position.title}</h3>
-                  <p>Tie-break rule: {getTiebreakLabel(position.tiebreak)}</p>
+                  <p>Regra de desempate: {getTiebreakLabel(position.tiebreak)}</p>
                   <button
                     type="button"
                     disabled={isMutating}
                     onClick={() => startEditing(position.id)}
                   >
-                    Edit {position.title}
+                    Editar {position.title}
                   </button>
                   <button
                     type="button"
@@ -163,7 +164,7 @@ export function PositionsTab({
                       setPositionToRemove(position);
                     }}
                   >
-                    Remove {position.title}
+                    Remover {position.title}
                   </button>
                 </>
               )}
@@ -175,20 +176,20 @@ export function PositionsTab({
         <PositionForm
           initialTitle=""
           initialTiebreak="YOUNGEST"
-          submitLabel="Add position"
+          submitLabel="Adicionar cargo"
           disabled={isMutating}
           onSubmit={createPosition}
         />
       )}
       <ConfirmDialog
         open={positionToRemove !== null}
-        title="Remove position?"
+        title="Remover cargo?"
         description={
           positionToRemove === null
             ? ''
-            : `Remove ${positionToRemove.title} from this election? The server will validate whether removal is allowed.`
+            : `Deseja remover ${positionToRemove.title} desta eleição? A administração da eleição validará se a remoção é permitida.`
         }
-        confirmLabel="Remove position"
+        confirmLabel="Remover cargo"
         onConfirm={() => void removePosition()}
         onCancel={() => setPositionToRemove(null)}
       />
@@ -232,7 +233,7 @@ function PositionForm({
     const parsedBody = createPositionBodySchema.safeParse({ title, tiebreak });
     if (!parsedBody.success) {
       setValidationMessage(
-        title.trim() === '' ? 'Position title is required.' : 'Enter a valid position title.',
+        title.trim() === '' ? 'Informe o nome do cargo.' : 'Informe um nome válido para o cargo.',
       );
       return;
     }
@@ -247,8 +248,8 @@ function PositionForm({
 
   return (
     <form noValidate onSubmit={handleSubmit}>
-      <h3>{submitLabel === 'Add position' ? 'Add a position' : 'Edit position'}</h3>
-      <label htmlFor="position-title">Position title</label>
+      <h3>{submitLabel === 'Adicionar cargo' ? 'Adicionar cargo' : 'Editar cargo'}</h3>
+      <label htmlFor="position-title">Nome do cargo</label>
       <input
         id="position-title"
         type="text"
@@ -256,7 +257,7 @@ function PositionForm({
         value={title}
         onChange={(event) => setTitle(event.currentTarget.value)}
       />
-      <label htmlFor="position-tiebreak">Tie-break rule</label>
+      <label htmlFor="position-tiebreak">Regra de desempate</label>
       <select
         id="position-tiebreak"
         value={tiebreak}
@@ -267,9 +268,9 @@ function PositionForm({
           }
         }}
       >
-        <option value="YOUNGEST">Youngest candidate</option>
-        <option value="OLDEST">Oldest candidate</option>
-        <option value="MOST_REMAINING_TIME">Most remaining university time</option>
+        <option value="YOUNGEST">Pessoa candidata mais jovem</option>
+        <option value="OLDEST">Pessoa candidata mais velha</option>
+        <option value="MOST_REMAINING_TIME">Maior tempo restante na universidade</option>
       </select>
       {validationMessage !== null && <p role="alert">{validationMessage}</p>}
       <button type="submit" disabled={disabled}>
@@ -277,7 +278,7 @@ function PositionForm({
       </button>
       {onCancel !== undefined && (
         <button type="button" disabled={disabled} onClick={onCancel}>
-          Cancel editing
+          Cancelar edição
         </button>
       )}
     </form>
@@ -309,11 +310,11 @@ function getQueueOrderedPositions(election: Election): Election['positions'][num
 function getTiebreakLabel(tiebreak: TiebreakRule): string {
   switch (tiebreak) {
     case 'YOUNGEST':
-      return 'Youngest candidate';
+      return 'Pessoa candidata mais jovem';
     case 'OLDEST':
-      return 'Oldest candidate';
+      return 'Pessoa candidata mais velha';
     case 'MOST_REMAINING_TIME':
-      return 'Most remaining university time';
+      return 'Maior tempo restante na universidade';
   }
 }
 
@@ -332,14 +333,14 @@ function isTiebreakRule(value: string): value is TiebreakRule {
  *
  * @param error - Falha recebida na chamada REST.
  * @param fallback - Mensagem para uma falha sem payload de API.
- * @returns Código e mensagem da API ou a mensagem alternativa.
+ * @returns Mensagem traduzida da API ou a mensagem alternativa.
  */
 function getRequestErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError && error.error !== undefined) {
-    return `${error.error.code}: ${error.error.message}`;
+    return getApiErrorMessage(error.error.code);
   }
   if (error instanceof Error) {
-    return error.message;
+    return fallback;
   }
 
   return fallback;

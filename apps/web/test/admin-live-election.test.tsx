@@ -304,8 +304,8 @@ async function renderLivePanel(): Promise<void> {
   renderWithProviders(<App createSocketClient={() => socket} />, {
     initialEntries: [`/admin/eleicoes/${ELECTION_ID}/configurar`],
   });
-  await user.click(await screen.findByRole('tab', { name: 'Live' }));
-  await screen.findByRole('tabpanel', { name: 'Live' });
+  await user.click(await screen.findByRole('tab', { name: 'Ao vivo' }));
+  await screen.findByRole('tabpanel', { name: 'Ao vivo' });
 }
 
 describe('administrator live election state', () => {
@@ -313,7 +313,7 @@ describe('administrator live election state', () => {
     await renderLivePanel();
 
     expect({
-      ready: await screen.findByText('Ready to open: President'),
+      ready: await screen.findByText('Pronto para iniciar: President'),
       watchedElections: socket.watchedElections,
     }).toEqual({
       ready: expect.any(HTMLElement),
@@ -329,7 +329,7 @@ describe('administrator live election state', () => {
     });
     socket.emitAdminState(socketState);
 
-    expect(await screen.findByText('No positions remain in the queue.')).toBeInTheDocument();
+    expect(await screen.findByText('Não há mais cargos na fila.')).toBeInTheDocument();
   });
 
   it('reports an incomplete active-round snapshot from the server', async () => {
@@ -342,7 +342,9 @@ describe('administrator live election state', () => {
     );
 
     expect(
-      await screen.findByText('The server reports an active round but did not provide its state.'),
+      await screen.findByText(
+        'O servidor informa uma rodada ativa, mas não forneceu os dados dela.',
+      ),
     ).toBeInTheDocument();
   });
 
@@ -351,7 +353,7 @@ describe('administrator live election state', () => {
     socket.reconnect();
 
     expect({
-      ready: await screen.findByText('Ready to open: President'),
+      ready: await screen.findByText('Pronto para iniciar: President'),
       watchedElections: socket.watchedElections,
     }).toEqual({
       ready: expect.any(HTMLElement),
@@ -362,14 +364,14 @@ describe('administrator live election state', () => {
   it('shows the in-progress round and closes it using its current round identifier', async () => {
     const user = userEvent.setup();
     await renderLivePanel();
-    await user.click(screen.getByRole('button', { name: 'Open round' }));
-    await screen.findByText('Voting in progress: President');
+    await user.click(screen.getByRole('button', { name: 'Abrir rodada' }));
+    await screen.findByText('Votação em andamento: President');
 
     expect({
       body: openRoundBody,
-      progress: screen.getByText('Votes: 0 of 3'),
-      deadline: screen.getByText(/Voting deadline:/),
-      countdown: screen.getByRole('timer', { name: 'Time remaining' }),
+      progress: screen.getByText('Votos: 0 de 3'),
+      deadline: screen.getByText(/Prazo da votação:/),
+      countdown: screen.getByRole('timer', { name: 'Tempo restante' }),
     }).toEqual({
       body: { positionId: POSITION.id },
       progress: expect.any(HTMLElement),
@@ -377,21 +379,21 @@ describe('administrator live election state', () => {
       countdown: expect.any(HTMLElement),
     });
 
-    await user.click(screen.getByRole('button', { name: 'Close round early' }));
+    await user.click(screen.getByRole('button', { name: 'Encerrar rodada antecipadamente' }));
 
     expect({
       roundId: closedRoundId,
-      ready: await screen.findByText('Ready to open: President'),
+      ready: await screen.findByText('Pronto para iniciar: President'),
     }).toEqual({ roundId: 'round-1', ready: expect.any(HTMLElement) });
   });
 
   it('sends a validated custom duration when opening a round', async () => {
     const user = userEvent.setup();
     await renderLivePanel();
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Round duration (seconds)' }), {
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Duração da rodada (segundos)' }), {
       target: { value: '120' },
     });
-    await user.click(screen.getByRole('button', { name: 'Open round' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir rodada' }));
 
     expect(openRoundBody).toEqual({ positionId: POSITION.id, durationSeconds: 120 });
   });
@@ -399,17 +401,17 @@ describe('administrator live election state', () => {
   it.each(['4', '3601', '60.5'])('rejects invalid round duration %s', async (duration) => {
     const user = userEvent.setup();
     await renderLivePanel();
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Round duration (seconds)' }), {
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Duração da rodada (segundos)' }), {
       target: { value: duration },
     });
-    await user.click(screen.getByRole('button', { name: 'Open round' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir rodada' }));
 
     expect({
       message: screen.getByRole('alert'),
       requestBody: openRoundBody,
     }).toEqual({
       message: expect.objectContaining({
-        textContent: 'Round duration must be a whole number from 5 to 3600 seconds.',
+        textContent: 'A duração da votação deve ser um número inteiro entre 5 e 3.600 segundos.',
       }),
       requestBody: undefined,
     });
@@ -421,10 +423,10 @@ describe('administrator live election state', () => {
     await renderLivePanel();
 
     expect({
-      outcome: await screen.findByText('Candidate elected: Ana.'),
-      counts: screen.getByText('Ana: 2 votes'),
-      totals: screen.getByText('Valid votes: 2; blank votes: 1.'),
-      tiebreak: screen.getByText('The position tie-break rule determined the result.'),
+      outcome: await screen.findByText('Pessoa eleita: Ana.'),
+      counts: screen.getByText('Ana: 2 votos'),
+      totals: screen.getByText('Votos válidos: 2; votos em branco: 1.'),
+      tiebreak: screen.getByText('A regra de desempate do cargo determinou o resultado.'),
     }).toEqual({
       outcome: expect.any(HTMLElement),
       counts: expect.any(HTMLElement),
@@ -432,12 +434,12 @@ describe('administrator live election state', () => {
       tiebreak: expect.any(HTMLElement),
     });
 
-    await user.click(screen.getByRole('button', { name: 'Release results to voters' }));
-    const releasedMessage = await screen.findByText('Results released to voters.');
+    await user.click(screen.getByRole('button', { name: 'Divulgar resultado aos eleitores' }));
+    const releasedMessage = await screen.findByText('Resultado divulgado aos eleitores.');
 
     expect({
       releasedRoundId,
-      releaseButton: screen.queryByRole('button', { name: 'Release results to voters' }),
+      releaseButton: screen.queryByRole('button', { name: 'Divulgar resultado aos eleitores' }),
       releasedMessage,
     }).toEqual({
       releasedRoundId: 'round-1',
@@ -451,13 +453,13 @@ describe('administrator live election state', () => {
     const user = userEvent.setup();
     await renderLivePanel();
 
-    expect(await screen.findByText('Runoff required between Ana and Bia.')).toBeInTheDocument();
+    expect(await screen.findByText('Segundo turno entre Ana e Bia.')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Open runoff' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir segundo turno' }));
 
     expect({
       positionId: openedRunoffPositionId,
-      votingRound: await screen.findByText('Voting in progress: President'),
+      votingRound: await screen.findByText('Votação em andamento: President'),
     }).toEqual({
       positionId: POSITION.id,
       votingRound: expect.any(HTMLElement),
@@ -469,8 +471,8 @@ describe('administrator live election state', () => {
     await renderLivePanel();
 
     expect({
-      outcome: await screen.findByText('No valid votes were cast.'),
-      runoffButton: screen.queryByRole('button', { name: 'Open runoff' }),
+      outcome: await screen.findByText('Não houve votos válidos.'),
+      runoffButton: screen.queryByRole('button', { name: 'Abrir segundo turno' }),
     }).toEqual({ outcome: expect.any(HTMLElement), runoffButton: null });
   });
 
@@ -479,14 +481,16 @@ describe('administrator live election state', () => {
     releaseFailure = true;
     const user = userEvent.setup();
     await renderLivePanel();
-    await user.click(await screen.findByRole('button', { name: 'Release results to voters' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Divulgar resultado aos eleitores' }),
+    );
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'ROUND_NOT_OPEN: Round is not available.',
+      'Esta rodada não está aberta para votação.',
     );
     expect({
       releasedRoundId,
-      releaseButton: screen.getByRole('button', { name: 'Release results to voters' }),
+      releaseButton: screen.getByRole('button', { name: 'Divulgar resultado aos eleitores' }),
     }).toEqual({
       releasedRoundId: undefined,
       releaseButton: expect.any(HTMLElement),
@@ -497,11 +501,11 @@ describe('administrator live election state', () => {
     serverState = makeResultState('ELECTED');
     const user = userEvent.setup();
     await renderLivePanel();
-    await user.click(await screen.findByRole('button', { name: 'Undo last action' }));
+    await user.click(await screen.findByRole('button', { name: 'Desfazer última ação' }));
 
     expect({
       undoCount,
-      result: screen.queryByRole('heading', { name: 'Last round result' }),
+      result: screen.queryByRole('heading', { name: 'Resultado da última rodada' }),
     }).toEqual({ undoCount: 1, result: null });
   });
 
@@ -509,13 +513,13 @@ describe('administrator live election state', () => {
     serverState = makeResultState('ELECTED');
     const user = userEvent.setup();
     await renderLivePanel();
-    await user.click(await screen.findByRole('button', { name: 'Annul round' }));
-    const confirmation = screen.getByRole('dialog', { name: 'Annul round?' });
-    await user.click(within(confirmation).getByRole('button', { name: 'Annul round' }));
+    await user.click(await screen.findByRole('button', { name: 'Anular rodada' }));
+    const confirmation = screen.getByRole('dialog', { name: 'Anular rodada?' });
+    await user.click(within(confirmation).getByRole('button', { name: 'Anular rodada' }));
 
     expect({
       roundId: annulledRoundId,
-      result: screen.queryByRole('heading', { name: 'Last round result' }),
+      result: screen.queryByRole('heading', { name: 'Resultado da última rodada' }),
     }).toEqual({ roundId: 'round-1', result: null });
   });
 
@@ -530,11 +534,11 @@ describe('administrator live election state', () => {
     });
     const user = userEvent.setup();
     await renderLivePanel();
-    await user.click(await screen.findByRole('button', { name: 'Attach Ana' }));
+    await user.click(await screen.findByRole('button', { name: 'Vincular Ana' }));
 
     expect({
       candidateId: attachedCandidateId,
-      ready: await screen.findByText('Ready to open: President'),
+      ready: await screen.findByText('Pronto para iniciar: President'),
     }).toEqual({ candidateId: 'candidate-1', ready: expect.any(HTMLElement) });
   });
 
@@ -545,11 +549,11 @@ describe('administrator live election state', () => {
     });
     const user = userEvent.setup();
     await renderLivePanel();
-    await user.click(await screen.findByRole('button', { name: 'Defer President' }));
+    await user.click(await screen.findByRole('button', { name: 'Adiar President' }));
 
     expect({
       positionId: deferredPositionId,
-      state: await screen.findByText('No positions remain in the queue.'),
+      state: await screen.findByText('Não há mais cargos na fila.'),
     }).toEqual({ positionId: POSITION.id, state: expect.any(HTMLElement) });
   });
 
@@ -560,11 +564,13 @@ describe('administrator live election state', () => {
     });
     const user = userEvent.setup();
     await renderLivePanel();
-    await user.click(await screen.findByRole('button', { name: 'Cancel President' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-    const confirmation = screen.getByRole('dialog', { name: 'Confirm cancellation' });
-    const input = within(confirmation).getByRole('textbox', { name: 'Type the title to confirm' });
-    const confirmButton = within(confirmation).getByRole('button', { name: 'Cancel position' });
+    await user.click(await screen.findByRole('button', { name: 'Cancelar President' }));
+    await user.click(screen.getByRole('button', { name: 'Continuar' }));
+    const confirmation = screen.getByRole('dialog', { name: 'Confirmar cancelamento' });
+    const input = within(confirmation).getByRole('textbox', {
+      name: 'Digite o nome do cargo para confirmar',
+    });
+    const confirmButton = within(confirmation).getByRole('button', { name: 'Cancelar cargo' });
 
     expect(confirmButton).toBeDisabled();
 
@@ -578,7 +584,7 @@ describe('administrator live election state', () => {
     expect({
       positionId: cancelledPositionId,
       body: cancelBody,
-      state: await screen.findByText('No positions remain in the queue.'),
+      state: await screen.findByText('Não há mais cargos na fila.'),
     }).toEqual({
       positionId: POSITION.id,
       body: { confirmTitle: 'President' },
@@ -590,9 +596,9 @@ describe('administrator live election state', () => {
     await renderLivePanel();
 
     expect({
-      attach: screen.queryByRole('button', { name: /^Attach / }),
-      defer: screen.queryByRole('button', { name: /^Defer / }),
-      cancel: screen.queryByRole('button', { name: /^Cancel / }),
+      attach: screen.queryByRole('button', { name: /^Vincular / }),
+      defer: screen.queryByRole('button', { name: /^Adiar / }),
+      cancel: screen.queryByRole('button', { name: /^Cancelar / }),
     }).toEqual({ attach: null, defer: null, cancel: null });
   });
 });

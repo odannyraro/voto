@@ -17,10 +17,10 @@ export function AdminDashboardPage(): ReactElement {
 
   return (
     <main>
-      <h1>Administrator dashboard</h1>
-      <p>Signed in as {admin.username}</p>
+      <h1>Painel administrativo</h1>
+      <p>Sessão iniciada como {admin.username}</p>
       <button type="button" onClick={logout}>
-        Log out
+        Sair
       </button>
       <AdminElectionsPage token={token} />
     </main>

@@ -124,8 +124,9 @@ async function renderConfiguration(tab: 'Voters' | 'Order'): Promise<void> {
     initialEntries: [`/admin/eleicoes/${ELECTION_ID}/configurar`],
   });
 
-  await user.click(await screen.findByRole('tab', { name: tab }));
-  await screen.findByRole('tabpanel', { name: tab });
+  const tabLabel = tab === 'Voters' ? 'Eleitores' : 'Ordem';
+  await user.click(await screen.findByRole('tab', { name: tabLabel }));
+  await screen.findByRole('tabpanel', { name: tabLabel });
 }
 
 describe('administrator voter and queue configuration', () => {
@@ -133,12 +134,12 @@ describe('administrator voter and queue configuration', () => {
     await renderConfiguration('Voters');
     const user = userEvent.setup();
 
-    await user.clear(screen.getByRole('spinbutton', { name: 'Number of voters' }));
-    await user.type(screen.getByRole('spinbutton', { name: 'Number of voters' }), count);
-    await user.click(screen.getByRole('button', { name: 'Generate codes' }));
+    await user.clear(screen.getByRole('spinbutton', { name: 'Quantidade de eleitores' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Quantidade de eleitores' }), count);
+    await user.click(screen.getByRole('button', { name: 'Gerar códigos' }));
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Number of voters must be a whole number from 1 to 500.',
+      'A quantidade deve ser um número inteiro entre 1 e 500.',
     );
   });
 
@@ -146,21 +147,21 @@ describe('administrator voter and queue configuration', () => {
     await renderConfiguration('Voters');
     const user = userEvent.setup();
 
-    await user.clear(screen.getByRole('spinbutton', { name: 'Number of voters' }));
-    await user.type(screen.getByRole('spinbutton', { name: 'Number of voters' }), '2');
+    await user.clear(screen.getByRole('spinbutton', { name: 'Quantidade de eleitores' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Quantidade de eleitores' }), '2');
     await user.type(
-      screen.getByRole('textbox', { name: 'Optional voter labels, one per line' }),
+      screen.getByRole('textbox', { name: 'Rótulos opcionais, um por linha' }),
       'Table 3\nTable 4',
     );
-    await user.click(screen.getByRole('button', { name: 'Generate codes' }));
+    await user.click(screen.getByRole('button', { name: 'Gerar códigos' }));
 
     expect({
       request: generatedBody,
-      voterList: await screen.findByRole('table', { name: 'Voter credentials' }),
+      voterList: await screen.findByRole('table', { name: 'Códigos de acesso dos eleitores' }),
     }).toEqual({
       request: { count: 2, labels: ['Table 3', 'Table 4'] },
       voterList: expect.objectContaining({
-        textContent: expect.stringContaining('Table 3CODE0001CREDENTIALED'),
+        textContent: expect.stringContaining('Table 3CODE0001Ativo'),
       }),
     });
   });
@@ -169,16 +170,16 @@ describe('administrator voter and queue configuration', () => {
     await renderConfiguration('Voters');
     const user = userEvent.setup();
     await user.type(
-      screen.getByRole('textbox', { name: 'Optional voter labels, one per line' }),
+      screen.getByRole('textbox', { name: 'Rótulos opcionais, um por linha' }),
       'Table 1\nTable 2',
     );
-    await user.click(screen.getByRole('button', { name: 'Generate codes' }));
+    await user.click(screen.getByRole('button', { name: 'Gerar códigos' }));
 
     expect({
       message: screen.getByRole('alert').textContent,
       request: generatedBody,
     }).toEqual({
-      message: 'Provide no more labels than the number of voters.',
+      message: 'Informe no máximo um rótulo por eleitor.',
       request: undefined,
     });
   });
@@ -190,14 +191,14 @@ describe('administrator voter and queue configuration', () => {
       configurable: true,
       value: { writeText: clipboardWrite },
     });
-    await user.click(screen.getByRole('button', { name: 'Copy code for Table 1' }));
+    await user.click(screen.getByRole('button', { name: 'Copiar código de Table 1' }));
 
     expect({
       copiedText: clipboardWrite.mock.calls[0]?.[0],
       feedback: await screen.findByRole('status'),
     }).toEqual({
       copiedText: 'ABCD2345',
-      feedback: expect.objectContaining({ textContent: 'Code copied.' }),
+      feedback: expect.objectContaining({ textContent: 'Código copiado.' }),
     });
   });
 
@@ -205,22 +206,22 @@ describe('administrator voter and queue configuration', () => {
     await renderConfiguration('Voters');
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'Revoke Table 1' }));
+    await user.click(screen.getByRole('button', { name: 'Revogar acesso de Table 1' }));
     await user.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Revoke voter' }),
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Revogar código' }),
     );
 
     expect(
-      await screen.findByRole('row', { name: /Table 1 ABCD2345 REVOKED/ }),
+      await screen.findByRole('row', { name: /Table 1 ABCD2345 Revogado/ }),
     ).toBeInTheDocument();
   });
 
   it('moves a position in the proposed order without applying it', async () => {
     await renderConfiguration('Order');
     const user = userEvent.setup();
-    const list = screen.getByRole('list', { name: 'Proposed voting order' });
+    const list = screen.getByRole('list', { name: 'Ordem de votação sugerida' });
 
-    await user.click(within(list).getByRole('button', { name: 'Move Treasurer up' }));
+    await user.click(within(list).getByRole('button', { name: 'Mover Treasurer para cima' }));
 
     expect({
       proposedOrder: within(list)
@@ -237,10 +238,10 @@ describe('administrator voter and queue configuration', () => {
     await renderConfiguration('Order');
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'Suggest order' }));
+    await user.click(screen.getByRole('button', { name: 'Sugerir ordem' }));
 
     expect({
-      proposedTitles: within(screen.getByRole('list', { name: 'Proposed voting order' }))
+      proposedTitles: within(screen.getByRole('list', { name: 'Ordem de votação sugerida' }))
         .getAllByRole('listitem')
         .map((item) => item.querySelector('span')?.textContent),
       appliedOrder: appliedQueue,
@@ -250,12 +251,12 @@ describe('administrator voter and queue configuration', () => {
   it('applies the proposed order only after explicit confirmation', async () => {
     await renderConfiguration('Order');
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: 'Suggest order' }));
-    await user.click(screen.getByRole('button', { name: 'Apply order' }));
+    await user.click(screen.getByRole('button', { name: 'Sugerir ordem' }));
+    await user.click(screen.getByRole('button', { name: 'Aplicar ordem' }));
 
     expect(appliedQueue).toBeUndefined();
     await user.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Apply order' }),
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Aplicar ordem' }),
     );
 
     expect(appliedQueue).toEqual(['position-2', 'position-1']);

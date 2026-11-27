@@ -4,6 +4,7 @@ import type { ReactElement } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { adminApi } from '../../../api/admin-api';
 import { ApiError } from '../../../api/api-client';
+import { getApiErrorMessage } from '../../../lib/ui-messages';
 import { useAdminAuth } from '../auth/admin-auth-context';
 import { AdminLivePanel } from '../live/AdminLivePanel';
 import { CandidatesTab } from '../config/CandidatesTab';
@@ -20,6 +21,27 @@ const CONFIGURATION_TABS: readonly ConfigurationTab[] = [
   'Order',
   'Live',
 ];
+
+/**
+ * Traduz a identificação interna de uma aba para o rótulo apresentado na interface.
+ *
+ * @param tab - Chave estável usada para controlar a aba selecionada.
+ * @returns Nome da seção em português.
+ */
+function getConfigurationTabLabel(tab: ConfigurationTab): string {
+  switch (tab) {
+    case 'Positions':
+      return 'Cargos';
+    case 'Candidates':
+      return 'Candidaturas';
+    case 'Voters':
+      return 'Eleitores';
+    case 'Order':
+      return 'Ordem';
+    case 'Live':
+      return 'Ao vivo';
+  }
+}
 
 /**
  * Carrega uma eleição administrativa e apresenta sua configuração de cargos.
@@ -53,9 +75,9 @@ export function AdminElectionConfigurationPage(): ReactElement {
           return;
         }
         setLoadError(
-          error instanceof ApiError
-            ? `${error.error?.code ?? 'API_ERROR'}: ${error.error?.message ?? error.message}`
-            : 'Unable to load this election. Check your connection and try again.',
+          error instanceof ApiError && error.error !== undefined
+            ? getApiErrorMessage(error.error.code)
+            : 'Não foi possível carregar esta eleição. Confira sua conexão e tente novamente.',
         );
       }
     }
@@ -73,7 +95,7 @@ export function AdminElectionConfigurationPage(): ReactElement {
   if (electionId === undefined) {
     return (
       <main>
-        <p role="alert">Election identifier is missing.</p>
+        <p role="alert">O identificador da eleição não foi informado.</p>
       </main>
     );
   }
@@ -81,22 +103,22 @@ export function AdminElectionConfigurationPage(): ReactElement {
   if (loadError !== undefined) {
     return (
       <main>
-        <h1>Election configuration</h1>
+        <h1>Configuração da eleição</h1>
         <p role="alert">{loadError}</p>
       </main>
     );
   }
 
   if (election === undefined) {
-    return <p role="status">Loading election configuration...</p>;
+    return <p role="status">Carregando a configuração da eleição...</p>;
   }
 
   return (
     <main>
-      <h1>Election configuration</h1>
-      <p>Election ID: {electionId}</p>
-      <p>Election: {election.election.name}</p>
-      <div role="tablist" aria-label="Election configuration">
+      <h1>Configuração da eleição</h1>
+      <p>Identificador da eleição: {electionId}</p>
+      <p>Eleição: {election.election.name}</p>
+      <div role="tablist" aria-label="Configuração da eleição">
         {CONFIGURATION_TABS.map((tab) => (
           <button
             key={tab}
@@ -108,7 +130,7 @@ export function AdminElectionConfigurationPage(): ReactElement {
             tabIndex={selectedTab === tab ? 0 : -1}
             onClick={() => setSelectedTab(tab)}
           >
-            {tab}
+            {getConfigurationTabLabel(tab)}
           </button>
         ))}
       </div>

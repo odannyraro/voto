@@ -45,7 +45,7 @@ export function Countdown({ clock }: CountdownProps): ReactElement {
   }, [remainingSeconds]);
 
   return (
-    <time role="timer" aria-label="Time remaining">
+    <time role="timer" aria-label="Tempo restante">
       {formatRemainingTime(remainingSeconds)}
     </time>
   );

@@ -147,12 +147,14 @@ async function fillNewCandidate(
   user: ReturnType<typeof userEvent.setup>,
   age: number,
 ): Promise<void> {
-  await user.type(screen.getByRole('textbox', { name: 'Candidate name' }), 'Beatriz Costa');
-  await user.clear(screen.getByRole('spinbutton', { name: 'Age' }));
-  await user.type(screen.getByRole('spinbutton', { name: 'Age' }), String(age));
-  await user.clear(screen.getByRole('spinbutton', { name: 'Remaining university time (months)' }));
+  await user.type(screen.getByRole('textbox', { name: 'Nome' }), 'Beatriz Costa');
+  await user.clear(screen.getByRole('spinbutton', { name: 'Idade (anos)' }));
+  await user.type(screen.getByRole('spinbutton', { name: 'Idade (anos)' }), String(age));
+  await user.clear(
+    screen.getByRole('spinbutton', { name: 'Tempo restante na universidade (meses)' }),
+  );
   await user.type(
-    screen.getByRole('spinbutton', { name: 'Remaining university time (months)' }),
+    screen.getByRole('spinbutton', { name: 'Tempo restante na universidade (meses)' }),
     '18',
   );
   await user.click(screen.getByRole('checkbox', { name: 'President' }));
@@ -163,10 +165,10 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
-    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
-    await screen.findByRole('heading', { name: 'Candidates' });
+    await user.click(await screen.findByRole('tab', { name: 'Candidaturas' }));
+    await screen.findByRole('heading', { name: 'Candidaturas' });
     await fillNewCandidate(user, 22);
-    await user.click(screen.getByRole('button', { name: 'Add candidate' }));
+    await user.click(screen.getByRole('button', { name: 'Adicionar candidatura' }));
 
     expect({
       body: createdCandidateBody,
@@ -192,17 +194,17 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
-    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
-    await screen.findByRole('heading', { name: 'Candidates' });
+    await user.click(await screen.findByRole('tab', { name: 'Candidaturas' }));
+    await screen.findByRole('heading', { name: 'Candidaturas' });
     await fillNewCandidate(user, age);
-    await user.click(screen.getByRole('button', { name: 'Add candidate' }));
+    await user.click(screen.getByRole('button', { name: 'Adicionar candidatura' }));
 
     expect({
       accepted: createdCandidateBody !== undefined,
       validation: screen.queryByRole('alert')?.textContent,
     }).toEqual({
       accepted: valid,
-      validation: valid ? undefined : 'Candidate age must be a whole number from 16 to 120.',
+      validation: valid ? undefined : 'A idade deve ser um número inteiro entre 16 e 120 anos.',
     });
   });
 
@@ -210,29 +212,27 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
-    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
-    await screen.findByRole('heading', { name: 'Candidates' });
-    await user.type(screen.getByRole('textbox', { name: 'Candidate name' }), 'Beatriz Costa');
-    await user.type(screen.getByRole('spinbutton', { name: 'Age' }), '22');
-    await user.click(screen.getByRole('button', { name: 'Add candidate' }));
+    await user.click(await screen.findByRole('tab', { name: 'Candidaturas' }));
+    await screen.findByRole('heading', { name: 'Candidaturas' });
+    await user.type(screen.getByRole('textbox', { name: 'Nome' }), 'Beatriz Costa');
+    await user.type(screen.getByRole('spinbutton', { name: 'Idade (anos)' }), '22');
+    await user.click(screen.getByRole('button', { name: 'Adicionar candidatura' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Select at least one position application.',
-    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Selecione ao menos um cargo pretendido.');
   });
 
   it('moves first choice to a remaining application when its application is removed', async () => {
     const user = userEvent.setup();
     renderConfiguration();
 
-    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
-    await screen.findByRole('heading', { name: 'Candidates' });
-    await user.type(screen.getByRole('textbox', { name: 'Candidate name' }), 'Beatriz Costa');
+    await user.click(await screen.findByRole('tab', { name: 'Candidaturas' }));
+    await screen.findByRole('heading', { name: 'Candidaturas' });
+    await user.type(screen.getByRole('textbox', { name: 'Nome' }), 'Beatriz Costa');
     await user.click(screen.getByRole('checkbox', { name: 'President' }));
     await user.click(screen.getByRole('checkbox', { name: 'Treasurer' }));
     await user.click(screen.getByRole('checkbox', { name: 'President' }));
 
-    expect(screen.getByRole('combobox', { name: 'First choice position' })).toHaveValue(
+    expect(screen.getByRole('combobox', { name: 'Primeira opção de cargo' })).toHaveValue(
       treasurerPosition.id,
     );
   });
@@ -241,18 +241,18 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
-    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
-    await screen.findByRole('heading', { name: 'Candidates' });
-    await user.click(screen.getByRole('button', { name: 'Edit Ana Silva' }));
+    await user.click(await screen.findByRole('tab', { name: 'Candidaturas' }));
+    await screen.findByRole('heading', { name: 'Candidaturas' });
+    await user.click(screen.getByRole('button', { name: 'Editar Ana Silva' }));
     await user.selectOptions(
-      screen.getByRole('combobox', { name: 'First choice position' }),
+      screen.getByRole('combobox', { name: 'Primeira opção de cargo' }),
       treasurerPosition.id,
     );
-    await user.click(screen.getByRole('button', { name: 'Save candidate' }));
+    await user.click(screen.getByRole('button', { name: 'Salvar candidatura' }));
 
     expect({
       firstChoice: updatedCandidateBody?.firstChoicePositionId,
-      candidate: await screen.findByText('First choice: Treasurer'),
+      candidate: await screen.findByText('Primeira opção: Treasurer'),
     }).toEqual({
       firstChoice: treasurerPosition.id,
       candidate: expect.any(HTMLElement),
@@ -263,10 +263,10 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
-    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
-    await screen.findByRole('heading', { name: 'Candidates' });
-    await user.click(screen.getByRole('button', { name: 'Remove Ana Silva' }));
-    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('tab', { name: 'Candidaturas' }));
+    await screen.findByRole('heading', { name: 'Candidaturas' });
+    await user.click(screen.getByRole('button', { name: 'Remover Ana Silva' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Voltar' }));
 
     expect(screen.getByRole('heading', { name: 'Ana Silva' })).toBeInTheDocument();
   });
@@ -275,14 +275,14 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
-    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
-    await screen.findByRole('heading', { name: 'Candidates' });
-    await user.click(screen.getByRole('button', { name: 'Remove Ana Silva' }));
+    await user.click(await screen.findByRole('tab', { name: 'Candidaturas' }));
+    await screen.findByRole('heading', { name: 'Candidaturas' });
+    await user.click(screen.getByRole('button', { name: 'Remover Ana Silva' }));
     await user.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove candidate' }),
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Remover pessoa candidata' }),
     );
 
-    expect(await screen.findByText('No candidates have been added.')).toBeInTheDocument();
+    expect(await screen.findByText('Nenhuma pessoa candidata foi cadastrada.')).toBeInTheDocument();
   });
 
   it('keeps an elected candidate when the API rejects removal', async () => {
@@ -316,20 +316,20 @@ describe('administrator candidate configuration', () => {
     const user = userEvent.setup();
     renderConfiguration();
 
-    await user.click(await screen.findByRole('tab', { name: 'Candidates' }));
-    await screen.findByRole('heading', { name: 'Candidates' });
-    await user.click(screen.getByRole('button', { name: 'Remove Ana Silva' }));
+    await user.click(await screen.findByRole('tab', { name: 'Candidaturas' }));
+    await screen.findByRole('heading', { name: 'Candidaturas' });
+    await user.click(screen.getByRole('button', { name: 'Remover Ana Silva' }));
     await user.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove candidate' }),
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Remover pessoa candidata' }),
     );
 
     expect({
       error: await screen.findByRole('alert'),
       candidate: screen.getByRole('heading', { name: 'Ana Silva' }),
-      electedLabel: screen.getByText('Elected candidate'),
+      electedLabel: screen.getByText('Pessoa já eleita'),
     }).toEqual({
       error: expect.objectContaining({
-        textContent: expect.stringContaining('An elected candidate cannot be removed.'),
+        textContent: expect.stringContaining('Um candidato eleito não pode ser removido.'),
       }),
       candidate: expect.any(HTMLElement),
       electedLabel: expect.any(HTMLElement),

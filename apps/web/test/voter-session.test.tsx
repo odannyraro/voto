@@ -31,7 +31,7 @@ describe('VoterSessionPage', () => {
     renderWithProviders(<App />, { initialEntries: ['/votar'] });
 
     expect(
-      await screen.findByRole('heading', { name: 'Waiting for election to start' }),
+      await screen.findByRole('heading', { name: 'Aguardando o início da eleição' }),
     ).toBeInTheDocument();
     expect(getState).toHaveBeenCalledWith(SESSION_TOKEN);
   });
@@ -40,7 +40,7 @@ describe('VoterSessionPage', () => {
     renderWithProviders(<App />, { initialEntries: ['/votar'] });
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Voter session not found. Join an election again.',
+      'Sessão de eleitor não encontrada. Entre novamente com seu código.',
     );
   });
 
@@ -53,7 +53,7 @@ describe('VoterSessionPage', () => {
     renderWithProviders(<App />, { initialEntries: ['/votar'] });
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Voter session not found. Join an election again.',
+      'Sessão de eleitor não encontrada. Entre novamente com seu código.',
     );
   });
 
@@ -71,7 +71,7 @@ describe('VoterSessionPage', () => {
     });
 
     expect(
-      await screen.findByRole('heading', { name: 'Waiting for election to start' }),
+      await screen.findByRole('heading', { name: 'Aguardando o início da eleição' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Student Council')).toBeInTheDocument();
   });
@@ -86,7 +86,7 @@ describe('VoterSessionPage', () => {
         </SocketProvider>
       ),
     });
-    await screen.findByRole('heading', { name: 'Waiting for election to start' });
+    await screen.findByRole('heading', { name: 'Aguardando o início da eleição' });
 
     act(() => {
       socket.emitVoterState(makeVoterStateDTO({ phase: 'VOTING' }));
@@ -135,7 +135,7 @@ describe('VoterSessionPage', () => {
         </SocketProvider>
       ),
     });
-    await screen.findByRole('heading', { name: 'Waiting for election to start' });
+    await screen.findByRole('heading', { name: 'Aguardando o início da eleição' });
 
     act(() => {
       socket.disconnect();
@@ -162,7 +162,7 @@ describe('VoterSessionPage', () => {
         </SocketProvider>
       ),
     });
-    await screen.findByRole('heading', { name: 'Waiting for election to start' });
+    await screen.findByRole('heading', { name: 'Aguardando o início da eleição' });
     act(() => {
       socket.disconnect();
       socket.reconnect();
@@ -174,7 +174,7 @@ describe('VoterSessionPage', () => {
       await reconnectState;
     });
 
-    expect(screen.getByRole('heading', { name: 'Election finished' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Eleição encerrada' })).toBeInTheDocument();
   });
 
   it('retains the latest reconnect response when an earlier request finishes later', async () => {
@@ -194,7 +194,7 @@ describe('VoterSessionPage', () => {
         </SocketProvider>
       ),
     });
-    await screen.findByRole('heading', { name: 'Waiting for election to start' });
+    await screen.findByRole('heading', { name: 'Aguardando o início da eleição' });
 
     act(() => {
       socket.disconnect();
@@ -202,13 +202,13 @@ describe('VoterSessionPage', () => {
       socket.disconnect();
       socket.reconnect();
     });
-    await screen.findByRole('heading', { name: 'Election finished' });
+    await screen.findByRole('heading', { name: 'Eleição encerrada' });
     await act(async () => {
       resolveFirstReconnect?.(makeVoterStateDTO({ phase: 'WAITING' }));
       await firstReconnect;
     });
 
-    expect(screen.getByRole('heading', { name: 'Election finished' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Eleição encerrada' })).toBeInTheDocument();
   });
 
   it('accepts a reconnect response newer than a socket update from before the disconnect', async () => {
@@ -223,7 +223,7 @@ describe('VoterSessionPage', () => {
         </SocketProvider>
       ),
     });
-    await screen.findByRole('heading', { name: 'Waiting for election to start' });
+    await screen.findByRole('heading', { name: 'Aguardando o início da eleição' });
 
     act(() => {
       socket.emitVoterState(makeVoterStateDTO({ phase: 'VOTING' }));
@@ -231,7 +231,7 @@ describe('VoterSessionPage', () => {
       socket.reconnect();
     });
 
-    expect(await screen.findByRole('heading', { name: 'Election finished' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Eleição encerrada' })).toBeInTheDocument();
   });
 
   it('reloads the voter state when the session page is remounted', async () => {
@@ -246,7 +246,7 @@ describe('VoterSessionPage', () => {
         <VoterSessionPage token={SESSION_TOKEN} />
       </SocketProvider>,
     );
-    await screen.findByRole('heading', { name: 'Waiting for election to start' });
+    await screen.findByRole('heading', { name: 'Aguardando o início da eleição' });
 
     rerender(
       <SocketProvider token={SESSION_TOKEN} createClient={createClient}>
@@ -254,7 +254,7 @@ describe('VoterSessionPage', () => {
       </SocketProvider>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Election finished' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Eleição encerrada' })).toBeInTheDocument();
     expect(getState).toHaveBeenCalledTimes(2);
   });
 
@@ -271,6 +271,8 @@ describe('VoterSessionPage', () => {
       ),
     });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('INVALID_TOKENSession expired');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Sua sessão expirou. Entre novamente.',
+    );
   });
 });
