@@ -113,7 +113,7 @@ agrupadas em um único commit.
 | C16 | Uma entrega completa: resultados e resolução de cargo insuficiente integram o painel ao vivo | `[x] C16.a + C16.b` resolução completa da rodada e da fila |
 | C17 | Divide-se: configuração do runner e dados de preparação são entregáveis separadas | `[x] C17.a` `playwright.config.ts` e `webServer`; `[x] C17.b` fixtures e helpers de API |
 | C17.x | Uma entrega extra: identidade, temas e idioma precisam ficar consistentes em toda a interface | `[x] C17.x` identidade Vota Ae, temas claro/escuro, atalho admin e textos em português |
-| C18 | Não divide: uma jornada curta e linear de configuração | `[ ] C18` uma spec administrativa completa |
+| C18 | Não divide: uma jornada curta e linear de configuração | `[x] C18` uma spec administrativa completa |
 | C19 | Divide-se: preparação de contexto/votos e liberação/verificação são dois grupos de risco | `[ ] C19.a` três contextos, entrada e votos; `[ ] C19.b` fechamento e liberação do resultado |
 | C20 | Divide-se: montagem do cenário e ação do 2º turno têm verificações independentes | `[ ] C20.a` cenário de `AWAITING_RUNOFF`; `[ ] C20.b` abrir 2º turno e verificar vencedor |
 | C21 | Divide-se: elegibilidade do eleito e candidatos insuficientes são cenários separados | `[ ] C21.a` exclusão do eleito no cargo seguinte; `[ ] C21.b` cargo sem candidatos e confirmação |
@@ -151,7 +151,8 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/styles.css` → identidade visual responsiva azul, branca e preta com variáveis por tema.
 - `apps/web/src/lib/ui-messages.ts` → traduz códigos de erro da API para mensagens seguras em português.
 - `apps/web/src/features/admin/elections/AdminElectionsPage.tsx` → carrega resumos, apresenta estados/contagens e cria eleições com validação compartilhada.
-- `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx` → carrega o agregado completo e navega pelas abas acessíveis de configuração.
+- `apps/web/src/features/admin/elections/election-status-label.ts` → traduz estados oficiais da eleição de forma compartilhada entre as telas de administração.
+- `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx` → carrega o agregado completo, navega pelas abas e abre eleições em preparação pela API.
 - `apps/web/src/features/admin/live/useAdminElection.ts` → sincroniza o agregado administrativo por REST/Socket.IO e reinscreve/ressincroniza após reconexão.
 - `apps/web/src/features/admin/live/AdminLivePanel.tsx` → mostra o estado ao vivo, abre/fecha rodadas, apresenta resultados oficiais e permite runoff, liberação, undo, anulação e ações de cargo insuficiente.
 - `apps/web/src/features/admin/config/PositionsTab.tsx` → lista, cria, edita e remove cargos respeitando fila, confirmação e estado devolvido pela API.
@@ -193,6 +194,8 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/utils/render-with-providers.tsx` → `renderWithProviders` com MemoryRouter e providers auth/socket injetáveis.
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
 - `apps/web/test/utils/factories.ts` → factories dos DTOs; nomes acessórios são localizados e reproduzíveis.
+- `e2e/specs/admin-configures-election.spec.ts` → cobre login, configuração e abertura pela UI, além dos limites sem cargo e sem candidato.
+- `e2e/specs/full-position.spec.ts` → cobre três sessões isoladas, cédulas carregadas e votos de candidatura/branco aceitos pelo servidor.
 - `apps/web/test/utils.test.tsx` → testes da composição de providers, isolamento e factories.
 - `e2e/playwright.config.ts` → configura Chromium, health check, Vite e backend local em memória.
 - `e2e/run-e2e.mjs` → seleciona portas disponíveis antes de iniciar Playwright e mantém a mesma configuração nos processos de execução.
@@ -740,16 +743,22 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/branding-theme.test.tsx` (2 testes); suíte web (200 testes); Playwright (4 testes).
 - Decisões: o ícone vetorial é um espaço reservado com caixa marcada; erros da API são traduzidos pelo código estruturado e falhas sem tradução recebem mensagem genérica em português.
 
-### [ ] C18 — E2E de configuração pelo admin
+### [x] C18 — E2E de configuração pelo admin
 **Ref.:** architecture §10.2 cenário 1.
 **Depende de:** C17.b, C10–C14.
 **Fazer:** criar login, eleição, cargo, candidatos, códigos e abrir eleição pela UI.
-**Testes (escrever antes):** jornada completa; ausência de cargo/candidato não abre indevidamente.
+**Testes (escrever antes):** jornada completa pela UI; sem cargo, a API rejeita abertura e mantém `DRAFT`; sem candidato, a eleição pode abrir conforme architecture §5.4, mas o cargo fica insuficiente e não inicia rodada.
 **Pronto quando:** spec termina com eleição aberta.
 **Arquivos:** `e2e/specs/admin-configures-election.spec.ts`.
 **Commit sugerido:** `test(e2e): cobre configuração completa pela interface`
+**Notas do agente:**
+- Feito: a spec realiza login, criação da eleição, cargo, candidatura, códigos e abertura pela interface; também valida a rejeição sem cargo e o estado insuficiente sem candidatos.
+- Arquivos: `e2e/specs/admin-configures-election.spec.ts`, `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx`, `apps/web/src/features/admin/elections/election-status-label.ts`.
+- Como usar: a tela de configuração exibe a situação atual e permite abrir eleições em preparação; falhas da API são apresentadas em português.
+- Testes: `e2e/specs/admin-configures-election.spec.ts` (3 cenários: jornada completa, rejeição sem cargo, cargo sem candidatos sem início de rodada).
+- Decisões: a abertura sem candidato permanece permitida conforme a arquitetura; o bloqueio ocorre na rodada, com o estado de candidaturas insuficientes para resolução pelo admin.
 
-### [ ] C19.a — Contextos e votos dos eleitores
+### [x] C19.a — Contextos e votos dos eleitores
 **Ref.:** architecture §10.2 cenário 2.
 **Depende de:** C17.b, C18.
 **Fazer:** preparar três contextos, fazer login por código e abrir a cédula em cada um.
@@ -757,6 +766,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** os três votos podem ser enviados ao servidor real.
 **Arquivos:** `e2e/specs/full-position.spec.ts`.
 **Commit sugerido:** `test(e2e): cobre entrada e voto de três eleitores`
+**Notas do agente:**
+- Feito: três contextos isolados autenticam com códigos reais e carregam a cédula; dois votos de candidatura e um voto branco recebem confirmação 204 do servidor.
+- Arquivos: `e2e/specs/full-position.spec.ts`.
+- Como usar: a spec abre a rodada pela API de preparação e executa login e votos pela interface do eleitor; o último voto fecha a rodada automaticamente.
+- Testes: `e2e/specs/full-position.spec.ts` (1 cenário: três logins isolados, cédulas e votos válidos/brancos).
+- Decisões: as confirmações dos dois primeiros votos são verificadas antes do voto final; a resposta do terceiro voto confirma aceitação sem antecipar as asserções de fechamento e resultado da C19.b.
 
 ### [ ] C19.b — Fechamento e liberação do resultado
 **Ref.:** architecture §10.2 cenário 2.

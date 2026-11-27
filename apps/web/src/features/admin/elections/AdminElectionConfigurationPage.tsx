@@ -1,10 +1,12 @@
-import type { AdminElectionDTO } from '@voto/shared';
+import type { AdminElectionDTO, ErrorDTO } from '@voto/shared';
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { adminApi } from '../../../api/admin-api';
 import { ApiError } from '../../../api/api-client';
+import { ErrorMessage } from '../../../components/ErrorMessage';
 import { getApiErrorMessage } from '../../../lib/ui-messages';
+import { getElectionStatusLabel } from './election-status-label';
 import { useAdminAuth } from '../auth/admin-auth-context';
 import { AdminLivePanel } from '../live/AdminLivePanel';
 import { CandidatesTab } from '../config/CandidatesTab';
@@ -54,6 +56,9 @@ export function AdminElectionConfigurationPage(): ReactElement {
   const [election, setElection] = useState<AdminElectionDTO>();
   const [loadError, setLoadError] = useState<string>();
   const [selectedTab, setSelectedTab] = useState<ConfigurationTab>('Positions');
+  const [openingError, setOpeningError] = useState<ErrorDTO['error'] | null>(null);
+  const [openingMessage, setOpeningMessage] = useState<string | null>(null);
+  const [isOpening, setIsOpening] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -88,6 +93,34 @@ export function AdminElectionConfigurationPage(): ReactElement {
     };
   }, [electionId, token]);
 
+  /**
+   * Solicita a abertura da eleição e só atualiza a tela com o agregado confirmado pelo servidor.
+   *
+   * @returns Promise resolvida após aplicar o estado oficial ou apresentar um erro acessível.
+   */
+  async function handleOpenElection(): Promise<void> {
+    if (token === null || electionId === undefined) {
+      return;
+    }
+
+    setOpeningError(null);
+    setOpeningMessage(null);
+    setIsOpening(true);
+    try {
+      setElection(await adminApi.openElection(token, electionId));
+    } catch (error: unknown) {
+      if (error instanceof ApiError && error.error !== undefined) {
+        setOpeningError(error.error);
+      } else {
+        setOpeningMessage(
+          'Não foi possível abrir a eleição. Confira sua conexão e tente novamente.',
+        );
+      }
+    } finally {
+      setIsOpening(false);
+    }
+  }
+
   if (token === null) {
     return <Navigate to="/admin/login" replace />;
   }
@@ -118,6 +151,14 @@ export function AdminElectionConfigurationPage(): ReactElement {
       <h1>Configuração da eleição</h1>
       <p>Identificador da eleição: {electionId}</p>
       <p>Eleição: {election.election.name}</p>
+      <p>Situação: {getElectionStatusLabel(election.election.status)}</p>
+      {election.election.status === 'DRAFT' && (
+        <button type="button" disabled={isOpening} onClick={() => void handleOpenElection()}>
+          {isOpening ? 'Abrindo eleição...' : 'Abrir eleição'}
+        </button>
+      )}
+      {openingError !== null && <ErrorMessage error={{ error: openingError }} />}
+      {openingMessage !== null && <p role="alert">{openingMessage}</p>}
       <div role="tablist" aria-label="Configuração da eleição">
         {CONFIGURATION_TABS.map((tab) => (
           <button

@@ -9,29 +9,13 @@ import { Link, useNavigate } from 'react-router';
 import { ApiError } from '../../../api/api-client';
 import { adminApi } from '../../../api/admin-api';
 import { ErrorMessage } from '../../../components/ErrorMessage';
+import { getElectionStatusLabel } from './election-status-label';
 
 const DEFAULT_VOTING_SECONDS = 60;
 
 /** Propriedades para carregar e criar eleições do administrador autenticado. */
 export interface AdminElectionsPageProps {
   readonly token: string;
-}
-
-/**
- * Traduz a situação da eleição para uma informação legível na lista.
- *
- * @param status - Estado oficial recebido no resumo do servidor.
- * @returns Situação apresentada em português.
- */
-function getElectionStatusLabel(status: ElectionSummaryDTO['status']): string {
-  switch (status) {
-    case 'DRAFT':
-      return 'Em preparação';
-    case 'OPEN':
-      return 'Aberta';
-    case 'FINISHED':
-      return 'Encerrada';
-  }
 }
 
 /**

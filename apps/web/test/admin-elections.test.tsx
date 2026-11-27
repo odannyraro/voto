@@ -26,6 +26,13 @@ const openElection = makeElectionSummaryDTO({
   positionCount: 1,
   voterCount: 5,
 });
+const finishedElection = makeElectionSummaryDTO({
+  id: 'election-3',
+  name: 'Alumni Election',
+  status: 'FINISHED',
+  positionCount: 3,
+  voterCount: 8,
+});
 
 let elections: ElectionSummaryDTO[];
 let createdBody: CreateElectionBody | undefined;
@@ -96,11 +103,11 @@ describe('administrator elections', () => {
   });
 
   it('shows election status and counts from each summary', async () => {
-    elections = [firstElection, openElection];
+    elections = [firstElection, openElection, finishedElection];
     renderWithProviders(<App />, { initialEntries: ['/admin'] });
 
     expect(await screen.findByRole('list', { name: 'Eleições' })).toHaveTextContent(
-      'Student CouncilSituação: Em preparação2 cargos12 eleitoresFaculty ElectionSituação: Aberta1 cargo5 eleitores',
+      'Student CouncilSituação: Em preparação2 cargos12 eleitoresFaculty ElectionSituação: Aberta1 cargo5 eleitoresAlumni ElectionSituação: Encerrada3 cargos8 eleitores',
     );
   });
 
