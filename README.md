@@ -30,7 +30,7 @@
 
 | Integrante | Parte no projeto |
 |---|---|
-| Daniel Rodrigues | Front-end (telas do eleitor e do admin) e testes de ponta a ponta |
+| Daniel Vitor Rabelo Rodrigues | Front-end (telas do eleitor e do admin) e testes de ponta a ponta |
 | Gustavo Chaves Ferreira | Servidor, banco de dados, CI/CD e deploy |
 | Júlio Assis Souza Amorim | Regras da eleição (domínio) e teste de mutação |
 
