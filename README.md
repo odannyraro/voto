@@ -3,11 +3,18 @@
 [![CI](https://github.com/odannyraro/voto/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/odannyraro/voto/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/odannyraro/voto/branch/main/graph/badge.svg)](https://codecov.io/gh/odannyraro/voto)
 
-Sistema web de eleições ao vivo, no estilo Kahoot: o admin conduz a votação cargo a cargo, e os eleitores votam pelo celular, com o resultado aparecendo em tempo real. Trabalho prático da disciplina de Teste de Software (DCC/UFMG).
+**Eleições ao vivo, no estilo Kahoot.** O admin conduz a votação cargo a cargo e os eleitores votam pelo celular, com o resultado aparecendo em tempo real. Trabalho prático da disciplina de Teste de Software (DCC/UFMG).
 
 **Sistema no ar:** https://vota-ae.onrender.com
 
 > O servidor está no plano gratuito do Render: depois de um tempo sem acesso, ele "dorme", e o primeiro acesso pode levar cerca de 1 minuto.
+
+| Em números | |
+|---|---|
+| Testes automatizados | **1.190**, rodando a cada envio em Linux, macOS e Windows |
+| Cobertura de linhas | de **90% a 100%** em cada pacote (mínimo exigido: 80%) |
+| Teste de mutação | **91,9%** dos mutantes detectados nas regras da eleição |
+| Deploy | automático, só depois de todos os testes passarem |
 
 | Entrega | Link |
 |---|---|
@@ -21,21 +28,34 @@ Sistema web de eleições ao vivo, no estilo Kahoot: o admin conduz a votação 
 
 ## Integrantes
 
-- Daniel Rodrigues
-- Gustavo Chaves Ferreira
-- Júlio Assis Souza Amorim
+| Integrante | Parte no projeto |
+|---|---|
+| Daniel Rodrigues | Front-end (telas do eleitor e do admin) e testes de ponta a ponta |
+| Gustavo Chaves Ferreira | Servidor, banco de dados, CI/CD e deploy |
+| Júlio Assis Souza Amorim | Regras da eleição (domínio) e teste de mutação |
 
 ## Sobre o sistema
 
-O Vota Aê foi pensado para eleições presenciais de grupos, como a escolha de uma diretoria: todos estão na mesma sala, cada um com o seu celular, e a eleição acontece ao vivo, um cargo por vez.
+O Vota Aê foi pensado para **eleições presenciais de grupos**, como a escolha de uma diretoria: todos estão na mesma sala, cada um com o seu celular, e a eleição acontece ao vivo, um cargo por vez.
 
 ### Como funciona
+
+```mermaid
+flowchart LR
+    C["1. Admin configura cargos, candidatos e ordem"] --> G["2. Gera um código por eleitor"]
+    G --> E["3. Eleitores entram com o código"]
+    E --> R["4. Admin abre a rodada de um cargo"]
+    R --> V["5. Todos votam no prazo"]
+    V --> L["6. Admin vê o resultado e libera"]
+    L -->|"próximo cargo"| R
+```
 
 1. O **admin** entra com usuário e senha, cria a eleição e configura os cargos, os candidatos e a ordem de votação.
 2. Ele gera os **códigos dos eleitores**: um código único e aleatório por pessoa, válido só naquela eleição.
 3. O **eleitor** abre o site, digita o código e aguarda.
-4. O admin abre a votação de um cargo. A cédula aparece na hora no celular de todos, com um prazo para votar.
-5. A rodada fecha quando todos votam ou quando o prazo acaba. O admin vê o resultado e decide quando liberá-lo aos eleitores.
+4. O admin abre a votação de um cargo, e a cédula aparece **na hora** no celular de todos, com um prazo para votar.
+5. A rodada fecha quando todos votam ou quando o prazo acaba.
+6. O admin vê o resultado e decide quando **liberá-lo** aos eleitores. Depois, segue para o próximo cargo.
 
 ### Regras da eleição
 
@@ -56,9 +76,9 @@ O texto original dos requisitos está em [docs/requisitos.md](docs/requisitos.md
 
 | Quem | O que faz no site |
 |---|---|
-| Eleitor (`/`) | Entra com o código, acompanha a espera, vota (em um candidato ou em branco) com contagem regressiva e vê o resultado quando o admin o libera, tudo atualizado ao vivo |
-| Admin (`/admin`) | Faz login, lista e cria eleições e as configura em abas: cargos e desempate, candidatos, códigos dos eleitores (gerar, copiar e revogar) e ordem de votação, com sugestão automática |
-| Admin, ao vivo | Abre as rodadas, acompanha quantos já votaram, encerra antes do prazo, libera o resultado, anula uma rodada, desfaz a última ação e resolve 2º turno ou cargos sem candidatos suficientes |
+| **Eleitor** (`/`) | Entra com o código, acompanha a espera, vota (em um candidato ou em branco) com contagem regressiva e vê o resultado quando o admin o libera, tudo atualizado ao vivo |
+| **Admin** (`/admin`) | Faz login, lista e cria eleições e as configura em abas: cargos e desempate, candidatos, códigos dos eleitores (gerar, copiar e revogar) e ordem de votação, com sugestão automática |
+| **Admin, ao vivo** | Abre as rodadas, acompanha quantos já votaram, encerra antes do prazo, libera o resultado, anula uma rodada, desfaz a última ação e resolve 2º turno ou cargos sem candidatos suficientes |
 
 _A preencher: botão para **abrir a eleição** na tela do admin (ainda não existe na interface) e, se o grupo quiser, capturas de tela._
 
@@ -70,8 +90,8 @@ _A preencher: botão para **abrir a eleição** na tela do admin (ainda não exi
 | Front-end | React 19, React Router, cliente Socket.IO e build com Vite |
 | Servidor | Fastify (API REST), Socket.IO (tempo real), Zod (validação), JWT (login) e bcrypt (senhas) |
 | Banco de dados | PostgreSQL, hospedado no [Neon](https://neon.tech) |
-| Testes | Vitest, Testing Library, MSW, pg-mem, StrykerJS e Playwright (e2e) |
-| Qualidade | ESLint e Prettier |
+| Testes | Vitest, Testing Library, MSW, pg-mem, StrykerJS e Playwright |
+| Qualidade | ESLint, Prettier e cobertura mínima de 80% por pacote |
 | CI/CD e nuvem | GitHub Actions, [Codecov](https://app.codecov.io/gh/odannyraro/voto) e [Render](https://render.com) |
 
 ### Arquitetura
@@ -85,16 +105,16 @@ flowchart LR
     S <-->|"grava e lê"| DB[("PostgreSQL")]
 ```
 
-O projeto é um monorepo com quatro pacotes:
+O projeto é um **monorepo com quatro pacotes**, cada um com uma responsabilidade:
 
 | Pacote | Responsabilidade |
 |---|---|
-| [`packages/domain`](packages/domain/src) | As regras da eleição, em funções puras: recebem a eleição e devolvem a eleição nova ou um erro de negócio. Sem banco, rede ou relógio próprio |
-| [`packages/shared`](packages/shared/src) | Os contratos usados pelo servidor e pelo front: formatos de dados, códigos de erro, eventos e validação |
-| [`apps/server`](apps/server/src) | Carrega a eleição, chama a regra, grava e avisa os celulares ao vivo |
-| [`apps/web`](apps/web/src) | As telas do eleitor e do admin |
+| [`packages/domain`](packages/domain/src) | As **regras da eleição**, em funções puras: recebem a eleição e devolvem a eleição nova ou um erro de negócio. Sem banco, rede ou relógio próprio |
+| [`packages/shared`](packages/shared/src) | Os **contratos** usados pelo servidor e pelo front: formatos de dados, códigos de erro, eventos e validação |
+| [`apps/server`](apps/server/src) | O **servidor**: carrega a eleição, chama a regra, grava e avisa os celulares ao vivo |
+| [`apps/web`](apps/web/src) | As **telas** do eleitor e do admin |
 
-Essa separação é o que torna o sistema **testável**: as regras são verificadas de forma rápida e determinística, e o que é externo (relógio, banco, rede) fica atrás de interfaces que os testes substituem. Detalhes em [docs/architecture.md](docs/architecture.md); rotas e eventos em [docs/api.md](docs/api.md).
+**Por que assim:** com as regras separadas do resto, elas são testadas de forma rápida e determinística, e tudo o que é externo (relógio, banco, rede) fica atrás de interfaces que os testes substituem. Detalhes em [docs/architecture.md](docs/architecture.md); rotas e eventos em [docs/api.md](docs/api.md).
 
 ### Integração e entrega contínuas
 
@@ -106,16 +126,16 @@ flowchart LR
     DP --> R["Render (produção)"]
 ```
 
-- [**CI**](.github/workflows/ci.yml): a cada envio, roda lint, formatação, checagem de tipos, todos os testes com cobertura e o build de produção nos três sistemas operacionais.
+- [**CI**](.github/workflows/ci.yml): a cada envio, roda lint, formatação, checagem de tipos, todos os testes com cobertura e o build de produção, nos **três sistemas operacionais**.
 - **Cobertura:** publicada no [Codecov](https://app.codecov.io/gh/odannyraro/voto), separada por pacote. Abaixo de 80% em qualquer um, o build falha.
-- [**Deploy**](.github/workflows/deploy.yml): só quando o CI termina verde na `main`, publica exatamente aquele commit no Render. Código com teste quebrado não chega à produção.
-- As execuções podem ser acompanhadas na aba [Actions](https://github.com/odannyraro/voto/actions).
+- [**Deploy**](.github/workflows/deploy.yml): só quando o CI termina **verde na `main`**, publica exatamente aquele commit no Render. Código com teste quebrado não chega à produção.
+- Todas as execuções ficam na aba [Actions](https://github.com/odannyraro/voto/actions).
 
 ## Uso de IA
 
-O projeto foi desenvolvido com agentes de IA para programação: o **Claude Code**, usado por dois integrantes, e o **GitHub Copilot**, usado por um. Cada um usou a ferramenta que preferia, mas todos seguiram as mesmas regras e o mesmo ciclo de trabalho.
+O projeto foi desenvolvido com **agentes de IA para programação**: o **Claude Code**, usado por dois integrantes, e o **GitHub Copilot**, usado por um. Cada um usou a ferramenta que preferia, mas todos seguiram **as mesmas regras e o mesmo ciclo de trabalho**.
 
-### Regras comuns, escritas antes do código
+### 1. Regras comuns, escritas antes do código
 
 Um arquivo Markdown, o [**CLAUDE.md**](CLAUDE.md), reúne as instruções que todo agente seguia a cada tarefa. Apesar do nome, ele é genérico e pode ser lido por qualquer ferramenta. Ele define:
 
@@ -124,11 +144,11 @@ Um arquivo Markdown, o [**CLAUDE.md**](CLAUDE.md), reúne as instruções que to
 - o que o agente **não pode fazer**: apagar ou afrouxar testes para "ficar verde", reduzir a cobertura ou mexer na parte de outro integrante;
 - o padrão das mensagens de commit.
 
-### Planejamento antes da execução
+### 2. Planejamento antes da execução
 
-A [arquitetura](docs/architecture.md) e a [divisão do trabalho](docs/divisao-tarefas.md) foram escritas antes do código. Cada integrante teve uma lista de tarefas pequenas ([servidor](docs/todo-backend.md), [domínio](docs/todo-domain.md) e [front-end](docs/todo-frontend.md)), que também servia de **memória do agente**: ao concluir uma tarefa, ele registrava o que fez, as decisões e as pendências.
+A [arquitetura](docs/architecture.md) e a [divisão do trabalho](docs/divisao-tarefas.md) foram escritas antes do código. Cada integrante teve uma **lista de tarefas pequenas** ([servidor](docs/todo-backend.md), [domínio](docs/todo-domain.md) e [front-end](docs/todo-frontend.md)), que também servia de **memória do agente**: ao concluir uma tarefa, ele registrava o que fez, as decisões e as pendências.
 
-### O ciclo de cada tarefa
+### 3. O ciclo de cada tarefa
 
 ```mermaid
 flowchart LR
@@ -139,23 +159,31 @@ flowchart LR
     CM --> PR["Pull request para a main"]
 ```
 
-Na revisão, o integrante testava o resultado e, quando precisava, corrigia à mão ou pedia um novo ciclo ao agente. A maior parte das tarefas foi feita numa branch específica de cada parte e levada à `main` por pull request.
+Na revisão, o integrante testava o resultado e, quando precisava, **corrigia à mão ou pedia um novo ciclo** ao agente. A maior parte das tarefas foi feita numa branch específica de cada parte e levada à `main` por pull request.
 
-### O que as revisões encontraram
+### 4. O que as revisões encontraram
 
-Ao fim de cada bloco de tarefas, o código foi revisado e refatorado. Essas revisões, junto com testes manuais no sistema real, acharam problemas que os testes ainda não cobriam. Cada um foi corrigido com um **teste de regressão escrito antes**, por exemplo:
+Ao fim de cada bloco de tarefas, o código foi revisado e refatorado. Essas revisões, junto com testes manuais no sistema real, acharam problemas que os testes ainda não cobriam. Cada um foi corrigido com um **teste de regressão escrito antes da correção**:
 
 - votos enviados ao mesmo tempo eram recusados;
 - requisições sem corpo podiam ser rejeitadas pelo servidor;
 - uma configuração de produção aceitaria um segredo de desenvolvimento.
 
-### O que aprendemos
+### 5. O que aprendemos
 
 A IA acelerou muito a escrita de código e de testes, mas precisou de **regras claras, tarefas pequenas e revisão constante**. Sem isso, ela tende a escrever testes que nunca falham, mudar o comportamento ao "refatorar" ou declarar uma tarefa pronta sem conferir.
 
 ## Testes
 
 ### Estratégia
+
+```mermaid
+flowchart TB
+    E2E["End-to-end: jornadas no navegador (Playwright)"]
+    INT["Integração: eleições completas pela API, com as regras reais"]
+    UNI["Unidade e componente: cada regra e cada tela"]
+    E2E --- INT --- UNI
+```
 
 | Nível | O que verifica | Como | Exemplo |
 |---|---|---|---|
@@ -201,7 +229,7 @@ npm run test:coverage    # roda os testes com cobertura (falha abaixo de 80% em 
 
 Os testes não precisam de banco de dados, internet nem configuração: usam banco em memória e relógio simulado. O relatório de cobertura de cada pacote fica em `<pacote>/coverage/index.html`.
 
-Teste de mutação do domínio (leva cerca de 2 minutos):
+Teste de mutação das regras da eleição (leva cerca de 2 minutos):
 
 ```bash
 npm run test:mutation -w packages/domain
