@@ -117,7 +117,7 @@ agrupadas em um único commit.
 | C19 | Divide-se: preparação de contexto/votos e liberação/verificação são dois grupos de risco | `[x] C19.a` três contextos, entrada e votos; `[x] C19.b` fechamento e liberação do resultado |
 | C20 | Divide-se: montagem do cenário e ação do 2º turno têm verificações independentes | `[x] C20.a` cenário de `AWAITING_RUNOFF`; `[x] C20.b` abrir 2º turno e verificar vencedor |
 | C21 | Divide-se: elegibilidade do eleito e candidatos insuficientes são cenários separados | `[x] C21.a + C21.b` exclusão do eleito e resolução completa de cargo insuficiente |
-| C22 | Divide-se: desfazer e invalidade/integração não precisam estar no mesmo commit | `[x] C22.a` desfazer resultado; `[ ] C22.b` spec de código inválido concluída, integração no CI aguarda B |
+| C22 | Divide-se: desfazer e invalidade/integração não precisam estar no mesmo commit | `[x] C22.a + C22.b` desfazer, código inválido e Playwright no CI dos três SOs |
 | C23 | Divide-se: semântica acessível e layout responsivo podem ser revisados separadamente | `[ ] C23.a` labels, roles, foco e mensagens; `[ ] C23.b` layout móvel e estados visíveis |
 | C24 | Divide-se: revisar duas pirâmides de testes separadamente reduz o risco | `[ ] C24.a` test smells no front; `[ ] C24.b` test smells nos e2e e cobertura final |
 
@@ -204,6 +204,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `e2e/run-e2e.mjs` → seleciona portas disponíveis antes de iniciar Playwright e mantém a mesma configuração nos processos de execução.
 - `e2e/fixtures/index.ts` → fixtures de admin autenticado, eleição em rascunho/pronta, credenciais, página administrativa e contexto limpo.
 - `e2e/specs/smoke.spec.ts` e `fixtures.spec.ts` → smoke do frontend local e verificação das fixtures pela API real.
+- `npm run e2e` → executa as specs Playwright por meio do workspace `e2e/`.
 - `npm --prefix e2e test` e `npm --prefix e2e test:headed` → executam as specs E2E em Chromium.
 - Módulos novos planejados:
   - `apps/web/src/api/` → I/O REST e Socket.IO;
@@ -866,19 +867,20 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `e2e/specs/resilience.spec.ts` (2 cenários: restauração após undo e mensagem para `NOTHING_TO_UNDO`).
 - Decisões: nenhum timer fixo; o cenário de conflito intercepta somente a resposta do endpoint de undo, preservando o restante da jornada contra o servidor real.
 
-### [ ] C22.b — Código inválido e integração no CI
+### [x] C22.b — Código inválido e integração no CI
 **Ref.:** architecture §10.2 cenário 5.
 **Depende de:** C22.a.
 **Fazer:** cobrir código inválido e coordenar com B o passo Playwright no CI dos três SOs.
 **Testes (escrever antes):** mensagem inválida; nenhum e2e usa waitForTimeout.
-**Pronto quando:** existem pelo menos cinco specs estáveis e o CI foi preparado por B.
+**Pronto quando:** existem pelo menos cinco specs estáveis e o CI executa Playwright nos três SOs.
 **Arquivos:** `e2e/specs/resilience.spec.ts`, `.github/workflows/ci.yml` somente via coordenação.
 **Commit sugerido:** `test(e2e): cobre código inválido e prepara execução no CI`
 **Notas do agente:**
 - Feito nesta entrega: a spec confirma que um código desconhecido de oito caracteres é rejeitado pelo servidor e traduzido em mensagem em português; a busca não encontrou `waitForTimeout`, `.skip` ou `.only` nas specs.
-- Arquivos: `e2e/specs/resilience.spec.ts`.
+- Feito: o workflow instala as dependências do workspace E2E, instala Chromium (com dependências do sistema no Ubuntu) e executa `npm run e2e` na matriz Ubuntu/macOS/Windows.
+- Arquivos: `e2e/specs/resilience.spec.ts`, `.github/workflows/ci.yml`, `package.json`.
 - Testes: `e2e/specs/resilience.spec.ts` (1 cenário de código inválido).
-- Pendente: o workflow atual ainda não executa Playwright. A alteração de `.github/workflows/ci.yml` depende de coordenação com B, conforme a responsabilidade definida no TO-DO, portanto C22.b permanece aberta até essa integração.
+- Decisões: a instalação de dependências nativas do Chromium usa `--with-deps` apenas no Ubuntu; macOS e Windows instalam o navegador sem o comando exclusivo para Linux.
 
 ### [ ] C23.a — Acessibilidade semântica
 **Ref.:** architecture §9.

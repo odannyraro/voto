@@ -627,7 +627,9 @@ steps:
   - codecov/codecov-action (apenas ubuntu; um upload por flag: shared, domain, server, web)
       with: token: ${{ secrets.CODECOV_TOKEN }}, files: packages/shared/coverage/lcov.info,...
   - npm run build
-  - npx playwright install --with-deps chromium && npm run e2e   # entra com a C22
+  - npm ci (working-directory: e2e)
+  - npx playwright install --with-deps chromium (Ubuntu) / npx playwright install chromium (macOS, Windows)
+  - npm run e2e
   - upload-artifact: relatório do Playwright em caso de falha
 ```
 
@@ -661,7 +663,7 @@ Padrão: **um commit por tarefa do TO-DO**, contendo os testes e a implementaç�
 | `npm run dev` | Servidor (`tsup --watch`, que recompila e reinicia o `dist/main.js` a cada arquivo salvo, na porta 3000) + web (`vite`, porta 5173) em paralelo pelo `scripts/dev.mjs`, com proxy do Vite para `/api` e `/socket.io`. Ctrl+C encerra os dois. O admin só existe com `ADMIN_USERNAME`/`ADMIN_PASSWORD` no ambiente. |
 | `npm test` | Vitest em todos os workspaces |
 | `npm run test:coverage` | Igual ao anterior, com cobertura e thresholds |
-| `npm run e2e` | Playwright (sobe o servidor sozinho via `webServer`); entra com a C22 |
+| `npm run e2e` | Playwright (sobe o servidor sozinho via `webServer`) |
 | `npm run lint` / `typecheck` / `format` / `format:check` | Qualidade |
 | `npm run build` | Build de produção de `web` (Vite) e `server` (tsup, `dist/main.js`). `shared` e `domain` não têm build próprio: entram nos dois bundles |
 | `npm start` | Sobe o build de produção servindo o front de `apps/web/dist` |

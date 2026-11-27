@@ -17,6 +17,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:coverage": "npm run test:coverage --workspaces --if-present",
+    "e2e": "npm --prefix e2e test",
     "dev": "node scripts/dev.mjs",
     "build": "npm run build -w apps/web && npm run build -w apps/server",
     "start": "cross-env WEB_DIST_DIR=apps/web/dist node apps/server/dist/main.js"

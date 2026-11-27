@@ -90,8 +90,24 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Relatório do Playwright para investigar e2e que falhou (architecture §12). Enquanto o
-      # workspace `e2e/` não existir, a pasta não existe e o passo não faz nada.
+      - name: Install E2E dependencies
+        run: npm ci
+        working-directory: e2e
+
+      - name: Install Playwright browser dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: npx playwright install --with-deps chromium
+        working-directory: e2e
+
+      - name: Install Playwright browser (macOS and Windows)
+        if: matrix.os != 'ubuntu-latest'
+        run: npx playwright install chromium
+        working-directory: e2e
+
+      - name: Run end-to-end tests
+        run: npm run e2e
+
+      # Relatório do Playwright para investigar falhas nos testes E2E.
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
