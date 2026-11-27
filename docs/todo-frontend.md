@@ -110,7 +110,7 @@ agrupadas em um único commit.
 | C13 | Divide-se: cadastro/validação e edição/removal têm casos próprios | `[x] C13.a` criar candidato e validações; `[x] C13.b` editar/remover candidato |
 | C14 | Divide-se: eleitores e fila são abas independentes com contratos próprios | `[x] C14.a` gerar, listar, copiar e revogar códigos; `[x] C14.b` ordem, sugestão e confirmação |
 | C15 | Uma entrega: sincronização e controles ao vivo compõem o mesmo painel administrativo | `[x] C15.a + C15.b` painel ao vivo completo |
-| C16 | Divide-se: resolução de rodada e ações de cargo insuficiente são fluxos distintos | `[ ] C16.a` resultado, 2º turno, liberar, desfazer e anular; `[ ] C16.b` anexar, adiar e cancelar |
+| C16 | Uma entrega completa: resultados e resolução de cargo insuficiente integram o painel ao vivo | `[x] C16.a + C16.b` resolução completa da rodada e da fila |
 | C17 | Divide-se: configuração do runner e dados de preparação são entregáveis separadas | `[ ] C17.a` `playwright.config.ts` e `webServer`; `[ ] C17.b` fixtures e helpers de API |
 | C18 | Não divide: uma jornada curta e linear de configuração | `[ ] C18` uma spec administrativa completa |
 | C19 | Divide-se: preparação de contexto/votos e liberação/verificação são dois grupos de risco | `[ ] C19.a` três contextos, entrada e votos; `[ ] C19.b` fechamento e liberação do resultado |
@@ -147,7 +147,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/src/features/admin/elections/AdminElectionsPage.tsx` → carrega resumos, apresenta estados/contagens e cria eleições com validação compartilhada.
 - `apps/web/src/features/admin/elections/AdminElectionConfigurationPage.tsx` → carrega o agregado completo e navega pelas abas acessíveis de configuração.
 - `apps/web/src/features/admin/live/useAdminElection.ts` → sincroniza o agregado administrativo por REST/Socket.IO e reinscreve/ressincroniza após reconexão.
-- `apps/web/src/features/admin/live/AdminLivePanel.tsx` → mostra a fila ao vivo, abre e fecha rodadas e apresenta progresso e prazo.
+- `apps/web/src/features/admin/live/AdminLivePanel.tsx` → mostra o estado ao vivo, abre/fecha rodadas, apresenta resultados oficiais e permite runoff, liberação, undo, anulação e ações de cargo insuficiente.
 - `apps/web/src/features/admin/config/PositionsTab.tsx` → lista, cria, edita e remove cargos respeitando fila, confirmação e estado devolvido pela API.
 - `apps/web/src/features/admin/config/CandidatesTab.tsx` → cadastra e edita candidatos/candidaturas, mantém primeira opção válida e respeita erros do servidor na remoção.
 - `apps/web/src/features/admin/config/VotersTab.tsx` → gera códigos, mostra rótulos/status, copia credenciais e revoga eleitores após confirmação.
@@ -654,23 +654,35 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/admin-live-election.test.tsx` (5 cenários de controles, limites inválidos, progresso, deadline/countdown e estado incompleto).
 - Decisões: validação reaproveita `openRoundBodySchema`; o estado devolvido pela API atualiza o snapshot, e um round sem DTO é reportado explicitamente.
 
-### [ ] C16.a — Resultado e resolução da rodada
+### [x] C16.a — Resultado e resolução da rodada
 **Ref.:** architecture §5.4 e §6.1.
 **Depende de:** C15.b.
 **Fazer:** mostrar resultado, abrir 2º turno, liberar, desfazer e anular.
 **Testes (escrever antes):** ELECTED, RUNOFF_REQUIRED, NO_VALID_VOTES e ações disponíveis.
 **Pronto quando:** a resolução usa status e DTO do servidor sem cálculos locais.
 **Arquivos:** `apps/web/src/features/admin/live/`.
-**Commit sugerido:** `feat(web): resolve resultados e segundo turno no painel`
+**Commit sugerido:** `feat(web): resolve resultados e cargos insuficientes no painel`
+**Notas do agente:**
+- Feito: painel apresenta contagens e desfechos recebidos do servidor; permite abrir segundo turno, liberar resultados, desfazer a última ação e anular rodada fechada.
+- Arquivos: `apps/web/src/features/admin/live/AdminLivePanel.tsx`, `apps/web/test/admin-live-election.test.tsx`.
+- Como usar: no resultado da última rodada, use as ações permitidas pelo DTO; finalistas e eleito são associados às contagens retornadas, sem apuração local.
+- Testes: `apps/web/test/admin-live-election.test.tsx` (6 cenários: ELECTED/liberação, RUNOFF_REQUIRED, NO_VALID_VOTES, erro de liberação, undo e anulação confirmada).
+- Decisões: a visibilidade das ações depende de `lastResult`, `next`, `canUndo` e do estado da rodada; todos os comandos adotam o `AdminElectionDTO` devolvido pela API.
 
-### [ ] C16.b — Candidatos insuficientes
+### [x] C16.b — Candidatos insuficientes
 **Ref.:** architecture §5.4.
 **Depende de:** C16.a, C6.a.
 **Fazer:** anexar candidato, adiar e cancelar com dupla confirmação e `confirmTitle`.
 **Testes (escrever antes):** anexar; adiar; cancelar nome vazio/diferente/exato.
 **Pronto quando:** todas as opções aparecem somente para `INSUFFICIENT_CANDIDATES`.
 **Arquivos:** `apps/web/src/features/admin/live/`.
-**Commit sugerido:** `feat(web): adiciona ações para candidatos insuficientes`
+**Commit sugerido:** `feat(web): resolve resultados e cargos insuficientes no painel`
+**Notas do agente:**
+- Feito: para o cargo com candidatos aptos insuficientes, permite anexar candidato existente, adiar ou cancelar após confirmação dupla com título exato.
+- Arquivos: `apps/web/src/features/admin/live/AdminLivePanel.tsx`, `apps/web/test/admin-live-election.test.tsx`.
+- Como usar: na aba Live, as ações aparecem somente quando `next.status` é `INSUFFICIENT_CANDIDATES`; cancelar exige confirmar e digitar exatamente o título do cargo.
+- Testes: `apps/web/test/admin-live-election.test.tsx` (4 cenários: anexar, adiar, cancelar com título vazio/diferente/exato e ocultar ações fora do status).
+- Decisões: `attachableCandidates` e o cargo são lidos do DTO; erros de mutação são apresentados e o estado só muda após a resposta completa da API.
 
 ### [ ] C17.a — Configuração Playwright
 **Ref.:** architecture §10.2 e §14.
