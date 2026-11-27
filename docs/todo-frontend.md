@@ -114,8 +114,8 @@ agrupadas em um único commit.
 | C17 | Divide-se: configuração do runner e dados de preparação são entregáveis separadas | `[x] C17.a` `playwright.config.ts` e `webServer`; `[x] C17.b` fixtures e helpers de API |
 | C17.x | Uma entrega extra: identidade, temas e idioma precisam ficar consistentes em toda a interface | `[x] C17.x` identidade Vota Ae, temas claro/escuro, atalho admin e textos em português |
 | C18 | Não divide: uma jornada curta e linear de configuração | `[x] C18` uma spec administrativa completa |
-| C19 | Divide-se: preparação de contexto/votos e liberação/verificação são dois grupos de risco | `[ ] C19.a` três contextos, entrada e votos; `[ ] C19.b` fechamento e liberação do resultado |
-| C20 | Divide-se: montagem do cenário e ação do 2º turno têm verificações independentes | `[ ] C20.a` cenário de `AWAITING_RUNOFF`; `[ ] C20.b` abrir 2º turno e verificar vencedor |
+| C19 | Divide-se: preparação de contexto/votos e liberação/verificação são dois grupos de risco | `[x] C19.a` três contextos, entrada e votos; `[x] C19.b` fechamento e liberação do resultado |
+| C20 | Divide-se: montagem do cenário e ação do 2º turno têm verificações independentes | `[x] C20.a` cenário de `AWAITING_RUNOFF`; `[x] C20.b` abrir 2º turno e verificar vencedor |
 | C21 | Divide-se: elegibilidade do eleito e candidatos insuficientes são cenários separados | `[ ] C21.a` exclusão do eleito no cargo seguinte; `[ ] C21.b` cargo sem candidatos e confirmação |
 | C22 | Divide-se: desfazer e invalidade/integração não precisam estar no mesmo commit | `[ ] C22.a` e2e de `undo`; `[ ] C22.b` código inválido e coordenação da execução no CI |
 | C23 | Divide-se: semântica acessível e layout responsivo podem ser revisados separadamente | `[ ] C23.a` labels, roles, foco e mensagens; `[ ] C23.b` layout móvel e estados visíveis |
@@ -196,6 +196,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/utils/factories.ts` → factories dos DTOs; nomes acessórios são localizados e reproduzíveis.
 - `e2e/specs/admin-configures-election.spec.ts` → cobre login, configuração e abertura pela UI, além dos limites sem cargo e sem candidato.
 - `e2e/specs/full-position.spec.ts` → cobre três sessões isoladas, cédulas carregadas, votos de candidatura/branco, fechamento automático e liberação privada/pública dos resultados.
+- `e2e/specs/runoff.spec.ts` → prepara uma disputa de três candidaturas, confirma os dois finalistas, abre o segundo turno pela interface e verifica a candidatura eleita.
 - `apps/web/test/utils.test.tsx` → testes da composição de providers, isolamento e factories.
 - `e2e/playwright.config.ts` → configura Chromium, health check, Vite e backend local em memória.
 - `e2e/run-e2e.mjs` → seleciona portas disponíveis antes de iniciar Playwright e mantém a mesma configuração nos processos de execução.
@@ -788,7 +789,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `e2e/specs/full-position.spec.ts` (1 cenário: fechamento automático, privacidade pré-liberação e resultado público após liberação).
 - Decisões: resultado e contagens são conferidos apenas pelo conteúdo retornado pelo servidor; não há espera fixa nem cálculo local.
 
-### [ ] C20.a — Cenário de segundo turno
+### [x] C20.a — Cenário de segundo turno
 **Ref.:** architecture §10.2 cenário 3.
 **Depende de:** C19.b.
 **Fazer:** preparar três candidatos e votos que deixam a posição em `AWAITING_RUNOFF`.
@@ -796,8 +797,14 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** cenário cria estado válido de 2º turno.
 **Arquivos:** `e2e/specs/runoff.spec.ts`.
 **Commit sugerido:** `test(e2e): prepara cenário de segundo turno`
+**Notas do agente:**
+- Feito: a API real prepara três candidaturas e cinco votos no placar 2–2–1; o cargo termina em `AWAITING_RUNOFF` e o servidor declara Ana e Bia como os dois finalistas.
+- Arquivos: `e2e/specs/runoff.spec.ts`.
+- Como usar: a spec usa a fixture de eleição em rascunho, prepara o cenário via API e abre a aba Ao vivo para confirmar o estado e a ação disponível.
+- Testes: `e2e/specs/runoff.spec.ts` (1 cenário: placar dividido, cargo aguardando segundo turno e exatamente dois finalistas disponíveis).
+- Decisões: votos 2–2–1 deixam a líder exatamente abaixo da maioria simples e evitam empate no corte entre segundo e terceiro lugar.
 
-### [ ] C20.b — Abrir segundo turno e verificar vencedor
+### [x] C20.b — Abrir segundo turno e verificar vencedor
 **Ref.:** architecture §10.2 cenário 3.
 **Depende de:** C20.a.
 **Fazer:** abrir 2º turno pela UI e verificar a decisão do cargo.
@@ -805,6 +812,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** runoff completo passa no servidor real.
 **Arquivos:** `e2e/specs/runoff.spec.ts`.
 **Commit sugerido:** `test(e2e): cobre abertura e resultado do segundo turno`
+**Notas do agente:**
+- Feito: a interface abre a rodada de segundo turno, o servidor expõe somente Ana e Bia na cédula, e os votos 2–3 encerram com Bia eleita.
+- Arquivos: `e2e/specs/runoff.spec.ts`.
+- Como usar: a spec parte do cenário `AWAITING_RUNOFF`, inicia o segundo turno pelo painel ao vivo e envia as escolhas dos cinco eleitores pela API real.
+- Testes: `e2e/specs/runoff.spec.ts` (1 cenário: abertura pela UI, finalistas exclusivos e eleição de Bia).
+- Decisões: a apuração e o cargo decidido são validados no DTO do servidor; a votação usa API para manter o foco desta subtarefa na ação administrativa e no contrato da cédula.
 
 ### [ ] C21.a — Exclusão do eleito
 **Ref.:** architecture §10.2 cenário 4.
