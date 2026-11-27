@@ -1,0 +1,13 @@
+{
+  "name": "@voto/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node run-e2e.mjs",
+    "test:headed": "node run-e2e.mjs --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}

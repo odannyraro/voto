@@ -187,7 +187,11 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
 - `apps/web/test/utils/factories.ts` → factories dos DTOs; nomes acessórios são localizados e reproduzíveis.
 - `apps/web/test/utils.test.tsx` → testes da composição de providers, isolamento e factories.
-- `e2e/` → ainda não existe; será criado por C17 ou por uma subdivisão dela.
+- `e2e/playwright.config.ts` → configura Chromium, health check, Vite e backend local em memória.
+- `e2e/run-e2e.mjs` → seleciona portas disponíveis antes de iniciar Playwright e mantém a mesma configuração nos processos de execução.
+- `e2e/fixtures/index.ts` → fixtures de admin autenticado, eleição em rascunho/pronta, credenciais, página administrativa e contexto limpo.
+- `e2e/specs/smoke.spec.ts` e `fixtures.spec.ts` → smoke do frontend local e verificação das fixtures pela API real.
+- `npm --prefix e2e test` e `npm --prefix e2e test:headed` → executam as specs E2E em Chromium.
 - Módulos novos planejados:
   - `apps/web/src/api/` → I/O REST e Socket.IO;
   - `apps/web/src/lib/` → lógica pura de tempo, porcentagens e rótulos;
@@ -684,7 +688,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `apps/web/test/admin-live-election.test.tsx` (4 cenários: anexar, adiar, cancelar com título vazio/diferente/exato e ocultar ações fora do status).
 - Decisões: `attachableCandidates` e o cargo são lidos do DTO; erros de mutação são apresentados e o estado só muda após a resposta completa da API.
 
-### [ ] C17.a — Configuração Playwright
+### [x] C17.a — Configuração Playwright
 **Ref.:** architecture §10.2 e §14.
 **Depende de:** marco M2.
 **Fazer:** criar `playwright.config.ts`, Chromium, base URL e `webServer` com servidor real em memória.
@@ -692,8 +696,14 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** Playwright inicia o app real sem configuração manual.
 **Arquivos:** `e2e/playwright.config.ts`.
 **Commit sugerido:** `test(e2e): configura Playwright com servidor real`
+**Notas do agente:**
+- Feito: Playwright executa Chromium contra o frontend Vite e o backend real em memória, com health check pelo proxy e portas locais isoladas.
+- Arquivos: `e2e/playwright.config.ts`, `e2e/package.json`, `e2e/run-e2e.mjs`, `apps/web/vite.config.ts`.
+- Como usar: rode `npm --prefix e2e test`; o comando inicia e encerra o ambiente sem exigir configuração manual.
+- Testes: `e2e/specs/smoke.spec.ts` (1 cenário: página de entrada servida pelo app local).
+- Decisões: a dependência e os scripts ficam em `e2e/`, evitando alterar o manifesto raiz; o launcher escolhe as portas uma vez e as repassa a todos os processos Playwright.
 
-### [ ] C17.b — Fixtures Playwright
+### [x] C17.b — Fixtures Playwright
 **Ref.:** architecture §10.2.
 **Depende de:** C17.a.
 **Fazer:** criar fixtures de admin, eleição pronta, códigos e contexto limpo.
@@ -701,6 +711,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** specs podem montar dados pela API sem duplicação.
 **Arquivos:** `e2e/fixtures/`.
 **Commit sugerido:** `test(e2e): adiciona fixtures de API e autenticação`
+**Notas do agente:**
+- Feito: fixtures autenticam admin, criam eleição em rascunho ou aberta com cargo/candidato/códigos, abrem painel autenticado e fornecem contexto limpo.
+- Arquivos: `e2e/fixtures/index.ts`, `e2e/specs/fixtures.spec.ts`.
+- Como usar: importe `test` e `expect` de `e2e/fixtures/index.ts`; peça `admin`, `election`, `readyElection`, `adminPage` ou `cleanContext` no teste.
+- Testes: `e2e/specs/fixtures.spec.ts` (3 cenários: identidade admin, eleição preparada e isolamento de `sessionStorage`); smoke: 1.
+- Decisões: preparação usa as rotas reais da API, e cada teste recebe uma eleição identificada pelo `testId`; erros HTTP e respostas incompletas falham explicitamente.
 
 ### [ ] C18 — E2E de configuração pelo admin
 **Ref.:** architecture §10.2 cenário 1.
@@ -829,6 +845,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
   ou elegibilidade.
 - Até o M2, o backend é representado por MSW e socket fake.
 - C2–C16 são de componente/unidade; C17–C22 são e2e; C23 pode avançar antes do M2.
+- C17 mantém Playwright e seus scripts em `e2e/`; o launcher fixa portas livres para que o servidor, Vite e workers usem a mesma origem sem conflitar com serviços de desenvolvimento ativos.
 - A criação de novos arquivos em `.github/workflows/` não é permitida sem B.
 - Qualquer desvio do contrato da API ou DTO precisa ser registrado em `todo-frontend.md` e aprovado
   pelo grupo antes da implementação.
