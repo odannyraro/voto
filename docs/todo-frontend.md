@@ -116,7 +116,7 @@ agrupadas em um único commit.
 | C18 | Não divide: uma jornada curta e linear de configuração | `[x] C18` uma spec administrativa completa |
 | C19 | Divide-se: preparação de contexto/votos e liberação/verificação são dois grupos de risco | `[x] C19.a` três contextos, entrada e votos; `[x] C19.b` fechamento e liberação do resultado |
 | C20 | Divide-se: montagem do cenário e ação do 2º turno têm verificações independentes | `[x] C20.a` cenário de `AWAITING_RUNOFF`; `[x] C20.b` abrir 2º turno e verificar vencedor |
-| C21 | Divide-se: elegibilidade do eleito e candidatos insuficientes são cenários separados | `[ ] C21.a` exclusão do eleito no cargo seguinte; `[ ] C21.b` cargo sem candidatos e confirmação |
+| C21 | Divide-se: elegibilidade do eleito e candidatos insuficientes são cenários separados | `[x] C21.a + C21.b` exclusão do eleito e resolução completa de cargo insuficiente |
 | C22 | Divide-se: desfazer e invalidade/integração não precisam estar no mesmo commit | `[ ] C22.a` e2e de `undo`; `[ ] C22.b` código inválido e coordenação da execução no CI |
 | C23 | Divide-se: semântica acessível e layout responsivo podem ser revisados separadamente | `[ ] C23.a` labels, roles, foco e mensagens; `[ ] C23.b` layout móvel e estados visíveis |
 | C24 | Divide-se: revisar duas pirâmides de testes separadamente reduz o risco | `[ ] C24.a` test smells no front; `[ ] C24.b` test smells nos e2e e cobertura final |
@@ -197,6 +197,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `e2e/specs/admin-configures-election.spec.ts` → cobre login, configuração e abertura pela UI, além dos limites sem cargo e sem candidato.
 - `e2e/specs/full-position.spec.ts` → cobre três sessões isoladas, cédulas carregadas, votos de candidatura/branco, fechamento automático e liberação privada/pública dos resultados.
 - `e2e/specs/runoff.spec.ts` → prepara uma disputa de três candidaturas, confirma os dois finalistas, abre o segundo turno pela interface e verifica a candidatura eleita.
+- `e2e/specs/elected-exclusion.spec.ts` → verifica que pessoa eleita não aparece na cédula seguinte e cobre anexar candidatura, adiar cargo e cancelar com dupla confirmação.
 - `apps/web/test/utils.test.tsx` → testes da composição de providers, isolamento e factories.
 - `e2e/playwright.config.ts` → configura Chromium, health check, Vite e backend local em memória.
 - `e2e/run-e2e.mjs` → seleciona portas disponíveis antes de iniciar Playwright e mantém a mesma configuração nos processos de execução.
@@ -819,7 +820,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `e2e/specs/runoff.spec.ts` (1 cenário: abertura pela UI, finalistas exclusivos e eleição de Bia).
 - Decisões: a apuração e o cargo decidido são validados no DTO do servidor; a votação usa API para manter o foco desta subtarefa na ação administrativa e no contrato da cédula.
 
-### [ ] C21.a — Exclusão do eleito
+### [x] C21.a — Exclusão do eleito
 **Ref.:** architecture §10.2 cenário 4.
 **Depende de:** C20.b.
 **Fazer:** eleger candidato no cargo A e verificar que ele não aparece na cédula do cargo B.
@@ -827,8 +828,14 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** elegibilidade entre cargos fica coberta pela UI.
 **Arquivos:** `e2e/specs/elected-exclusion.spec.ts`.
 **Commit sugerido:** `test(e2e): cobre exclusão de eleito no cargo seguinte`
+**Notas do agente:**
+- Feito: Ana vence Mayor; ao abrir Treasurer pela interface, a cédula mostra Bia e Caio, mas não inclui Ana.
+- Arquivos: `e2e/specs/elected-exclusion.spec.ts`.
+- Como usar: a spec prepara cargos, candidaturas e credenciais pela API real; três contextos de eleitor votam pela interface e o administrador abre a rodada seguinte no painel ao vivo.
+- Testes: `e2e/specs/elected-exclusion.spec.ts` (1 cenário: eleição do primeiro cargo e elegibilidade da cédula seguinte).
+- Decisões: a apuração e a abertura inicial são preparação via API; os votos, o avanço de cargo e a cédula seguinte são exercitados pelos navegadores.
 
-### [ ] C21.b — Cargo sem candidatos
+### [x] C21.b — Cargo sem candidatos
 **Ref.:** architecture §10.2 cenário 4.
 **Depende de:** C21.a.
 **Fazer:** verificar anexar existente, adiar e cancelar pela UI com confirmação dupla.
@@ -836,6 +843,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** todas as ações de insuficiência passam no e2e.
 **Arquivos:** `e2e/specs/elected-exclusion.spec.ts`.
 **Commit sugerido:** `test(e2e): cobre cargos sem candidatos suficientes`
+**Notas do agente:**
+- Feito: o painel ao vivo permite anexar Bia e deixar Treasurer pronto, adiar Treasurer para depois de Secretary e cancelar Treasurer só após duas confirmações e a digitação exata do título.
+- Arquivos: `e2e/specs/elected-exclusion.spec.ts`.
+- Como usar: cada cenário prepara Ana eleita e Treasurer sem pessoas aptas; as três ações são executadas pelo painel administrativo e o cancelamento também confere o estado persistido.
+- Testes: `e2e/specs/elected-exclusion.spec.ts` (3 cenários: anexar existente, adiar e cancelar com confirmação dupla).
+- Decisões: a preparação usa API real; as mutações são realizadas pela UI e validadas no estado do servidor, sem esperas fixas.
 
 ### [ ] C22.a — E2E de desfazer
 **Ref.:** architecture §10.2 cenário 5.
