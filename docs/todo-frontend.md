@@ -117,7 +117,7 @@ agrupadas em um único commit.
 | C19 | Divide-se: preparação de contexto/votos e liberação/verificação são dois grupos de risco | `[x] C19.a` três contextos, entrada e votos; `[x] C19.b` fechamento e liberação do resultado |
 | C20 | Divide-se: montagem do cenário e ação do 2º turno têm verificações independentes | `[x] C20.a` cenário de `AWAITING_RUNOFF`; `[x] C20.b` abrir 2º turno e verificar vencedor |
 | C21 | Divide-se: elegibilidade do eleito e candidatos insuficientes são cenários separados | `[x] C21.a + C21.b` exclusão do eleito e resolução completa de cargo insuficiente |
-| C22 | Divide-se: desfazer e invalidade/integração não precisam estar no mesmo commit | `[ ] C22.a` e2e de `undo`; `[ ] C22.b` código inválido e coordenação da execução no CI |
+| C22 | Divide-se: desfazer e invalidade/integração não precisam estar no mesmo commit | `[x] C22.a` desfazer resultado; `[ ] C22.b` spec de código inválido concluída, integração no CI aguarda B |
 | C23 | Divide-se: semântica acessível e layout responsivo podem ser revisados separadamente | `[ ] C23.a` labels, roles, foco e mensagens; `[ ] C23.b` layout móvel e estados visíveis |
 | C24 | Divide-se: revisar duas pirâmides de testes separadamente reduz o risco | `[ ] C24.a` test smells no front; `[ ] C24.b` test smells nos e2e e cobertura final |
 
@@ -198,6 +198,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `e2e/specs/full-position.spec.ts` → cobre três sessões isoladas, cédulas carregadas, votos de candidatura/branco, fechamento automático e liberação privada/pública dos resultados.
 - `e2e/specs/runoff.spec.ts` → prepara uma disputa de três candidaturas, confirma os dois finalistas, abre o segundo turno pela interface e verifica a candidatura eleita.
 - `e2e/specs/elected-exclusion.spec.ts` → verifica que pessoa eleita não aparece na cédula seguinte e cobre anexar candidatura, adiar cargo e cancelar com dupla confirmação.
+- `e2e/specs/resilience.spec.ts` → cobre desfazer a divulgação, erro `NOTHING_TO_UNDO` e código de eleitor inválido.
 - `apps/web/test/utils.test.tsx` → testes da composição de providers, isolamento e factories.
 - `e2e/playwright.config.ts` → configura Chromium, health check, Vite e backend local em memória.
 - `e2e/run-e2e.mjs` → seleciona portas disponíveis antes de iniciar Playwright e mantém a mesma configuração nos processos de execução.
@@ -850,7 +851,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `e2e/specs/elected-exclusion.spec.ts` (3 cenários: anexar existente, adiar e cancelar com confirmação dupla).
 - Decisões: a preparação usa API real; as mutações são realizadas pela UI e validadas no estado do servidor, sem esperas fixas.
 
-### [ ] C22.a — E2E de desfazer
+### [x] C22.a — E2E de desfazer
 **Ref.:** architecture §10.2 cenário 5.
 **Depende de:** C21.b.
 **Fazer:** liberar resultado e desfazer pela UI, verificando o estado anterior.
@@ -858,6 +859,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** resiliência de desfazer fica coberta sem sleep.
 **Arquivos:** `e2e/specs/resilience.spec.ts`.
 **Commit sugerido:** `test(e2e): cobre desfazer resultado pela interface`
+**Notas do agente:**
+- Feito: a interface divulga o resultado e desfaz essa ação, restaurando o estado não divulgado; uma resposta `NOTHING_TO_UNDO` do servidor é apresentada como mensagem de erro.
+- Arquivos: `e2e/specs/resilience.spec.ts`.
+- Como usar: a spec prepara uma eleição pela API real, acompanha a tela ao vivo e executa as ações administrativas no navegador; o conflito de undo é simulado na fronteira HTTP para cobrir a corrida em que o histórico já mudou no servidor.
+- Testes: `e2e/specs/resilience.spec.ts` (2 cenários: restauração após undo e mensagem para `NOTHING_TO_UNDO`).
+- Decisões: nenhum timer fixo; o cenário de conflito intercepta somente a resposta do endpoint de undo, preservando o restante da jornada contra o servidor real.
 
 ### [ ] C22.b — Código inválido e integração no CI
 **Ref.:** architecture §10.2 cenário 5.
@@ -867,6 +874,11 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** existem pelo menos cinco specs estáveis e o CI foi preparado por B.
 **Arquivos:** `e2e/specs/resilience.spec.ts`, `.github/workflows/ci.yml` somente via coordenação.
 **Commit sugerido:** `test(e2e): cobre código inválido e prepara execução no CI`
+**Notas do agente:**
+- Feito nesta entrega: a spec confirma que um código desconhecido de oito caracteres é rejeitado pelo servidor e traduzido em mensagem em português; a busca não encontrou `waitForTimeout`, `.skip` ou `.only` nas specs.
+- Arquivos: `e2e/specs/resilience.spec.ts`.
+- Testes: `e2e/specs/resilience.spec.ts` (1 cenário de código inválido).
+- Pendente: o workflow atual ainda não executa Playwright. A alteração de `.github/workflows/ci.yml` depende de coordenação com B, conforme a responsabilidade definida no TO-DO, portanto C22.b permanece aberta até essa integração.
 
 ### [ ] C23.a — Acessibilidade semântica
 **Ref.:** architecture §9.
