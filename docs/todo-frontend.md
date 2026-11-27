@@ -195,7 +195,7 @@ ser preparada sem servidor real. C23 pode avançar após C6 e C24 só deve come�
 - `apps/web/test/utils/faker.ts` → fábrica isolada do Faker com locale `pt_BR` e seed fixa.
 - `apps/web/test/utils/factories.ts` → factories dos DTOs; nomes acessórios são localizados e reproduzíveis.
 - `e2e/specs/admin-configures-election.spec.ts` → cobre login, configuração e abertura pela UI, além dos limites sem cargo e sem candidato.
-- `e2e/specs/full-position.spec.ts` → cobre três sessões isoladas, cédulas carregadas e votos de candidatura/branco aceitos pelo servidor.
+- `e2e/specs/full-position.spec.ts` → cobre três sessões isoladas, cédulas carregadas, votos de candidatura/branco, fechamento automático e liberação privada/pública dos resultados.
 - `apps/web/test/utils.test.tsx` → testes da composição de providers, isolamento e factories.
 - `e2e/playwright.config.ts` → configura Chromium, health check, Vite e backend local em memória.
 - `e2e/run-e2e.mjs` → seleciona portas disponíveis antes de iniciar Playwright e mantém a mesma configuração nos processos de execução.
@@ -773,7 +773,7 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 - Testes: `e2e/specs/full-position.spec.ts` (1 cenário: três logins isolados, cédulas e votos válidos/brancos).
 - Decisões: as confirmações dos dois primeiros votos são verificadas antes do voto final; a resposta do terceiro voto confirma aceitação sem antecipar as asserções de fechamento e resultado da C19.b.
 
-### [ ] C19.b — Fechamento e liberação do resultado
+### [x] C19.b — Fechamento e liberação do resultado
 **Ref.:** architecture §10.2 cenário 2.
 **Depende de:** C19.a, C15–C16.
 **Fazer:** verificar fechamento após todos votarem, resultado privado antes da liberação e público depois.
@@ -781,6 +781,12 @@ limitados aos campos não relevantes à asserção e usam seed fixa.
 **Pronto quando:** a spec cobre a jornada completa de um cargo.
 **Arquivos:** `e2e/specs/full-position.spec.ts`.
 **Commit sugerido:** `test(e2e): cobre fechamento e liberação de resultado`
+**Notas do agente:**
+- Feito: a jornada confirma fechamento automático após os três votos, mostra a apuração somente no painel administrativo antes da liberação e entrega o resultado aos três eleitores depois da ação do admin.
+- Arquivos: `e2e/specs/full-position.spec.ts`.
+- Como usar: a spec abre a rodada pela interface administrativa, faz os votos nas sessões isoladas e libera o resultado pela mesma interface.
+- Testes: `e2e/specs/full-position.spec.ts` (1 cenário: fechamento automático, privacidade pré-liberação e resultado público após liberação).
+- Decisões: resultado e contagens são conferidos apenas pelo conteúdo retornado pelo servidor; não há espera fixa nem cálculo local.
 
 ### [ ] C20.a — Cenário de segundo turno
 **Ref.:** architecture §10.2 cenário 3.
