@@ -11,7 +11,7 @@
 
 | Em números | |
 |---|---|
-| Testes automatizados | **1.190**, rodando a cada envio em Linux, macOS e Windows |
+| Testes automatizados | **1.208** (incluindo 18 de ponta a ponta no navegador), rodando a cada envio em Linux, macOS e Windows |
 | Cobertura de linhas | de **90% a 100%** em cada pacote (mínimo exigido: 80%) |
 | Teste de mutação | **91,9%** dos mutantes detectados nas regras da eleição |
 | Deploy | automático, só depois de todos os testes passarem |
@@ -20,7 +20,7 @@
 |---|---|
 | Sistema em produção | https://vota-ae.onrender.com |
 | Repositório | https://github.com/odannyraro/voto |
-| Build no GitHub Actions | _a preencher: link da execução mais recente com sucesso_ |
+| Build no GitHub Actions | https://github.com/odannyraro/voto/actions/runs/45927626044 |
 | Relatório de cobertura (Codecov) | https://app.codecov.io/gh/odannyraro/voto |
 | Vídeo no YouTube | _a preencher_ |
 
@@ -80,8 +80,6 @@ O texto original dos requisitos está em [docs/requisitos.md](docs/requisitos.md
 | **Admin** (`/admin`) | Faz login, lista e cria eleições e as configura em abas: cargos e desempate, candidatos, códigos dos eleitores (gerar, copiar e revogar) e ordem de votação, com sugestão automática |
 | **Admin, ao vivo** | Abre as rodadas, acompanha quantos já votaram, encerra antes do prazo, libera o resultado, anula uma rodada, desfaz a última ação e resolve 2º turno ou cargos sem candidatos suficientes |
 
-_A preencher: botão para **abrir a eleição** na tela do admin (ainda não existe na interface) e, se o grupo quiser, capturas de tela._
-
 ## Tecnologias
 
 | Área | Tecnologias |
@@ -120,13 +118,13 @@ O projeto é um **monorepo com quatro pacotes**, cada um com uma responsabilidad
 
 ```mermaid
 flowchart LR
-    P["Push ou pull request"] --> CI["CI em Linux, macOS e Windows: lint, tipos, testes, cobertura e build"]
+    P["Push ou pull request"] --> CI["CI em Linux, macOS e Windows: lint, tipos, testes, cobertura, build e e2e"]
     CI --> C["Relatório no Codecov"]
     CI -->|"verde na main"| DP["Workflow de deploy"]
     DP --> R["Render (produção)"]
 ```
 
-- [**CI**](.github/workflows/ci.yml): a cada envio, roda lint, formatação, checagem de tipos, todos os testes com cobertura e o build de produção, nos **três sistemas operacionais**.
+- [**CI**](.github/workflows/ci.yml): a cada envio, roda lint, formatação, checagem de tipos, todos os testes com cobertura, o build de produção e, por fim, os testes de ponta a ponta no navegador, nos **três sistemas operacionais**.
 - **Cobertura:** publicada no [Codecov](https://app.codecov.io/gh/odannyraro/voto), separada por pacote. Abaixo de 80% em qualquer um, o build falha.
 - [**Deploy**](.github/workflows/deploy.yml): só quando o CI termina **verde na `main`**, publica exatamente aquele commit no Render. Código com teste quebrado não chega à produção.
 - Todas as execuções ficam na aba [Actions](https://github.com/odannyraro/voto/actions).
@@ -191,7 +189,7 @@ flowchart TB
 | **Componente** | As telas do front | Testing Library, rede simulada com MSW e socket falso | [painel ao vivo do admin](apps/web/test/admin-live-election.test.tsx) |
 | **Integração** | Uma eleição completa pela API | Servidor com o domínio real, sem simular as regras | [fluxo de votação](apps/server/test/integration/election-flow.test.ts) e [segundo turno](apps/server/test/integration/runoff-flow.test.ts) |
 | **Contrato** | Banco em memória e Postgres se comportam igual | A mesma suíte roda nos dois (com pg-mem) | [contrato do repositório](apps/server/test/contracts/election-repository.contract.ts) |
-| **End-to-end** | Jornadas do usuário no navegador | Playwright | _a preencher_ |
+| **End-to-end** | Jornadas do usuário no navegador | Playwright com o sistema inteiro rodando e um navegador real | [cargo completo com três eleitores](e2e/specs/full-position.spec.ts) e [segundo turno](e2e/specs/runoff.spec.ts) |
 | **Mutação** | Se os testes realmente detectam erros | StrykerJS no domínio | **91,9%** dos mutantes detectados |
 
 ### Boas práticas aplicadas
@@ -200,6 +198,7 @@ flowchart TB
 - **Limites das regras:** para "mais de 50%", há um teste com [um voto acima da metade e outro com exatamente a metade](packages/domain/test/compute-result.test.ts#L39-L61).
 - **Concorrência:** [uma rajada de 100 votos simultâneos](apps/server/test/services/election-write-queue.test.ts#L69-L79) precisa ser toda aceita e contada.
 - **Determinismo:** os testes de prazo não esperam o tempo passar: usam um [relógio falso](apps/server/test/doubles/fake-clock.ts), que o próprio teste adianta.
+- **E2E pelo que o usuário vê:** os testes de ponta a ponta encontram os elementos pelo papel e pelo texto (um botão, um rótulo), não por detalhes internos da tela, e cada eleitor usa uma [janela separada do navegador](e2e/specs/full-position.spec.ts#L38-L40).
 - ***Test doubles* só nas fronteiras** (relógio, agendador, rede, banco), a partir de interfaces do próprio projeto.
 - **Padrão AAA**, um comportamento por teste e nomes que descrevem o cenário e o resultado esperado.
 
@@ -211,7 +210,7 @@ flowchart TB
 | `packages/shared` | Contratos e validação das requisições | 138 | 100% |
 | `apps/server` | Rotas, tempo real, banco, prazos, concorrência e eleições completas pela API | 631 | 99% |
 | `apps/web` | Telas do eleitor e do admin e comunicação com o servidor | 198 | 90% |
-| e2e | _a preencher_ | _a preencher_ | — |
+| [`e2e`](e2e/specs) | Jornadas no navegador: configurar e abrir a eleição, votar com vários eleitores, segundo turno, exclusão do eleito, cargos sem candidatos, desfazer e código inválido | 18 | — |
 
 O relatório detalhado, arquivo por arquivo, está no [Codecov](https://app.codecov.io/gh/odannyraro/voto).
 
@@ -235,10 +234,12 @@ Teste de mutação das regras da eleição (leva cerca de 2 minutos):
 npm run test:mutation -w packages/domain
 ```
 
-Testes end-to-end:
+Testes end-to-end (a pasta `e2e/` tem dependências próprias; o Playwright sobe o servidor e o front sozinhos, com banco em memória):
 
 ```bash
-# a preencher
+npm --prefix e2e ci                            # instala o Playwright (uma vez)
+npx --prefix e2e playwright install chromium   # baixa o navegador (uma vez)
+npm run e2e                                    # roda os testes end-to-end
 ```
 
 Para usar o sistema localmente (as eleições ficam em memória e somem ao fechar):
